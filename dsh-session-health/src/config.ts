@@ -36,11 +36,21 @@ export interface ProjectionConfig {
   enabled: boolean
 }
 
+export interface CostConfig {
+  /**
+   * Cache-hit token price as a fraction of a full-price input token (e.g.
+   * DeepSeek-style 0.1 = 1/10). Used for the per-round billable-equivalent
+   * figure ("计费预期") in the projection, /health, and the tool. Default 0.1.
+   */
+  cacheHitDiscount: number
+}
+
 /** Untrusted plugin configuration after Loader normalization; every field optional. */
 export interface Config {
   thresholds?: ThresholdsConfig
   checks?: ChecksConfig
   projection?: ProjectionConfig
+  cost?: CostConfig
 }
 
 /** Schemastery schema: documents the shape for the Loader and settings UI. */
@@ -67,12 +77,14 @@ export const Config: z<Config> = z.object({
     processes: z.object({ enabled: z.boolean().default(true) }),
   }),
   projection: z.object({ enabled: z.boolean().default(true) }),
+  cost: z.object({ cacheHitDiscount: z.number().min(0).max(1).default(0.1) }),
 })
 
 export interface ResolvedConfig {
   thresholds: ThresholdsConfig
   checks: ChecksConfig
   projection: ProjectionConfig
+  cost: CostConfig
 }
 
 export function resolveConfig(config: Config = {}): ResolvedConfig {
@@ -97,5 +109,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     processes: { enabled: config.checks?.processes?.enabled ?? true },
   }
   const projection: ProjectionConfig = { enabled: config.projection?.enabled ?? true }
-  return { thresholds, checks, projection }
+  const cost: CostConfig = { cacheHitDiscount: config.cost?.cacheHitDiscount ?? 0.1 }
+  return { thresholds, checks, projection, cost }
 }

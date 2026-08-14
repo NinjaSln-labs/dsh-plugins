@@ -43,6 +43,15 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
   if (s.total !== null) {
     lines.push(`- 每轮输入约 ${formatCompact(s.total)} token${s.ratio !== null ? `（窗口 ${Math.round(s.ratio * 100)}%）` : ''}${s.window !== null ? `；窗口 ${formatCompact(s.window)}` : ''}`)
   }
+  if (s.cacheHitRate !== null) {
+    lines.push(`- 缓存命中率 ${Math.round(s.cacheHitRate * 100)}%（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)
+  }
+  if (s.effectivePerRound !== null) {
+    lines.push(`- 计费当量约 ${formatCompact(s.effectivePerRound)} token/轮（缓存命中按折扣计，不含输出 token）`)
+  }
+  if (s.expectedTotalTokens !== null) {
+    lines.push(`- 剩余轮数输入费用预期 ≈ ${formatCompact(s.expectedTotalTokens)} token（含缓存折扣）`)
+  }
   if (s.compactions > 0) {
     lines.push(`- 已压缩 ${s.compactions} 次：早期细节概要化（git 可追溯）`)
   }
@@ -53,15 +62,28 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
   if (opts.minimal) lines.push('minimal 模式：仅核心指标')
 
   if (report.severity === 'yellow' || report.severity === 'red') {
-    lines.push(
-      '',
-      '切换前检查（在任务边界处）：',
-      '- [ ] 未提交变更已 commit / push',
-      '- [ ] 交接文档已同步',
-      report.handoff.runningProcesses.length > 0
-        ? `- [ ] 运行中进程归属明确（${report.handoff.runningProcesses.join('、')}）`
-        : '- [ ] 运行中进程归属明确（dev server / 测试服务）',
-    )
+    const h = report.handoff
+    const commitItem = h.uncommittedCount !== null
+      ? h.uncommittedCount === 0
+        ? `- [x] 未提交变更：0 个（最新 commit ${h.lastCommit ?? '未知'}）`
+        : `- [ ] 未提交变更：${h.uncommittedCount} 个（最新 commit ${h.lastCommit ?? '未知'}）`
+      : '- [ ] 未提交变更：无法自动检查（无 subprocess 或非 git 工作树）'
+    const pushItem = h.branchLine !== null
+      ? /ahead \d+/.test(h.branchLine)
+        ? `- [ ] 已 push：${h.branchLine}`
+        : `- [x] 已 push：分支与远程同步（${h.branchLine}）`
+      : '- [ ] 已 push：无法自动检查'
+    const handoffItem = h.hasHandoff === true
+      ? '- [x] 交接文档：已就位'
+      : h.hasHandoff === false
+        ? '- [ ] 交接文档：未找到你指定的文件'
+        : '- [ ] 交接文档：未配置或无法检查'
+    const processItem = h.runningProcesses.length > 0
+      ? `- [x] 运行中进程：${h.runningProcesses.join('、')}（切换前确认归属）`
+      : h.runningProcesses.length === 0 && h.isGitRepo !== null || h.hasHandoff !== null || h.uncommittedCount !== null
+        ? '- [x] 运行中进程：未发现工作区相关进程'
+        : '- [ ] 运行中进程：未检查（dev server / 测试服务需自行确认）'
+    lines.push('', '切换前检查（在任务边界处）：', commitItem, pushItem, handoffItem, processItem)
   }
   return lines.join('\n')
 }

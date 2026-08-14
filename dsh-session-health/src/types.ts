@@ -35,6 +35,22 @@ export interface SessionHealthProjection {
   assistantMessages: number
   /** Number of compaction rounds (early detail summarized). */
   compactions: number
+  /**
+   * Cache-hit ratio of the LAST request: cacheRead / (uncached input +
+   * cacheRead). A high ratio means most of the context is served from the
+   * provider cache — cheap, and a sign of stable context; compactions reset
+   * it. Null before any usage report.
+   */
+  cacheHitRate: number | null
+  /** Last request's uncached input tokens. Null before any usage report. */
+  uncachedInputTokens: number | null
+  /** Last request's tokens served from the provider cache. Null before any usage report. */
+  cacheReadTokens: number | null
+  /**
+   * Per-round billable-equivalent: uncached input + cacheRead ×
+   * cost.cacheHitDiscount (host config). Null before any usage report.
+   */
+  effectivePerRound: number | null
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
