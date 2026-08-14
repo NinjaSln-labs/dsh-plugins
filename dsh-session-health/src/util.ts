@@ -21,3 +21,11 @@ export function formatHitRate(rate: number): string {
 export function formatUsd(v: number): string {
   return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
 }
+
+/** CNY formatting: ¥0.15 (2 decimals, money convention). */
+export function formatCny(v: number): string {
+  return `¥${v.toFixed(2)}`
+}
+
+/** Peak/valley period labels used by the money notes. */
+export const PERIOD_LABEL: Record<'peak' | 'offpeak', string> = { peak: '忙时', offpeak: '闲时' }

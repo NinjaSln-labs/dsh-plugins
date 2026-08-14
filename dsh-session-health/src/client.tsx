@@ -137,6 +137,7 @@ function HealthBadge(props: {
   sessions: {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
   }
+  locale: { snapshot: { active: string } }
 }): JSX.Element {
   const [proj, setProj] = React.useState<SessionHealthProjection | undefined>(undefined)
   const [pressure, setPressure] = React.useState<ContextPressureLike | undefined>(undefined)
@@ -228,12 +229,22 @@ function HealthBadge(props: {
             </span>
           </div>
         ) : null}
-        {proj?.effectivePerRoundUsd !== null && proj?.effectivePerRoundUsd !== undefined ? (
-          <div className="sh-tip-row">
-            <span className="sh-k">计费预期</span>
-            <span className="sh-v">约 {formatUsd(proj.effectivePerRoundUsd)}/轮（含缓存折扣）</span>
-          </div>
-        ) : null}
+        {(() => {
+          const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
+          const cny = proj?.effectivePerRoundCny
+          const usd = proj?.effectivePerRoundUsd
+          const money = isZh && cny !== null && cny !== undefined
+            ? `¥${cny.toFixed(2)}`
+            : usd !== null && usd !== undefined ? formatUsd(usd) : null
+          const period = proj?.pricePeriod === 'peak' ? '（忙时价）' : proj?.pricePeriod === 'offpeak' ? '（闲时价）' : ''
+          if (money === null) return null
+          return (
+            <div className="sh-tip-row">
+              <span className="sh-k">计费预期</span>
+              <span className="sh-v">约 {money}/轮（含缓存折扣）{period}</span>
+            </div>
+          )
+        })()}
         <div className="sh-tip-row">
           <span className="sh-k">模型窗口</span>
           <span className="sh-v">{compact(merged.window)}</span>
@@ -291,7 +302,7 @@ export const name = 'dsh-session-health'
  * There is deliberately NO `remote.sessionHealth`: plugin Remotes never mount
  * client-side, and an injected one would leave the entry pending forever.
  */
-export const inject = ['slots', 'sessions', 'remote', 'remote.commands']
+export const inject = ['slots', 'sessions', 'remote', 'remote.commands', 'locale']
 
 /**
  * Inject the badge stylesheet the client-modules way: a
@@ -321,6 +332,7 @@ export function apply(ctx: ClientContext): void {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
   }
   const commands = (ctx.remote as unknown as { commands: CommandsRemote }).commands
+  const locale = (ctx as unknown as { locale: { snapshot: { active: string } } }).locale
 
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
     { name: 'conversation.session.header.utilities', id: 'session-health-dot', order: 10 } as never,
@@ -329,6 +341,7 @@ export function apply(ctx: ClientContext): void {
         sessionId={props.sessionId}
         sessions={sessions}
         commands={commands}
+        locale={locale}
       />
     ),
   ) as never)
