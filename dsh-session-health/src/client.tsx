@@ -68,10 +68,9 @@ function compact(n: number | null | undefined): string {
   return String(n)
 }
 
-/** Hit rate as an integer percent: 0.9993 -> '≈100%', 0.9 -> '90%' (no decimals, never a fake exact 100%). */
+/** Hit rate display: integer percent only — the raw 0..1 value stays in the data. */
 function pctOf(rate: number): string {
-  const pct = Math.round(rate * 100)
-  return rate < 1 && pct === 100 ? '≈100%' : `${pct}%`
+  return `${Math.round(rate * 100)}%`
 }
 
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
