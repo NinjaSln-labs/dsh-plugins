@@ -1,5 +1,7 @@
 # dsh-knowledge-sqlite
 
+[English](README.md) | [中文](README.zh.md)
+
 Cross-session knowledge for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a `ctx.knowledge` service seam plus `knowledge_*` model tools, backed by SQLite FTS5 **trigram** retrieval (CJK substring search) with **L1 query expansion**.
 
 Implements the [V1.11 knowledge seam proposal](https://github.com/NinjaSln-labs/dsh-knowledge-sqlite/blob/main/docs/DESIGN.md) (11-round reviewed design, community proposal — not an official DSH feature). Contract: `write/update/search/list/delete` + budget + events + error codes.

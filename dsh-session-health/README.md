@@ -1,17 +1,19 @@
 # dsh-session-health
 
+[English](README.md) | [中文](README.zh.md)
+
 Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (命中率是上下文稳定度的表现；压缩会重置命中), compaction-aware **预计下次输入（剔除缓存命中）**, **计费预期**（未缓存输入 + 缓存命中×折扣，`cost.cacheHitDiscount` 可配）, model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
+- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **cost expectation** (uncached input + cache hits × discount, `cost.cacheHitDiscount` configurable), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
 - **`/health` command** — full textual report with optional probes:
   - `/health` — everything (git / handoff / process probes, configurable)
   - `/health minimal` — core metrics only (token / window / scale)
   - `/health no-git` / `/health no-handoff` — skip a probe
-  - `/health doc=<你的文件名>` — check your own handoff document (no preset filename; the concept is yours, the name is yours)
-  - `/health remaining=<轮数>` — cost expectation: `计费当量 × 剩余轮数 ≈ 输入费用预期`（含缓存折扣）
+  - `/health doc=<your-file>` — check your own handoff document (no preset filename; the concept is yours, the name is yours)
+  - `/health remaining=<rounds>` — cost expectation: `billable-equivalent × remaining rounds ≈ expected input cost` (cache-discounted)
   - `/health processes` — force the process probe
-- **`session_health` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
-- **`sessionHealth` projection** — durable host-computed fold (turns, messages, compactions, last-wins pressure/window, severity + advice) pushed to every client; survives replay and page reloads.
+- **`session_health` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `cost`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
+- **`sessionHealth` projection** — durable host-computed fold (turns, messages, compactions, last-wins pressure/window, last-request cache buckets, severity + advice) pushed to every client; survives replay and page reloads.
 
 ## Handoff checklist (automated)
 
@@ -47,6 +49,7 @@ checks: {
   processes: { enabled: true },                            // ps probe via ctx.subprocess
 }
 projection: { enabled: true }                              // reactive badge unit
+cost: { cacheHitDiscount: 0.1 }                            // cache-hit price fraction
 ```
 
 ## Why real data
@@ -57,8 +60,9 @@ Every signal comes from the harness itself — nothing is estimated:
 |---|---|
 | Per-round input tokens | `ctx.tokenMeter.measure` (exact, snapshot caliber) |
 | Context window | `llm.resolveModelInfo` (e.g. 1M for deepseek-v4-pro) |
-| Messages / turns / compactions | `sessionHealth` projection fold (sessionQuery fallback) |
-| Git repo? | `fs` probe of `.git` |
+| Messages / turns / compactions / cache buckets | `sessionHealth` projection fold (sessionQuery fallback) |
+| Next-request occupancy | token-meter `contextPressure.projectedTokens` (compaction-aware) |
+| Git repo + worktree state | `fs` probe + read-only git subcommands |
 | Handoff doc | `fs` probe of the name *you* provide |
 | Running processes | `ctx.subprocess` read-only `ps` probe, workspace-filtered |
 
@@ -81,10 +85,11 @@ Or add to a profile overlay:
 ## Development
 
 ```sh
-npm run build      # tsc → lib/
+npm run build      # tsc → lib/ + esbuild client bundle
 npm run typecheck  # strict typecheck
 npm run smoke      # logic smoke tests (stub services)
-npm run mount      # real-cordis mount test (service + command + tool + projection)
+npm run mount      # real-cordis mount test (command + tool + projection)
+npm run build:client && node scripts/client-mount.mjs  # browser-boot path test
 ```
 
 ## Design
