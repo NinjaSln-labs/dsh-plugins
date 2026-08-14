@@ -1,0 +1,8 @@
+{
+  "name": "dsh-plugins",
+  "private": true,
+  "description": "DSH plugin collection: DeepSeek Harness community plugins",
+  "scripts": {
+    "build": "pnpm -r build"
+  }
+}

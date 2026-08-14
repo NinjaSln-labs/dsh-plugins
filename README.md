@@ -1,0 +1,16 @@
+# DSH Plugins
+
+Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). All plugins are public and installable via `dsh plugin add <name>` once published to npm.
+
+## Plugins
+
+| Plugin | Package | Status |
+|---|---|---|
+| [dsh-session-health](./dsh-session-health) | session health badge + `/health` command (real token-meter data) | published to GitHub, npm pending |
+
+## Conventions
+
+- One plugin per directory, each a standalone npm package (`dsh.bundle` manifest)
+- Install: `dsh plugin add <package-name>`
+- Discover: [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic on this repo
+- Keep repos sanitized: no local paths, no secrets, noreply git email
