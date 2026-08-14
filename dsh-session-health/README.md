@@ -2,16 +2,20 @@
 
 Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost (merged with token-meter's compaction-aware `projectedTokens` — a "预计下次输入" row appears after compactions), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
+- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (命中率是上下文稳定度的表现；压缩会重置命中), compaction-aware **预计下次输入（剔除缓存命中）**, **计费预期**（未缓存输入 + 缓存命中×折扣，`cost.cacheHitDiscount` 可配）, model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
 - **`/health` command** — full textual report with optional probes:
   - `/health` — everything (git / handoff / process probes, configurable)
   - `/health minimal` — core metrics only (token / window / scale)
   - `/health no-git` / `/health no-handoff` — skip a probe
   - `/health doc=<你的文件名>` — check your own handoff document (no preset filename; the concept is yours, the name is yours)
-  - `/health remaining=<轮数>` — economy refinement with your remaining-round estimate
+  - `/health remaining=<轮数>` — cost expectation: `计费当量 × 剩余轮数 ≈ 输入费用预期`（含缓存折扣）
   - `/health processes` — force the process probe
 - **`session_health` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
 - **`sessionHealth` projection** — durable host-computed fold (turns, messages, compactions, last-wins pressure/window, severity + advice) pushed to every client; survives replay and page reloads.
+
+## Handoff checklist (automated)
+
+When yellow/red, `/health` appends a **real-state checklist** instead of static prose: `git status --short` / `git log --oneline -1` / `git status -sb` (read-only whitelisted argv via `ctx.subprocess`) drive the commit/push items, the handoff probe drives the doc item, and the process probe drives the process item. Uncheckable items are marked `[ ]` with the reason — never silently "done".
 
 ## Decision model
 

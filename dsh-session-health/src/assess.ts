@@ -491,6 +491,7 @@ export async function assess(
       isGitRepo,
       hasHandoff,
       runningProcesses,
+      processesChecked,
       clean,
       uncommittedCount,
       lastCommit,

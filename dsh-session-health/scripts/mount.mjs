@@ -31,6 +31,18 @@ ctx.provide('fs', {
   resolve: async p => p,
   stat: async p => (p === '.git' ? {} : undefined),
 })
+// Read-only git worktree probe fixture: clean worktree, synced branch.
+const GIT_OUT = {
+  'status --short': '',
+  'log --oneline -1': '166f5ac feat: dsh-session-health\n',
+  'status -sb': '## main...origin/main\n',
+}
+ctx.provide('subprocess', {
+  spawn: ({ argv }) => ({
+    done: Promise.resolve({ exitCode: 0 }),
+    collected: { stdout: { readFrom: () => ({ text: GIT_OUT[`${argv[1]} ${argv[2] ?? ''}`.trim()] ?? '' }) } },
+  }),
+})
 ctx.provide('commands', { register: def => { registrations.commands = def } })
 ctx.provide('tools', { register: tool => { registrations.tools = tool } })
 ctx.provide('sessionProjections', { register: def => { registrations.projections = def } })
@@ -58,6 +70,8 @@ try {
   })
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('健康度：**黄**'))
+  assert.ok(result.text.includes('- [x] 未提交变更：0 个'), 'checklist commit item reflects the clean worktree')
+  assert.ok(result.text.includes('- [x] 已 push：分支与远程同步'), 'checklist push item reflects the synced branch')
   console.log('  ok  apply ran: /health command registered + handler runs')
 
   // 2) session_health tool registered with a working execute.

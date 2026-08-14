@@ -80,7 +80,7 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
         : '- [ ] 交接文档：未配置或无法检查'
     const processItem = h.runningProcesses.length > 0
       ? `- [x] 运行中进程：${h.runningProcesses.join('、')}（切换前确认归属）`
-      : h.runningProcesses.length === 0 && h.isGitRepo !== null || h.hasHandoff !== null || h.uncommittedCount !== null
+      : h.processesChecked
         ? '- [x] 运行中进程：未发现工作区相关进程'
         : '- [ ] 运行中进程：未检查（dev server / 测试服务需自行确认）'
     lines.push('', '切换前检查（在任务边界处）：', commitItem, pushItem, handoffItem, processItem)
