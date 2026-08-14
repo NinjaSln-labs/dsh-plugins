@@ -84,7 +84,7 @@ const OUTPUT_SCHEMA = {
       required: true,
       additionalProperties: false,
       properties: {
-        cacheHitRate: { type: 'number', description: '上次请求的缓存命中率 0..1（未知时省略）' },
+        cacheHitRate: { type: 'number', description: '会话级缓存命中率 0..1（近 20 次请求加权；未知时省略）' },
         effectivePerRound: { type: 'number', description: '每轮计费当量 token（未缓存输入 + 缓存命中×折扣；未知时省略）' },
         effectivePerRoundUsd: { type: 'number', description: '每轮计费当量金额 USD（未知时省略）' },
         effectivePerRoundCny: { type: 'number', description: '每轮计费当量金额 CNY（官方峰谷定价文档激活时；未知时省略）' },

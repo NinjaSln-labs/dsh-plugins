@@ -11,7 +11,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
-import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
+import { applyHealthEvent, healthView, CACHE_WINDOW_SIZE, type SessionHealthState } from './projection.ts'
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
 import { PERIOD_LABEL, formatCny } from './util.ts'
 import type { PriceCache, PricePeriod } from './pricing.ts'
@@ -466,7 +466,7 @@ export async function assess(
     pricePeriodFromProjection = snapshot.pricePeriod ?? null
   }
   if (cacheHitRate !== null) {
-    probes.push(`缓存命中率 ${formatHitRate(cacheHitRate)}（上次请求；命中高说明上下文稳定，压缩会重置命中）`)
+    probes.push(`缓存命中率 ${formatHitRate(cacheHitRate)}（近 ${CACHE_WINDOW_SIZE} 次请求加权；命中高说明上下文稳定，压缩会重置命中）`)
   }
   const expectedTotalTokens = effectivePerRound !== null
     && opts.remainingRounds !== null && opts.remainingRounds !== undefined
