@@ -357,6 +357,19 @@ await check('pricing: failure keeps the last good price', async () => {
   assert.equal(cache.get().missPerMCny, 1.5) // last good document survives
 })
 
+await check('pricing: refreshAny falls back to the second URL', async () => {
+  const cache = new PriceCache(staticPricing(0.28, 0.1))
+  const fail = async () => { throw new Error('primary down') }
+  const ok = async () => ({ ok: true, json: async () => structuredClone(OFFICIAL_DOC) })
+  assert.equal(await cache.refreshAny(['https://primary', 'https://fallback'], fail), false) // both down
+  assert.equal(cache.get().missPerMCny, null) // static fallback intact
+  assert.equal(
+    await cache.refreshAny(['https://primary', 'https://fallback'], url => (url.includes('fallback') ? ok() : fail())),
+    true,
+  )
+  assert.equal(cache.get('deepseek-v4-flash').missPerMCny, 1.5) // fallback doc won
+})
+
 await check('pricing: invalid documents are rejected', async () => {
   const cache = new PriceCache(staticPricing(0.28, 0.1))
   for (const bad of [

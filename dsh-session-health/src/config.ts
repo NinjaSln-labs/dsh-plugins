@@ -69,11 +69,18 @@ export interface CostConfig {
    */
   priceSource: 'auto' | 'static'
   /**
-   * JSON pricing document URL for priceSource 'auto'. Default: the
-   * dsh-plugins repo's maintained pricing/deepseek.json.
-   * Shape: { "currency": "usd", "inputPerM": 0.28, "cacheHitDiscount": 0.1 }
+   * Primary JSON pricing document URL for priceSource 'auto'. Default: the
+   * jsdelivr CDN mirror of the dsh-plugins repo's pricing/deepseek.json —
+   * GitHub raw is unreachable on many CN networks and a failed fetch silently
+   * degrades the whole money display to static USD (no CNY).
    */
   priceUrl: string
+  /**
+   * Fallback URL tried in the same refresh cycle when the primary fails.
+   * Default: the canonical GitHub raw location (covers CDN outages / stale
+   * mirrors; whichever URL succeeds first wins).
+   */
+  priceFallbackUrl: string
   /** Refresh cadence for priceSource 'auto', in hours. Default 24. */
   priceRefreshHours: number
 }
@@ -115,7 +122,8 @@ export const Config: z<Config> = z.object({
     cacheHitDiscount: z.number().min(0).max(1).default(0.1),
     inputPricePerM: z.number().min(0).default(0.28),
     priceSource: z.union([z.const('auto'), z.const('static')]).default('auto'),
-    priceUrl: z.string().default('https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json'),
+    priceUrl: z.string().default('https://cdn.jsdelivr.net/gh/NinjaSln-labs/dsh-plugins@main/pricing/deepseek.json'),
+    priceFallbackUrl: z.string().default('https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json'),
     priceRefreshHours: z.number().min(1).max(24 * 30).default(24),
   }),
 })
@@ -154,7 +162,8 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     cacheHitDiscount: config.cost?.cacheHitDiscount ?? 0.1,
     inputPricePerM: config.cost?.inputPricePerM ?? 0.28,
     priceSource: config.cost?.priceSource ?? 'auto',
-    priceUrl: config.cost?.priceUrl ?? 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
+    priceUrl: config.cost?.priceUrl ?? 'https://cdn.jsdelivr.net/gh/NinjaSln-labs/dsh-plugins@main/pricing/deepseek.json',
+    priceFallbackUrl: config.cost?.priceFallbackUrl ?? 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
     priceRefreshHours: config.cost?.priceRefreshHours ?? 24,
   }
   return { thresholds, checks, projection, cost }

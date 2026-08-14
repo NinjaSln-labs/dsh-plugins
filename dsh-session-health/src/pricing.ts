@@ -171,6 +171,14 @@ export class PriceCache {
       return false
     }
   }
+
+  /** Try the URLs in order; the first successful fetch wins. */
+  async refreshAny(urls: readonly string[], fetchImpl: typeof fetch = fetch, timeoutMs = 10_000): Promise<boolean> {
+    for (const url of urls) {
+      if (await this.refresh(url, fetchImpl, timeoutMs)) return true
+    }
+    return false
+  }
 }
 
 function intervalDisposer(ctx: Context, fn: () => void, delayMs: number): () => void {
@@ -185,14 +193,20 @@ function intervalDisposer(ctx: Context, fn: () => void, delayMs: number): () => 
 }
 
 /**
- * Start the periodic price refresh: one immediate fire-and-forget fetch, then
- * `priceRefreshHours` cadence. Failures are silent (the cache keeps the last
- * good price / the static fallback). Disposal rides the calling fiber.
+ * Start the periodic price refresh: one immediate fire-and-forget fetch (with
+ * the fallback URL in the same cycle), then `priceRefreshHours` cadence.
+ * Failures are silent (the cache keeps the last good price / the static
+ * fallback). Disposal rides the calling fiber.
  * @returns the disposer.
  */
-export function startPricingRefresh(ctx: Context, config: { priceSource: 'auto' | 'static'; priceUrl: string; priceRefreshHours: number }, cache: PriceCache): () => void {
+export function startPricingRefresh(
+  ctx: Context,
+  config: { priceSource: 'auto' | 'static'; priceUrl: string; priceFallbackUrl: string; priceRefreshHours: number },
+  cache: PriceCache,
+): () => void {
   if (config.priceSource !== 'auto') return () => {}
-  const url = config.priceUrl
-  void cache.refresh(url)
-  return ctx.effect(() => intervalDisposer(ctx, () => void cache.refresh(url), config.priceRefreshHours * 3_600_000), 'dsh-session-health: pricing refresh')
+  const urls = [...new Set([config.priceUrl, config.priceFallbackUrl].filter(Boolean))]
+  const refresh = () => void cache.refreshAny(urls)
+  refresh()
+  return ctx.effect(() => intervalDisposer(ctx, refresh, config.priceRefreshHours * 3_600_000), 'dsh-session-health: pricing refresh')
 }
