@@ -47,7 +47,7 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
     lines.push(`- 缓存命中率 ${formatHitRate(s.cacheHitRate)}（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)
   }
   if (s.effectivePerRoundCny !== null && s.effectivePerRoundCny !== undefined && s.effectivePerRoundUsd !== null && s.effectivePerRoundUsd !== undefined) {
-    lines.push(`- 计费预期：约 ${formatCny(s.effectivePerRoundCny)}/轮（≈${formatUsd(s.effectivePerRoundUsd)}；输入价 ¥${s.inputMissPerM ?? 0}/M ${s.pricePeriod !== null ? PERIOD_LABEL[s.pricePeriod] : ''}，缓存命中 ¥${s.inputHitPerM ?? 0}/M，不含输出）`)
+    lines.push(`- 计费预期：约 ${formatCny(s.effectivePerRoundCny)}/轮（≈${formatUsd(s.effectivePerRoundUsd)}；输入价 ¥${s.inputMissPerMCny ?? 0}/M / $${s.inputMissPerMUsd ?? 0} ${s.pricePeriod !== null ? PERIOD_LABEL[s.pricePeriod] : ''}，缓存命中 ¥${s.inputHitPerMCny ?? 0}/M / $${s.inputHitPerMUsd ?? 0}，不含输出）`)
   } else if (s.effectivePerRoundUsd !== null && s.effectivePerRoundUsd !== undefined) {
     lines.push(`- 计费预期：约 ${formatUsd(s.effectivePerRoundUsd)}/轮（输入价 $${s.inputPricePerM ?? 0}/M 估算，缓存命中按折扣计，不含输出）`)
   }

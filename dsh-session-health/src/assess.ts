@@ -41,12 +41,14 @@ export interface HealthSignals {
   expectedTotalCny: number | null
   /** USD-normalized input price basis per 1M tokens (miss price × usdPerCny). */
   inputPricePerM: number
-  /** Cache-miss input price per 1M in the document currency; null in static mode. */
-  inputMissPerM: number | null
-  /** Cache-hit input price per 1M in the document currency; null in static mode. */
-  inputHitPerM: number | null
-  /** 'cny' with an official document, 'usd' in static mode. */
-  priceCurrency: 'cny' | 'usd'
+  /** Official cache-miss input price per 1M in CNY; null in static mode. */
+  inputMissPerMCny: number | null
+  /** Official cache-hit input price per 1M in CNY; null in static mode. */
+  inputHitPerMCny: number | null
+  /** Official cache-miss input price per 1M in USD (static mode: the config value). */
+  inputMissPerMUsd: number
+  /** Official cache-hit input price per 1M in USD. */
+  inputHitPerMUsd: number
   /** Current peak/off-peak period; null in static mode. */
   pricePeriod: PricePeriod
 }
@@ -477,12 +479,13 @@ export async function assess(
     }
   })()
   const price = pricingCache !== undefined ? pricingCache.get(model) : null
-  const priceCurrency = price !== null ? price.currency : 'usd'
   const pricePeriod = price?.period ?? pricePeriodFromProjection
-  const inputMissPerM = price !== null ? price.missPerM : null
-  const inputHitPerM = price !== null ? price.hitPerM : null
-  const costNote = priceCurrency === 'cny' && effectivePerRoundCny !== null
-    ? `计费预期约 ${formatCny(effectivePerRoundCny)}/轮（≈${formatUsd(effectivePerRoundUsd ?? 0)}；输入价 ¥${price!.missPerM}/M ${pricePeriod !== null ? PERIOD_LABEL[pricePeriod] : ''}，缓存命中 ¥${price!.hitPerM}/M，不含输出）`
+  const inputMissPerMCny = price !== null ? price.missPerMCny : null
+  const inputHitPerMCny = price !== null ? price.hitPerMCny : null
+  const inputMissPerMUsd = price !== null ? price.missPerMUsd : config.cost.inputPricePerM
+  const inputHitPerMUsd = price !== null ? price.hitPerMUsd : inputMissPerMUsd * config.cost.cacheHitDiscount
+  const costNote = effectivePerRoundCny !== null && effectivePerRoundUsd !== null
+    ? `计费预期约 ${formatCny(effectivePerRoundCny)}/轮（≈${formatUsd(effectivePerRoundUsd)}；输入价 ¥${inputMissPerMCny ?? 0}/M / $${inputMissPerMUsd} ${pricePeriod !== null ? PERIOD_LABEL[pricePeriod] : ''}，缓存命中 ¥${inputHitPerMCny ?? 0}/M / $${inputHitPerMUsd}，不含输出）`
     : effectivePerRoundUsd !== null
       ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${config.cost.inputPricePerM}/M，缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
       : ''
@@ -544,10 +547,11 @@ export async function assess(
       expectedTotalTokens,
       expectedTotalUsd,
       expectedTotalCny,
-      inputPricePerM: price !== null ? price.missPerM * price.usdPerCny : config.cost.inputPricePerM,
-      inputMissPerM,
-      inputHitPerM,
-      priceCurrency,
+      inputPricePerM: inputMissPerMUsd,
+      inputMissPerMCny,
+      inputHitPerMCny,
+      inputMissPerMUsd,
+      inputHitPerMUsd,
       pricePeriod,
     },
     probes,

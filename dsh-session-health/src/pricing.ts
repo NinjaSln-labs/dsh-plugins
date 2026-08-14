@@ -21,30 +21,40 @@ import type { Context } from '@deepseek-ai/cordis'
 
 export type PricePeriod = 'peak' | 'offpeak' | null
 
-/** One resolved price the money math runs on. */
+/**
+ * One resolved price the money math runs on. Both official currencies ride
+ * along (the zh docs publish CNY, the en docs USD — no conversion): static
+ * mode carries USD only.
+ */
 export interface ResolvedPricing {
-  /** 'cny' from an auto-fetched official document; 'usd' in static mode. */
-  currency: 'cny' | 'usd'
-  /** Full-price (cache-miss) input price per 1M tokens, in `currency`. */
-  missPerM: number
-  /** Cache-hit input price per 1M tokens, in `currency`. */
-  hitPerM: number
-  /** USD per CNY for the USD figures (1 in usd mode). */
-  usdPerCny: number
+  /** Full-price (cache-miss) input price per 1M tokens, USD. */
+  missPerMUsd: number
+  /** Cache-hit input price per 1M tokens, USD. */
+  hitPerMUsd: number
+  /** Full-price (cache-miss) input price per 1M tokens, CNY; null in static mode. */
+  missPerMCny: number | null
+  /** Cache-hit input price per 1M tokens, CNY; null in static mode. */
+  hitPerMCny: number | null
   /** Current period; null in static mode. */
   period: PricePeriod
 }
 
+interface PeriodPrice {
+  inputMissPerMCny: number
+  inputHitPerMCny: number
+  inputMissPerMUsd: number
+  inputHitPerMUsd: number
+}
+
 interface ModelPrice {
-  peak: { inputMissPerM: number; inputHitPerM: number }
-  offpeak: { inputMissPerM: number; inputHitPerM: number }
+  peak: PeriodPrice
+  offpeak: PeriodPrice
 }
 
 interface PricingDocument {
   source?: unknown
   updatedAt?: unknown
   note?: unknown
-  usdPerCny: number
   peakHours: readonly (readonly [number, number])[]
   models: Readonly<Record<string, ModelPrice | undefined>>
 }
@@ -56,23 +66,26 @@ function isPair(value: unknown): value is readonly [number, number] {
     && value[0] >= 0 && value[1] > value[0] && value[1] <= 24
 }
 
+function isPeriodPrice(value: unknown): value is PeriodPrice {
+  if (typeof value !== 'object' || value === null) return false
+  const p = value as Record<string, unknown>
+  for (const key of ['inputMissPerMCny', 'inputHitPerMCny', 'inputMissPerMUsd', 'inputHitPerMUsd']) {
+    const n = p[key]
+    if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return false
+  }
+  if ((p.inputMissPerMCny as number) <= 0 || (p.inputMissPerMUsd as number) <= 0) return false
+  return true
+}
+
 function isModelPrice(value: unknown): value is ModelPrice {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  for (const key of ['peak', 'offpeak']) {
-    const p = v[key]
-    if (typeof p !== 'object' || p === null) return false
-    const { inputMissPerM, inputHitPerM } = p as Record<string, unknown>
-    if (typeof inputMissPerM !== 'number' || !Number.isFinite(inputMissPerM) || inputMissPerM <= 0) return false
-    if (typeof inputHitPerM !== 'number' || !Number.isFinite(inputHitPerM) || inputHitPerM < 0) return false
-  }
-  return true
+  return isPeriodPrice(v.peak) && isPeriodPrice(v.offpeak)
 }
 
 function validDocument(value: unknown): PricingDocument | null {
   if (typeof value !== 'object' || value === null) return null
   const doc = value as Record<string, unknown>
-  if (typeof doc.usdPerCny !== 'number' || !Number.isFinite(doc.usdPerCny) || doc.usdPerCny <= 0) return null
   if (!Array.isArray(doc.peakHours) || doc.peakHours.length === 0 || !doc.peakHours.every(isPair)) return null
   if (typeof doc.models !== 'object' || doc.models === null) return null
   const models: Record<string, ModelPrice | undefined> = {}
@@ -84,7 +97,6 @@ function validDocument(value: unknown): PricingDocument | null {
   }
   if (!found) return null
   return {
-    usdPerCny: doc.usdPerCny as number,
     peakHours: doc.peakHours as readonly (readonly [number, number])[],
     models,
   }
@@ -105,13 +117,13 @@ export function periodAt(peakHours: readonly (readonly [number, number])[], nowM
   return 'offpeak'
 }
 
-/** Static-mode resolved pricing (flat USD, no period). */
+/** Static-mode resolved pricing (flat USD, no period, no CNY). */
 export function staticPricing(inputPricePerM: number, cacheHitDiscount: number): ResolvedPricing {
   return {
-    currency: 'usd',
-    missPerM: inputPricePerM,
-    hitPerM: inputPricePerM * cacheHitDiscount,
-    usdPerCny: 1,
+    missPerMUsd: inputPricePerM,
+    hitPerMUsd: inputPricePerM * cacheHitDiscount,
+    missPerMCny: null,
+    hitPerMCny: null,
     period: null,
   }
 }
@@ -134,10 +146,10 @@ export class PriceCache {
     const period = periodAt(this.doc.peakHours, Date.now())
     const p = entry[period]
     return {
-      currency: 'cny',
-      missPerM: p.inputMissPerM,
-      hitPerM: p.inputHitPerM,
-      usdPerCny: this.doc.usdPerCny,
+      missPerMUsd: p.inputMissPerMUsd,
+      hitPerMUsd: p.inputHitPerMUsd,
+      missPerMCny: p.inputMissPerMCny,
+      hitPerMCny: p.inputHitPerMCny,
       period,
     }
   }
