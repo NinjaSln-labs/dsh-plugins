@@ -1,0 +1,7 @@
+{
+  "currency": "usd",
+  "inputPerM": 0.28,
+  "cacheHitDiscount": 0.1,
+  "updatedAt": "2026-08-14",
+  "note": "deepseek-v4-flash class input pricing: cache miss $0.28 / 1M tokens, cache hits bill at 10%. Keep in sync with https://api-docs.deepseek.com/quick_start/pricing — this file is the default priceUrl source for dsh-session-health (cost.priceSource: 'auto')."
+}

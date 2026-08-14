@@ -13,6 +13,7 @@ import { assess } from '../lib/assess.js'
 import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
 import { resolveConfig } from '../lib/config.js'
+import { PriceCache } from '../lib/pricing.js'
 
 let failures = 0
 async function check(name, fn) {
@@ -246,6 +247,68 @@ await check('assess: cost expectation from cache-effective per-round', async () 
   assert.ok(text.includes('- 缓存命中率 90%'))
   assert.ok(text.includes('计费预期：约 $0.01/轮'), `got: ${text}`)
   assert.ok(text.includes('剩余轮数输入费用预期 ≈ $0.07（约 251K token 计费当量）'))
+})
+
+/* ---------- pricing (priceSource auto) ---------- */
+await check('pricing: auto refresh picks up a valid document', async () => {
+  const cache = new PriceCache({ inputPricePerM: 0.28, cacheHitDiscount: 0.1 })
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ currency: 'usd', inputPerM: 1.5, cacheHitDiscount: 0.2 }) })
+  assert.equal(await cache.refresh('https://x', fetchImpl), true)
+  assert.equal(cache.get().inputPricePerM, 1.5)
+  assert.equal(cache.get().cacheHitDiscount, 0.2)
+})
+
+await check('pricing: failure keeps the last good price', async () => {
+  const cache = new PriceCache({ inputPricePerM: 0.28, cacheHitDiscount: 0.1 })
+  const ok = async () => ({ ok: true, json: async () => ({ currency: 'usd', inputPerM: 1.5 }) })
+  await cache.refresh('https://x', ok)
+  const fail = async () => { throw new Error('offline') }
+  assert.equal(await cache.refresh('https://x', fail), false)
+  assert.equal(cache.get().inputPricePerM, 1.5) // last good price survives
+  assert.equal(cache.get().cacheHitDiscount, 0.1) // fallback discount from static
+})
+
+await check('pricing: invalid documents are rejected', async () => {
+  const cache = new PriceCache({ inputPricePerM: 0.28, cacheHitDiscount: 0.1 })
+  for (const bad of [
+    { currency: 'eur', inputPerM: 1 },
+    { inputPerM: -1 },
+    { inputPerM: 'x' },
+    { inputPerM: 1, cacheHitDiscount: 2 },
+  ]) {
+    const fetchImpl = async () => ({ ok: true, json: async () => bad })
+    assert.equal(await cache.refresh('https://x', fetchImpl), false, JSON.stringify(bad))
+  }
+  assert.equal(cache.get().inputPricePerM, 0.28)
+})
+
+await check('assess: live pricing from the ctx cache overrides static config', async () => {
+  const pricingCtx = {
+    get: name => {
+      if (name === 'sessionHealthPricing') {
+        return { get: () => ({ inputPricePerM: 1.0, cacheHitDiscount: 0.1 }) }
+      }
+      if (name === 'sessionProjections') {
+        return {
+          snapshot: () => ({
+            values: {
+              sessionHealth: {
+                severity: 'yellow', advice: 'a', ratio: 0.13, total: 132_000, window: 1_000_000,
+                turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
+                cacheHitRate: 0.9, uncachedInputTokens: 13_200, cacheReadTokens: 118_800,
+                effectivePerRound: 25_080, effectivePerRoundUsd: (25_080 * 1.0) / 1_000_000,
+              },
+            },
+          }),
+        }
+      }
+      return services[name]
+    },
+  }
+  const report = await assess(pricingCtx, session, 'agent-1', signal, config, {})
+  assert.equal(report.signals.inputPricePerM, 1.0)
+  const text = buildCommandText(report, { minimal: false })
+  assert.ok(text.includes('$1/M 估算'), 'cost note uses the live price')
 })
 
 /* ---------- /health command handler ---------- */

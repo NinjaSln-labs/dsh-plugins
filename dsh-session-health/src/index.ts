@@ -20,6 +20,7 @@ import { Config, resolveConfig, type Config as ConfigType } from './config.ts'
 import { sessionHealthProjectionDefinition } from './projection.ts'
 import { healthCommandDefinition } from './command.ts'
 import { sessionHealthTool } from './tool.ts'
+import { PriceCache, startPricingRefresh } from './pricing.ts'
 
 export { Config } from './config.ts'
 export { sessionHealthProjectionDefinition, applyHealthEvent, healthView } from './projection.ts'
@@ -46,11 +47,21 @@ export default {
   apply(ctx: Context, config: ConfigType = {}): void {
     const resolved = resolveConfig(config)
 
+    // Live pricing cache: periodic fetch when priceSource is 'auto',
+    // static config otherwise. Provided on the context so assess() and the
+    // projection view share one resolved price.
+    const pricing = new PriceCache({
+      inputPricePerM: resolved.cost.inputPricePerM,
+      cacheHitDiscount: resolved.cost.cacheHitDiscount,
+    })
+    ctx.provide('sessionHealthPricing', pricing)
+    startPricingRefresh(ctx, resolved, pricing)
+
     // Reactive badge data (optional child: headless assemblies without the
     // projection registry just lose the push path, not the plugin).
     if (resolved.projection.enabled) {
       ctx.inject(['sessionProjections'], (projectionCtx) => {
-        projectionCtx.sessionProjections.register(sessionHealthProjectionDefinition(resolved))
+        projectionCtx.sessionProjections.register(sessionHealthProjectionDefinition(resolved, pricing))
       })
     }
 
