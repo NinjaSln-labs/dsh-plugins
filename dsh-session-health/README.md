@@ -4,7 +4,7 @@
 
 Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **per-round cost in USD** (`cost.inputPricePerM`, default $0.28/M; cache hits × `cost.cacheHitDiscount`), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
+- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **per-round cost in money** (CNY for the zh locale, USD otherwise — official DeepSeek peak/off-peak pricing, `忙时价/闲时价` tagged), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
 - **`/health` command** — full textual report with optional probes:
   - `/health` — everything (git / handoff / process probes, configurable)
   - `/health minimal` — core metrics only (token / window / scale)
@@ -60,15 +60,27 @@ cost: {
 
 ## Pricing (money display)
 
-The harness carries no pricing, so the USD figures resolve through a live
-cache: `priceSource: 'auto'` (default) fetches the JSON document at
-`priceUrl` (default: the dsh-plugins repo's maintained
-[`pricing/deepseek.json`](../../../pricing/deepseek.json)) every
-`priceRefreshHours`, keeps the last good price across failures, and falls
-back to the static `inputPricePerM` / `cacheHitDiscount` until the first
-success. Point `priceUrl` at any JSON of the shape
-`{ "currency": "usd", "inputPerM": 0.28, "cacheHitDiscount": 0.1 }`, or set
-`priceSource: 'static'` to disable fetching entirely.
+The harness carries no pricing, so the money figures resolve through a live
+cache driven by the **official DeepSeek pricing document** (default
+`priceUrl` = the dsh-plugins repo's maintained
+[`pricing/deepseek.json`](../../../pricing/deepseek.json), synced from
+[api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)):
+
+- **Peak/off-peak (峰谷定价)**: evaluated against **Beijing wall time** on
+  every read — peak 9:00–12:00 / 14:00–18:00 Beijing, everything else is
+  off-peak at half price. The badge tags the row `忙时价/闲时价`.
+- **Per model**: prices picked by the current model name (`models."*"` is the
+  fallback), e.g. deepseek-v4-flash: off-peak ¥1.5/M miss / ¥0.05/M hit,
+  peak ¥3.0/M / ¥0.10/M.
+- **Currency by region**: the document is CNY-denominated; USD derives
+  through its `usdPerCny` rate. The badge shows **CNY when the app locale is
+  zh, USD otherwise**.
+- Refresh every `priceRefreshHours` (default 24h); failures keep the last
+  good document; static `inputPricePerM` / `cacheHitDiscount` (flat USD, no
+  period) apply until the first success or with `priceSource: 'static'`.
+
+Document shape:
+`{ "currency": "cny", "usdPerCny": 0.14, "peakHours": [[9,12],[14,18]], "models": { "<model>": { "peak": { "inputMissPerM": 3.0, "inputHitPerM": 0.10 }, "offpeak": { "inputMissPerM": 1.5, "inputHitPerM": 0.05 } }, "*": { ... } } }`
 
 ## Why real data
 

@@ -1,7 +1,22 @@
 {
-  "currency": "usd",
-  "inputPerM": 0.28,
-  "cacheHitDiscount": 0.1,
+  "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "currency": "cny",
   "updatedAt": "2026-08-14",
-  "note": "deepseek-v4-flash class input pricing: cache miss $0.28 / 1M tokens, cache hits bill at 10%. Keep in sync with https://api-docs.deepseek.com/quick_start/pricing — this file is the default priceUrl source for dsh-session-health (cost.priceSource: 'auto')."
+  "usdPerCny": 0.14,
+  "peakHours": [[9, 12], [14, 18]],
+  "models": {
+    "deepseek-v4-flash": {
+      "peak": { "inputMissPerM": 3.0, "inputHitPerM": 0.10 },
+      "offpeak": { "inputMissPerM": 1.5, "inputHitPerM": 0.05 }
+    },
+    "deepseek-v4-pro": {
+      "peak": { "inputMissPerM": 9.0, "inputHitPerM": 0.30 },
+      "offpeak": { "inputMissPerM": 4.5, "inputHitPerM": 0.15 }
+    },
+    "*": {
+      "peak": { "inputMissPerM": 3.0, "inputHitPerM": 0.10 },
+      "offpeak": { "inputMissPerM": 1.5, "inputHitPerM": 0.05 }
+    }
+  },
+  "note": "官方峰谷定价（北京时间 2026-08-17 00:00 生效；此前为平价：未命中 ¥1/M、命中 ¥0.02/M）。高峰 = 北京时间 9:00-12:00、14:00-18:00，其余为闲时（半价）。USD 显示按 usdPerCny 汇率换算。价格变更时更新本文件（同时更新 updatedAt）。"
 }

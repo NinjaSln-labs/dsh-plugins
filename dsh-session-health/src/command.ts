@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { ResolvedConfig } from './config.ts'
 import { assess, type HealthReport } from './assess.ts'
-import { formatCompact, formatHitRate, formatUsd } from './util.ts'
+import { PERIOD_LABEL, formatCny, formatCompact, formatHitRate, formatUsd } from './util.ts'
 import type { HealthSeverity } from './types.ts'
 
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
@@ -46,10 +46,14 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
   if (s.cacheHitRate !== null) {
     lines.push(`- 缓存命中率 ${formatHitRate(s.cacheHitRate)}（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)
   }
-  if (s.effectivePerRoundUsd !== null && s.effectivePerRoundUsd !== undefined) {
+  if (s.effectivePerRoundCny !== null && s.effectivePerRoundCny !== undefined && s.effectivePerRoundUsd !== null && s.effectivePerRoundUsd !== undefined) {
+    lines.push(`- 计费预期：约 ${formatCny(s.effectivePerRoundCny)}/轮（≈${formatUsd(s.effectivePerRoundUsd)}；输入价 ¥${s.inputMissPerM ?? 0}/M ${s.pricePeriod !== null ? PERIOD_LABEL[s.pricePeriod] : ''}，缓存命中 ¥${s.inputHitPerM ?? 0}/M，不含输出）`)
+  } else if (s.effectivePerRoundUsd !== null && s.effectivePerRoundUsd !== undefined) {
     lines.push(`- 计费预期：约 ${formatUsd(s.effectivePerRoundUsd)}/轮（输入价 $${s.inputPricePerM ?? 0}/M 估算，缓存命中按折扣计，不含输出）`)
   }
-  if (s.expectedTotalUsd !== null && s.expectedTotalUsd !== undefined && s.expectedTotalTokens !== null && s.expectedTotalTokens !== undefined) {
+  if (s.expectedTotalCny !== null && s.expectedTotalCny !== undefined && s.expectedTotalUsd !== null && s.expectedTotalUsd !== undefined && s.expectedTotalTokens !== null && s.expectedTotalTokens !== undefined) {
+    lines.push(`- 剩余轮数输入费用预期 ≈ ${formatCny(s.expectedTotalCny)}（≈${formatUsd(s.expectedTotalUsd)}；约 ${formatCompact(s.expectedTotalTokens)} token 计费当量）`)
+  } else if (s.expectedTotalUsd !== null && s.expectedTotalUsd !== undefined && s.expectedTotalTokens !== null && s.expectedTotalTokens !== undefined) {
     lines.push(`- 剩余轮数输入费用预期 ≈ ${formatUsd(s.expectedTotalUsd)}（约 ${formatCompact(s.expectedTotalTokens)} token 计费当量）`)
   }
   if (s.compactions > 0) {

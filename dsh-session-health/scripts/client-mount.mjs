@@ -45,6 +45,7 @@ assert.ok(Array.isArray(plugin.inject), 'exports must carry the inject list')
 assert.ok(plugin.inject.includes('remote'), 'ctx.remote reads need the remote root injected')
 assert.ok(plugin.inject.includes('remote.commands'), 'remote.commands sub-service must be injected')
 assert.ok(!plugin.inject.includes('remote.sessionHealth'), 'a plugin Remote can never mount client-side — must not be injected')
+assert.ok(plugin.inject.includes('locale'), 'locale must be injected for the currency-by-region display')
 console.log('  ok  bundle registered via __ModuleLoader__ with apply/inject/name')
 
 // 2b) The compaction-aware merge helper is exported and correct.
@@ -96,6 +97,7 @@ ctx.provide('remote', {
 ctx.provide('remote.commands', {
   execute: async () => ({ ok: true }),
 })
+ctx.provide('locale', { snapshot: { active: 'zh' } })
 
 try {
   await ctx.plugin(plugin).await()

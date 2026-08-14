@@ -86,11 +86,17 @@ const OUTPUT_SCHEMA = {
       properties: {
         cacheHitRate: { type: 'number', description: '上次请求的缓存命中率 0..1（未知时省略）' },
         effectivePerRound: { type: 'number', description: '每轮计费当量 token（未缓存输入 + 缓存命中×折扣；未知时省略）' },
-        effectivePerRoundUsd: { type: 'number', description: '每轮计费当量金额 USD（= effectivePerRound × inputPricePerM / 1e6；未知时省略）' },
-        inputPricePerM: { type: 'number', description: '输入价格基准（USD / 1M token，缓存命中按折扣）' },
+        effectivePerRoundUsd: { type: 'number', description: '每轮计费当量金额 USD（未知时省略）' },
+        effectivePerRoundCny: { type: 'number', description: '每轮计费当量金额 CNY（官方峰谷定价文档激活时；未知时省略）' },
+        inputPricePerM: { type: 'number', description: '输入价格基准（USD 归一化 / 1M token）' },
+        inputMissPerM: { type: 'number', description: '文档货币下的未命中输入价 /1M（静态模式省略）' },
+        inputHitPerM: { type: 'number', description: '文档货币下的缓存命中输入价 /1M（静态模式省略）' },
+        pricePeriod: { type: 'string', enum: ['peak', 'offpeak'], description: '当前忙/闲时段（北京时间；静态模式省略）' },
+        priceCurrency: { type: 'string', enum: ['cny', 'usd'], description: '价格文档货币' },
         remainingRounds: { type: 'integer', description: '本次调用提供的剩余轮数（未提供时省略）' },
         expectedTotalTokens: { type: 'number', description: '剩余轮数输入费用预期 token（= effectivePerRound × remainingRounds；未知时省略）' },
         expectedTotalUsd: { type: 'number', description: '剩余轮数输入费用预期 USD（未知时省略）' },
+        expectedTotalCny: { type: 'number', description: '剩余轮数输入费用预期 CNY（未知时省略）' },
       },
     },
   },
@@ -153,14 +159,20 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
       if (report.handoff.lastCommit !== null) handoffReady.lastCommit = report.handoff.lastCommit
       if (report.handoff.hasHandoff !== null) handoffReady.hasHandoff = report.handoff.hasHandoff
 
-      const cost: Record<string, number> = {}
+      const cost: Record<string, number | string> = {}
       if (report.signals.cacheHitRate !== null) cost.cacheHitRate = report.signals.cacheHitRate
       if (report.signals.effectivePerRound !== null) cost.effectivePerRound = report.signals.effectivePerRound
       if (report.signals.effectivePerRoundUsd !== null) cost.effectivePerRoundUsd = report.signals.effectivePerRoundUsd
+      if (report.signals.effectivePerRoundCny !== null) cost.effectivePerRoundCny = report.signals.effectivePerRoundCny
       cost.inputPricePerM = report.signals.inputPricePerM
+      if (report.signals.inputMissPerM !== null) cost.inputMissPerM = report.signals.inputMissPerM
+      if (report.signals.inputHitPerM !== null) cost.inputHitPerM = report.signals.inputHitPerM
+      cost.priceCurrency = report.signals.priceCurrency
+      if (report.signals.pricePeriod !== null) cost.pricePeriod = report.signals.pricePeriod
       if (args.remainingRounds !== undefined) cost.remainingRounds = args.remainingRounds
       if (report.signals.expectedTotalTokens !== null) cost.expectedTotalTokens = report.signals.expectedTotalTokens
       if (report.signals.expectedTotalUsd !== null) cost.expectedTotalUsd = report.signals.expectedTotalUsd
+      if (report.signals.expectedTotalCny !== null) cost.expectedTotalCny = report.signals.expectedTotalCny
 
       return {
         severity: report.severity,

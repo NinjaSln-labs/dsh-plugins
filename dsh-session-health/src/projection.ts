@@ -18,7 +18,7 @@ import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { sessionHealthProjectionSchema } from './schemas.ts'
 import type { HealthSeverity, SessionHealthProjection } from './types.ts'
 import type { ResolvedConfig } from './config.ts'
-import type { ResolvedPricing } from './pricing.ts'
+import type { PricePeriod, ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
 
 /** Fold state (plain JSON per the unit contract — persisted-cache precondition). */
@@ -96,7 +96,11 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
  * only at the bottom tier (green → blue). The exact threshold values live in
  * config, never here.
  */
-export function healthView(state: SessionHealthState, config: ResolvedConfig): SessionHealthProjection {
+export function healthView(
+  state: SessionHealthState,
+  config: ResolvedConfig,
+  price?: ResolvedPricing,
+): SessionHealthProjection {
   const total = state.pressureTokens ?? null
   const window = state.contextWindow ?? null
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
@@ -125,12 +129,23 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
     : null
   const uncachedInputTokens = lastUsage?.inputTokens ?? null
   const cacheReadTokens = lastUsage?.cacheReadTokens ?? null
+  // Money math: with an official pricing document the cache-hit ratio and
+  // the per-token price come from the doc (CNY, period-aware); in static mode
+  // they come from config (flat USD).
+  const discount = price !== undefined && price.missPerM > 0
+    ? price.hitPerM / price.missPerM
+    : config.cost.cacheHitDiscount
   const effectivePerRound = lastUsage !== undefined
-    ? lastUsage.inputTokens + lastUsage.cacheReadTokens * config.cost.cacheHitDiscount
+    ? lastUsage.inputTokens + lastUsage.cacheReadTokens * discount
     : null
+  const pricePerM = price !== undefined ? price.missPerM : config.cost.inputPricePerM
   const effectivePerRoundUsd = effectivePerRound !== null
-    ? effectivePerRound * config.cost.inputPricePerM / 1_000_000
+    ? effectivePerRound * pricePerM / 1_000_000 * (price?.usdPerCny ?? 1)
     : null
+  const effectivePerRoundCny = effectivePerRound !== null && price !== undefined && price.currency === 'cny'
+    ? effectivePerRound * price.missPerM / 1_000_000
+    : null
+  const pricePeriod: PricePeriod = price?.period ?? null
 
   let advice: string
   switch (severity) {
@@ -166,13 +181,16 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
     cacheReadTokens,
     effectivePerRound,
     effectivePerRoundUsd,
+    effectivePerRoundCny,
+    pricePeriod,
   }
 }
 
 /** Build the unit for one registration; the fold functions close over config. */
 export function sessionHealthProjectionDefinition(
   config: ResolvedConfig,
-  pricing?: { get(): ResolvedPricing },
+  pricing?: { get(model?: string): ResolvedPricing },
+  modelOf?: () => string,
 ): ProjectionDefinition<'sessionHealth', SessionHealthState> {
   return {
     key: 'sessionHealth',
@@ -181,10 +199,8 @@ export function sessionHealthProjectionDefinition(
     apply: applyHealthEvent,
     // The fold stays event-pure; only the money view reads the live price
     // cache (falls back to the static config when no cache is mounted).
-    view: state => healthView(state, pricing === undefined
-      ? config
-      : { ...config, cost: { ...config.cost, ...pricing.get() } }),
-    // v3: effectivePerRoundUsd money field (invalidates persisted rows).
-    stateVersion: 3,
+    view: state => healthView(state, config, pricing?.get(modelOf?.() ?? '')),
+    // v4: effectivePerRoundCny + pricePeriod (invalidates persisted rows).
+    stateVersion: 4,
   }
 }

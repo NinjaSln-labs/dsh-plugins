@@ -13,7 +13,8 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
 import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
-import type { PriceCache } from './pricing.ts'
+import { PERIOD_LABEL, formatCny } from './util.ts'
+import type { PriceCache, PricePeriod } from './pricing.ts'
 import type { HealthRecommendation, HealthSeverity } from './types.ts'
 
 export interface HealthSignals {
@@ -30,12 +31,24 @@ export interface HealthSignals {
   effectivePerRound: number | null
   /** effectivePerRound in USD (inputPricePerM basis); null when unknown. */
   effectivePerRoundUsd: number | null
+  /** effectivePerRound in CNY when an official pricing document is active; null otherwise. */
+  effectivePerRoundCny: number | null
   /** effectivePerRound × remaining rounds; null unless remainingRounds provided. */
   expectedTotalTokens: number | null
   /** expectedTotalTokens in USD; null unless remainingRounds provided. */
   expectedTotalUsd: number | null
-  /** The input price basis (USD per 1M tokens) used for the money figures. */
+  /** expectedTotalTokens in CNY when the official document is active; null otherwise. */
+  expectedTotalCny: number | null
+  /** USD-normalized input price basis per 1M tokens (miss price × usdPerCny). */
   inputPricePerM: number
+  /** Cache-miss input price per 1M in the document currency; null in static mode. */
+  inputMissPerM: number | null
+  /** Cache-hit input price per 1M in the document currency; null in static mode. */
+  inputHitPerM: number | null
+  /** 'cny' with an official document, 'usd' in static mode. */
+  priceCurrency: 'cny' | 'usd'
+  /** Current peak/off-peak period; null in static mode. */
+  pricePeriod: PricePeriod
 }
 
 export interface HandoffReadiness {
@@ -417,14 +430,20 @@ export async function assess(
   let cacheHitRate: number | null = null
   let effectivePerRound: number | null = null
   let effectivePerRoundUsd: number | null = null
+  let effectivePerRoundCny: number | null = null
+  let pricePeriodFromProjection: PricePeriod = null
   const registry = ctx.get('sessionProjections')
   if (registry !== undefined) {
     try {
       const value = registry.snapshot(session).values.sessionHealth
       if (value !== undefined) {
-        cacheHitRate = value.cacheHitRate
-        effectivePerRound = value.effectivePerRound
-        effectivePerRoundUsd = value.effectivePerRoundUsd
+        // `?? null`: a snapshot missing a newer field must read as null, not
+        // undefined — `!== null` checks elsewhere would then treat it as known.
+        cacheHitRate = value.cacheHitRate ?? null
+        effectivePerRound = value.effectivePerRound ?? null
+        effectivePerRoundUsd = value.effectivePerRoundUsd ?? null
+        effectivePerRoundCny = value.effectivePerRoundCny ?? null
+        pricePeriodFromProjection = value.pricePeriod ?? null
       }
     } catch { /* degrade to unknown */ }
   }
@@ -439,20 +458,41 @@ export async function assess(
     && opts.remainingRounds !== null && opts.remainingRounds !== undefined
     ? effectivePerRoundUsd * opts.remainingRounds
     : null
+  const expectedTotalCny = effectivePerRoundCny !== null
+    && opts.remainingRounds !== null && opts.remainingRounds !== undefined
+    ? effectivePerRoundCny * opts.remainingRounds
+    : null
 
   // Human-readable verdict.
   const pct = ratio !== null ? Math.round(ratio * 100) : null
   const economy = total !== null && total >= config.thresholds.economyTokenFloor
   // Live pricing (ctx-provided cache when mounted; static config otherwise).
-  const pricing = (ctx.get('sessionHealthPricing') as PriceCache | undefined)?.get() ?? config.cost
-  const costNote = effectivePerRoundUsd !== null
-    ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${pricing.inputPricePerM}/M，缓存命中按 ${Math.round(pricing.cacheHitDiscount * 100)}% 计，不含输出）`
-    : ''
+  const pricingCache = ctx.get('sessionHealthPricing') as PriceCache | undefined
+  const model = (() => {
+    try {
+      const sel = (ctx.get('agentDefaultModel') as { currentSelection(): { model: string } } | undefined)?.currentSelection()
+      return sel?.model ?? ''
+    } catch {
+      return ''
+    }
+  })()
+  const price = pricingCache !== undefined ? pricingCache.get(model) : null
+  const priceCurrency = price !== null ? price.currency : 'usd'
+  const pricePeriod = price?.period ?? pricePeriodFromProjection
+  const inputMissPerM = price !== null ? price.missPerM : null
+  const inputHitPerM = price !== null ? price.hitPerM : null
+  const costNote = priceCurrency === 'cny' && effectivePerRoundCny !== null
+    ? `计费预期约 ${formatCny(effectivePerRoundCny)}/轮（≈${formatUsd(effectivePerRoundUsd ?? 0)}；输入价 ¥${price!.missPerM}/M ${pricePeriod !== null ? PERIOD_LABEL[pricePeriod] : ''}，缓存命中 ¥${price!.hitPerM}/M，不含输出）`
+    : effectivePerRoundUsd !== null
+      ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${config.cost.inputPricePerM}/M，缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
+      : ''
   const remainingNote = opts.remainingRounds !== null && opts.remainingRounds !== undefined
     && opts.remainingRounds >= config.thresholds.economyRoundFloor
-    ? `（剩余约 ${opts.remainingRounds} 轮：${expectedTotalUsd !== null
-      ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
-      : `按 ${formatCompact(total ?? 0)} token/轮估算，费用累积明显`}）`
+    ? `（剩余约 ${opts.remainingRounds} 轮：${expectedTotalCny !== null
+      ? `预计输入费用 ≈ ${formatCny(expectedTotalCny)}（≈${formatUsd(expectedTotalUsd ?? 0)}）`
+      : expectedTotalUsd !== null
+        ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
+        : `按 ${formatCompact(total ?? 0)} token/轮估算，费用累积明显`}）`
     : ''
   let reason: string
   switch (view.severity) {
@@ -500,9 +540,15 @@ export async function assess(
       cacheHitRate,
       effectivePerRound,
       effectivePerRoundUsd,
+      effectivePerRoundCny,
       expectedTotalTokens,
       expectedTotalUsd,
-      inputPricePerM: pricing.inputPricePerM,
+      expectedTotalCny,
+      inputPricePerM: price !== null ? price.missPerM * price.usdPerCny : config.cost.inputPricePerM,
+      inputMissPerM,
+      inputHitPerM,
+      priceCurrency,
+      pricePeriod,
     },
     probes,
     handoff: {

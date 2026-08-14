@@ -56,6 +56,14 @@ export interface SessionHealthProjection {
    * USD, the money figure the badge displays. Null before any usage report.
    */
   effectivePerRoundUsd: number | null
+  /**
+   * The same per-round cost in CNY when an auto-fetched official pricing
+   * document is active (its currency is cny); null in static (USD) mode or
+   * before any usage report.
+   */
+  effectivePerRoundCny: number | null
+  /** 'peak' | 'offpeak' when the official peak/valley pricing applies; null otherwise. */
+  pricePeriod: 'peak' | 'offpeak' | null
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
