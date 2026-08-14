@@ -9,23 +9,19 @@
  * `sessionHealth` projection (`sessions.binding(...).session.projections
  * .faceOf('sessionHealth')`), updated by `session/projection` frames the
  * moment the host fold changes — zero polling, zero RPC. The projection seam
- * is the one wire path community plugins own (client remotes are a fixed
- * generated list; a plugin Remote would never mount — see src/schemas.ts).
+ * is the one wire path community plugins own: the browser mounts a fixed,
+ * build-time generated Remote list (api-remotes), so a plugin Remote such as
+ * `remote.sessionHealth` can never mount — inject it and the entry stays
+ * pending forever (web boot: waiting for service: remote.sessionHealth).
  *
- * Clicking the badge runs `/health` through the core commands Remote for the
- * full textual report.
+ * Clicking the badge runs `/health` through the core commands Remote
+ * (`remote.commands`, always mounted) for the full textual report.
  */
 import * as React from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the header.utilities seat).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionHealthProjection, HealthSeverity } from './types.ts'
-
-/** Client plugin identity (loader diagnostics). */
-export const name = 'dsh-session-health'
-
-/** Required client services; `remote.commands` is the core, always-mounted Remote. */
-export const inject = ['slots', 'sessions', 'remote.commands']
 
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
@@ -215,6 +211,20 @@ function HealthBadge(props: {
   )
 }
 
+/** Package id — must match package.json `name` and the ModuleLoader handoff. */
+export const name = 'dsh-session-health'
+
+/**
+ * Required client services. Cordis forbids `ctx.remote` / `ctx.sessions` /
+ * `ctx.slots` property reads unless they appear here (topology-sensitive
+ * proxy; "cannot get property X without inject"). Both the `remote` root and
+ * the `remote.commands` sub-service are injected, mirroring the in-tree
+ * convention (ui-goal: ['slots','sessions','remote','remote.goals',...]).
+ * There is deliberately NO `remote.sessionHealth`: plugin Remotes never mount
+ * client-side, and an injected one would leave the entry pending forever.
+ */
+export const inject = ['slots', 'sessions', 'remote', 'remote.commands']
+
 /** Client entry: register the badge in the session header utilities seat. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
@@ -223,7 +233,9 @@ export function apply(ctx: ClientContext): void {
     return styles.insert(CSS)
   }, 'dsh-session-health: styles')
 
-  const sessions = ctx.sessions as unknown as HealthBadgePropsSessions
+  const sessions = ctx.sessions as unknown as {
+    binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
+  }
   const commands = (ctx.remote as unknown as { commands: CommandsRemote }).commands
 
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
@@ -236,9 +248,4 @@ export function apply(ctx: ClientContext): void {
       />
     ),
   ) as never)
-}
-
-/** The sessions face the badge needs (structural, cast at the service boundary). */
-type HealthBadgePropsSessions = {
-  binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
 }
