@@ -3,21 +3,19 @@
  *
  * Mounts the built plugin the way the harness LOADER does (cordis-plugin-loader
  * unwrapExports: `module.default ?? module`, then `ctx.plugin(...)`) and
- * verifies the wiring: Remote service provision, conditional registration of
- * the projection unit / tool / command through ctx.inject children, and a
- * live healthState RPC call.
+ * verifies the wiring: conditional registration of the projection unit / tool
+ * / command through ctx.inject children, and live handler runs.
  *
  * Regression guard: the plugin default export MUST be an object with `apply`
  * (loader pitfall — a factory function default is called as the plugin body
  * and its returned `{ apply }` is silently ignored: no error, entry ACTIVE,
- * apply never runs). If apply does not run, `ctx.get('sessionHealth')` stays
- * undefined and the registrations below stay null → this test fails.
+ * apply never runs). If apply does not run, the registrations below stay
+ * null → this test fails.
  *
  *   npm run build && node scripts/mount.mjs
  */
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionHealthService } from '../lib/index.js'
 
 const session = { header: { cwd: '/tmp/ws' } }
 const registrations = { commands: null, tools: null, projections: null }
@@ -50,17 +48,8 @@ await ctx.plugin(plugin).await()
 await new Promise(resolve => setTimeout(resolve, 50))
 
 try {
-  // 1) apply RAN (the loader-pitfall guard): Remote service is provided and callable.
-  const service = ctx.get('sessionHealth')
-  assert.ok(service instanceof SessionHealthService, 'ctx.sessionHealth is the Remote service (apply ran)')
-  const health = await service.healthState({ sessionId: 's1' })
-  assert.equal(health.color, 'yellow') // 132K >= 50K economy floor
-  assert.equal(health.total, 132_000)
-  assert.equal(health.window, 1_000_000)
-  console.log('  ok  apply ran: Remote service provided + healthState RPC')
-
-  // 2) /health command registered.
-  assert.ok(registrations.commands !== null, 'command registered')
+  // 1) apply RAN (the loader-pitfall guard): the command registered.
+  assert.ok(registrations.commands !== null, 'command registered (apply ran)')
   assert.equal(registrations.commands.name, 'health')
   const result = await registrations.commands.handler({
     agent: { id: 'agent-1', session },
@@ -69,9 +58,9 @@ try {
   })
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('健康度：**黄**'))
-  console.log('  ok  /health command registered + handler runs')
+  console.log('  ok  apply ran: /health command registered + handler runs')
 
-  // 3) session_health tool registered with a working execute.
+  // 2) session_health tool registered with a working execute.
   assert.ok(registrations.tools !== null, 'tool registered')
   assert.equal(registrations.tools.name, 'session_health')
   const value = await registrations.tools.execute({}, {
@@ -82,7 +71,7 @@ try {
   assert.equal(value.recommendation, 'suggest-switch')
   console.log('  ok  session_health tool registered + execute runs')
 
-  // 4) sessionHealth projection unit registered (unit contract shape).
+  // 3) sessionHealth projection unit registered (unit contract shape).
   assert.ok(registrations.projections !== null, 'projection registered')
   assert.equal(registrations.projections.key, 'sessionHealth')
   assert.equal(typeof registrations.projections.init, 'function')

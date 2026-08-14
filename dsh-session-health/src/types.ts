@@ -37,19 +37,6 @@ export interface SessionHealthProjection {
   compactions: number
 }
 
-/** Request of the Remote healthState method (badge fallback path). */
-export interface HealthStateRequest {
-  sessionId: string
-}
-
-/** Response of the Remote healthState method. */
-export interface HealthStateResult {
-  color: HealthSeverity
-  ratio: number | null
-  total: number | null
-  window: number | null
-}
-
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Continue-vs-new verdict + signals, folded from session events. */
