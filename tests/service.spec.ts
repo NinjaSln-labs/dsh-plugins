@@ -8,6 +8,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
 import knowledgeSqlite from '../src/index.ts'
 import type { KnowledgeService } from '../src/index.ts'
 
@@ -94,6 +96,9 @@ afterEach(async () => {
 })
 
 const agent = { id: 'agent-1', session: { id: 'sess-1', header: { cwd: '/ws/one' } }, ctx: {} }
+
+/** 实验语料目录（相对测试文件解析，避免仓库内出现本地绝对路径）。 */
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'research', 'memory-experiment')
 
 describe('apply() 装配', () => {
   it('提供 ctx.knowledge、注册 6 个工具、事件可订阅', async () => {
@@ -228,7 +233,7 @@ describe('ask 门控', () => {
 
 describe('probe（实验套件）', () => {
   it('seed → eval-hard 确定性臂（A 7% / C 21% / D 50%）', { timeout: 30000 }, async () => {
-    app = await boot({ agent, corpusPath: '/Users/sin/Documents/deepseekharnesstest/research/memory-experiment' })
+    app = await boot({ agent, corpusPath: CORPUS })
     const seed = await app.service.probe('seed')
     expect(seed.ok).toBe(true)
     const seedPart = seed.parts[0] as { distractors: number }
@@ -242,7 +247,7 @@ describe('probe（实验套件）', () => {
   })
 
   it('contract 全过（≥11 项）', { timeout: 30000 }, async () => {
-    app = await boot({ agent, corpusPath: '/Users/sin/Documents/deepseekharnesstest/research/memory-experiment' })
+    app = await boot({ agent, corpusPath: CORPUS })
     const c = await app.service.probe('contract')
     expect(c.ok).toBe(true)
     const checks = (c.parts[0] as { checks: Array<{ name: string; pass: boolean }> }).checks
