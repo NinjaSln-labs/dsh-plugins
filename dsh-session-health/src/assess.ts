@@ -15,7 +15,7 @@ import { applyHealthEvent, healthView, type SessionHealthState } from './project
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
 import { PERIOD_LABEL, formatCny } from './util.ts'
 import type { PriceCache, PricePeriod } from './pricing.ts'
-import type { HealthRecommendation, HealthSeverity } from './types.ts'
+import type { HealthRecommendation, HealthSeverity, SessionHealthProjection } from './types.ts'
 
 export interface HealthSignals {
   total: number | null
@@ -134,7 +134,7 @@ async function readCounts(
   session: Session,
   agentId: string | undefined,
   signal: AbortSignal,
-): Promise<{ counts: Counts; compactions: number }> {
+): Promise<{ counts: Counts; compactions: number; snapshot?: SessionHealthProjection }> {
   const registry = ctx.get('sessionProjections')
   if (registry !== undefined) {
     try {
@@ -143,6 +143,7 @@ async function readCounts(
         return {
           counts: { turns: value.turns, user: value.userMessages, assistant: value.assistantMessages },
           compactions: value.compactions,
+          snapshot: value,
         }
       }
     } catch { /* fall through to sessionQuery */ }
@@ -356,9 +357,29 @@ export async function assess(
   const total = measureTokens(ctx, session)
   const window = await resolveWindow(ctx, session)
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
-  const { counts, compactions } = await readCounts(ctx, session, agentId, signal)
+  const { counts, compactions, snapshot } = await readCounts(ctx, session, agentId, signal)
+
+  // Live pricing (ctx-provided cache when mounted; static config otherwise) —
+  // resolved before the view so the severity bills the same cache-discounted
+  // figure the projection unit uses.
+  const pricingCache = ctx.get('sessionHealthPricing') as PriceCache | undefined
+  const model = (() => {
+    try {
+      const sel = (ctx.get('agentDefaultModel') as { currentSelection(): { model: string } } | undefined)?.currentSelection()
+      return sel?.model ?? ''
+    } catch {
+      return ''
+    }
+  })()
+  const price = pricingCache !== undefined ? pricingCache.get(model) : null
 
   // Severity via the exact same view the projection unit uses (config thresholds).
+  // The projection's usage buckets ride its pushed value; reconstruct the fold
+  // state's lastUsage so the economy dimension bills the same effectivePerRound.
+  const usage = snapshot !== undefined && snapshot.uncachedInputTokens !== null && snapshot.uncachedInputTokens !== undefined
+    && snapshot.cacheReadTokens !== null && snapshot.cacheReadTokens !== undefined
+    ? { inputTokens: snapshot.uncachedInputTokens, cacheReadTokens: snapshot.cacheReadTokens, cacheWriteTokens: 0 }
+    : null
   const state: SessionHealthState = {
     turns: counts.turns ?? 0,
     lastTurn: null,
@@ -367,8 +388,9 @@ export async function assess(
     compactions,
     ...(total !== null ? { pressureTokens: total } : {}),
     ...(window !== null ? { contextWindow: window } : {}),
+    ...(usage !== null ? { lastUsage: usage } : {}),
   }
-  const view = healthView(state, config)
+  const view = healthView(state, config, price ?? undefined)
 
   // Work-nature (dimension B) folding into the recommendation.
   let recommendation: HealthRecommendation
@@ -427,27 +449,21 @@ export async function assess(
   }
 
   // Cache-hit accounting + cost expectation. The bucket figures ride the
-  // sessionHealth projection snapshot when the unit is mounted (the exact
-  // tokenMeter measurement above stays the primary pressure source).
+  // sessionHealth projection snapshot read above (the exact tokenMeter
+  // measurement stays the primary pressure source).
   let cacheHitRate: number | null = null
   let effectivePerRound: number | null = null
   let effectivePerRoundUsd: number | null = null
   let effectivePerRoundCny: number | null = null
   let pricePeriodFromProjection: PricePeriod = null
-  const registry = ctx.get('sessionProjections')
-  if (registry !== undefined) {
-    try {
-      const value = registry.snapshot(session).values.sessionHealth
-      if (value !== undefined) {
-        // `?? null`: a snapshot missing a newer field must read as null, not
-        // undefined — `!== null` checks elsewhere would then treat it as known.
-        cacheHitRate = value.cacheHitRate ?? null
-        effectivePerRound = value.effectivePerRound ?? null
-        effectivePerRoundUsd = value.effectivePerRoundUsd ?? null
-        effectivePerRoundCny = value.effectivePerRoundCny ?? null
-        pricePeriodFromProjection = value.pricePeriod ?? null
-      }
-    } catch { /* degrade to unknown */ }
+  if (snapshot !== undefined) {
+    // `?? null`: a snapshot missing a newer field must read as null, not
+    // undefined — `!== null` checks elsewhere would then treat it as known.
+    cacheHitRate = snapshot.cacheHitRate ?? null
+    effectivePerRound = snapshot.effectivePerRound ?? null
+    effectivePerRoundUsd = snapshot.effectivePerRoundUsd ?? null
+    effectivePerRoundCny = snapshot.effectivePerRoundCny ?? null
+    pricePeriodFromProjection = snapshot.pricePeriod ?? null
   }
   if (cacheHitRate !== null) {
     probes.push(`缓存命中率 ${formatHitRate(cacheHitRate)}（上次请求；命中高说明上下文稳定，压缩会重置命中）`)
@@ -465,20 +481,11 @@ export async function assess(
     ? effectivePerRoundCny * opts.remainingRounds
     : null
 
-  // Human-readable verdict.
+  // Human-readable verdict. Yellow's reason branches on the same driver the
+  // projection unit used: capacity (ratio ≥ windowHigh) or economy (billable-
+  // equivalent per round, cache-discounted, against the window-scaled floor).
   const pct = ratio !== null ? Math.round(ratio * 100) : null
-  const economy = total !== null && total >= config.thresholds.economyTokenFloor
-  // Live pricing (ctx-provided cache when mounted; static config otherwise).
-  const pricingCache = ctx.get('sessionHealthPricing') as PriceCache | undefined
-  const model = (() => {
-    try {
-      const sel = (ctx.get('agentDefaultModel') as { currentSelection(): { model: string } } | undefined)?.currentSelection()
-      return sel?.model ?? ''
-    } catch {
-      return ''
-    }
-  })()
-  const price = pricingCache !== undefined ? pricingCache.get(model) : null
+  const capacityHigh = ratio !== null && ratio >= config.thresholds.windowHigh
   const pricePeriod = price?.period ?? pricePeriodFromProjection
   const inputMissPerMCny = price !== null ? price.missPerMCny : null
   const inputHitPerMCny = price !== null ? price.hitPerMCny : null
@@ -495,7 +502,7 @@ export async function assess(
       ? `预计输入费用 ≈ ${formatCny(expectedTotalCny)}（≈${formatUsd(expectedTotalUsd ?? 0)}）`
       : expectedTotalUsd !== null
         ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
-        : `按 ${formatCompact(total ?? 0)} token/轮估算，费用累积明显`}）`
+        : `按 ${formatCompact(effectivePerRound ?? total ?? 0)} token/轮估算，费用累积明显`}）`
     : ''
   let reason: string
   switch (view.severity) {
@@ -503,9 +510,9 @@ export async function assess(
       reason = `上下文已占窗口 ${pct}%，处于危险区；建议尽快在任务边界收尾，并先补交接（文档 + commit）。`
       break
     case 'yellow':
-      reason = ratio !== null
+      reason = capacityHigh
         ? `上下文已占窗口 ${pct}%，早期内容开始被压缩；若剩余工作还多，开新会话更划算。${remainingNote}`
-        : `每轮历史输入约 ${formatCompact(total ?? 0)} token${economy ? '，费用可观' : ''}；若剩余工作还多，开新会话更划算。${remainingNote}`
+        : `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣），费用可观；若剩余工作还多，开新会话更划算。${remainingNote}`
       break
     case 'blue':
       reason = `上下文占用 ${pct}%（中等）——继续没问题，留意窗口压力；如需切换，先补交接再切。`

@@ -16,8 +16,21 @@ export interface ThresholdsConfig {
   windowHigh: number
   /** Window-ratio floor of the "危险区" (red) tier. Default 0.8. */
   windowCritical: number
-  /** Per-round input tokens that make the economy dimension expensive. Default 50000. */
+  /**
+   * Billable-equivalent (cache-discounted) tokens per round that make the
+   * economy dimension expensive. Default 50000. The effective floor is
+   * max(economyTokenFloor, economyWindowRatio × contextWindow) when the
+   * window is known — the absolute default was calibrated for ~128K-window
+   * models, so it must scale up on larger windows or every session crosses
+   * it at single-digit occupancy.
+   */
   economyTokenFloor: number
+  /**
+   * Window-ratio component of the economy floor (see economyTokenFloor).
+   * Default 0.3: on a 1M-window model the economy tier needs ~300K
+   * billable-equivalent per round before it outranks the ratio tiers.
+   */
+  economyWindowRatio: number
   /** Remaining rounds at which economy cost accumulates. Default 10. */
   economyRoundFloor: number
   /** Message-count proxy for context bloat. Default 800. */
@@ -80,6 +93,7 @@ export const Config: z<Config> = z.object({
     windowHigh: z.number().min(0).max(1).default(0.5),
     windowCritical: z.number().min(0).max(1).default(0.8),
     economyTokenFloor: z.number().min(0).default(50000),
+    economyWindowRatio: z.number().min(0).max(1).default(0.3),
     economyRoundFloor: z.number().min(0).default(10),
     messageCountProxy: z.number().min(0).default(800),
   }),
@@ -119,6 +133,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     windowHigh: config.thresholds?.windowHigh ?? 0.5,
     windowCritical: config.thresholds?.windowCritical ?? 0.8,
     economyTokenFloor: config.thresholds?.economyTokenFloor ?? 50000,
+    economyWindowRatio: config.thresholds?.economyWindowRatio ?? 0.3,
     economyRoundFloor: config.thresholds?.economyRoundFloor ?? 10,
     messageCountProxy: config.thresholds?.messageCountProxy ?? 800,
   }
