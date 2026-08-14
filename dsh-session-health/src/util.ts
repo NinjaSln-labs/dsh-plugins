@@ -12,7 +12,7 @@ export function formatCompact(n: number): string {
   return String(n)
 }
 
-/** Hit rate display: integer percent only — the raw 0..1 value stays in the data. */
+/** Hit rate display: floored integer percent — 0.9993 -> '99%' (true lower bound, never a fake 100%). The raw 0..1 value stays in the data. */
 export function formatHitRate(rate: number): string {
-  return `${Math.round(rate * 100)}%`
+  return `${Math.floor(rate * 100)}%`
 }
