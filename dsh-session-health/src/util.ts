@@ -11,3 +11,9 @@ export function formatCompact(n: number): string {
   if (n >= 1000) return Math.round(n / 1000) + 'K'
   return String(n)
 }
+
+/** Hit rate as an integer percent: 0.9993 -> '≈100%', 0.9 -> '90%' (no decimals, never a fake exact 100%). */
+export function formatHitRate(rate: number): string {
+  const pct = Math.round(rate * 100)
+  return rate < 1 && pct === 100 ? '≈100%' : `${pct}%`
+}
