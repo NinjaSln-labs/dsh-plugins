@@ -22,6 +22,7 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the header.utilities seat).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionHealthProjection, HealthSeverity } from './types.ts'
+import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
 
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
@@ -150,6 +151,8 @@ function HealthBadge(props: {
 }): JSX.Element {
   const [proj, setProj] = React.useState<SessionHealthProjection | undefined>(undefined)
   const [pressure, setPressure] = React.useState<ContextPressureLike | undefined>(undefined)
+  // Core tokenUsage projection value — same source as the input-bar stats line.
+  const [usage, setUsage] = React.useState<TokenUsageLike | undefined>(undefined)
   const [hover, setHover] = React.useState(false)
   // 计费预期行的显示口径：金额（默认）↔ 计费当量 token 数。点击行切换，localStorage 记住。
   const [costAsTokens, setCostAsTokens] = React.useState<boolean>(() => {
@@ -178,7 +181,10 @@ function HealthBadge(props: {
     const binding = props.sessions.binding?.(props.sessionId)?.session?.projections
     const face = binding?.faceOf?.('sessionHealth')
     const pressureFace = binding?.faceOf?.('contextPressure')
-    if (face === undefined && pressureFace === undefined) return () => { alive = false }
+    // Cache-hit rate rides the CORE tokenUsage projection — the exact value
+    // the input-bar stats line shows (src/usage.ts has the single formula).
+    const usageFace = binding?.faceOf?.('tokenUsage')
+    if (face === undefined && pressureFace === undefined && usageFace === undefined) return () => { alive = false }
     const readHealth = () => {
       if (!alive) return
       const v = face?.getSnapshot()
@@ -189,11 +195,18 @@ function HealthBadge(props: {
       const v = pressureFace?.getSnapshot()
       if (v !== undefined && v !== null) setPressure(v as ContextPressureLike)
     }
+    const readUsage = () => {
+      if (!alive) return
+      const v = usageFace?.getSnapshot()
+      if (v !== undefined && v !== null) setUsage(v as TokenUsageLike)
+    }
     readHealth()
     readPressure()
+    readUsage()
     const offs = [
       face !== undefined ? face.subscribe(readHealth) : () => {},
       pressureFace !== undefined ? pressureFace.subscribe(readPressure) : () => {},
+      usageFace !== undefined ? usageFace.subscribe(readUsage) : () => {},
     ]
     return () => {
       alive = false
@@ -257,7 +270,7 @@ function HealthBadge(props: {
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
-          <span className="sh-v">约 {compact(merged.total)} token{proj?.cacheHitRate !== null && proj?.cacheHitRate !== undefined ? `（缓存命中 ${pctOf(proj.cacheHitRate)}）` : ''}</span>
+          <span className="sh-v">约 {compact(merged.total)} token{(() => { const rate = cacheHitRateOf(usage); return rate !== null ? `（缓存命中 ${pctOf(rate)}）` : '' })()}</span>
         </div>
         {merged.projected !== null ? (
           <div className="sh-tip-row">

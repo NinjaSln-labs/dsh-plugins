@@ -23,7 +23,6 @@ export const sessionHealthProjectionSchema = zod.object({
   userMessages: zod.number().int().nonnegative(),
   assistantMessages: zod.number().int().nonnegative(),
   compactions: zod.number().int().nonnegative(),
-  cacheHitRate: zod.number().min(0).max(1).nullable(),
   uncachedInputTokens: zod.number().int().nonnegative().nullable(),
   cacheReadTokens: zod.number().int().nonnegative().nullable(),
   effectivePerRound: zod.number().nonnegative().nullable(),

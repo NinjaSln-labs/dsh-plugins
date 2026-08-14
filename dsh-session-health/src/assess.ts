@@ -12,6 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
 import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
+import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
 import { PERIOD_LABEL, formatCny } from './util.ts'
 import type { PriceCache, PricePeriod } from './pricing.ts'
@@ -128,22 +129,29 @@ interface Counts {
   assistant: number | null
 }
 
-/** Event counts: sessionHealth projection snapshot (O(1)) preferred, sessionQuery fallback. */
+/** Event counts + core projection values: sessionHealth snapshot (O(1)) preferred, sessionQuery fallback. */
 async function readCounts(
   ctx: Context,
   session: Session,
   agentId: string | undefined,
   signal: AbortSignal,
-): Promise<{ counts: Counts; compactions: number; snapshot?: SessionHealthProjection }> {
+): Promise<{ counts: Counts; compactions: number; snapshot?: SessionHealthProjection; tokenUsage?: TokenUsageLike }> {
   const registry = ctx.get('sessionProjections')
   if (registry !== undefined) {
     try {
-      const value = registry.snapshot(session).values.sessionHealth
+      const values = registry.snapshot(session).values as unknown as {
+        sessionHealth?: SessionHealthProjection
+        tokenUsage?: TokenUsageLike
+      }
+      const value = values.sessionHealth
       if (value !== undefined) {
         return {
           counts: { turns: value.turns, user: value.userMessages, assistant: value.assistantMessages },
           compactions: value.compactions,
           snapshot: value,
+          // The cache-hit rate rides the CORE tokenUsage projection — the
+          // same value the input-bar stats line shows (src/usage.ts formula).
+          tokenUsage: values.tokenUsage as TokenUsageLike | undefined,
         }
       }
     } catch { /* fall through to sessionQuery */ }
@@ -357,7 +365,7 @@ export async function assess(
   const total = measureTokens(ctx, session)
   const window = await resolveWindow(ctx, session)
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
-  const { counts, compactions, snapshot } = await readCounts(ctx, session, agentId, signal)
+  const { counts, compactions, snapshot, tokenUsage } = await readCounts(ctx, session, agentId, signal)
 
   // Live pricing (ctx-provided cache when mounted; static config otherwise) —
   // resolved before the view so the severity bills the same cache-discounted
@@ -448,10 +456,12 @@ export async function assess(
     probes.push('DSH 会话持久化：会话自动落盘，新会话可从会话列表恢复')
   }
 
-  // Cache-hit accounting + cost expectation. The bucket figures ride the
+  // Cache-hit accounting + cost expectation. The cache-hit RATE rides the
+  // core tokenUsage projection (single algorithm in src/usage.ts — same
+  // value the input-bar stats line shows); the money buckets ride the
   // sessionHealth projection snapshot read above (the exact tokenMeter
   // measurement stays the primary pressure source).
-  let cacheHitRate: number | null = null
+  const cacheHitRate = cacheHitRateOf(tokenUsage)
   let effectivePerRound: number | null = null
   let effectivePerRoundUsd: number | null = null
   let effectivePerRoundCny: number | null = null
@@ -459,7 +469,6 @@ export async function assess(
   if (snapshot !== undefined) {
     // `?? null`: a snapshot missing a newer field must read as null, not
     // undefined — `!== null` checks elsewhere would then treat it as known.
-    cacheHitRate = snapshot.cacheHitRate ?? null
     effectivePerRound = snapshot.effectivePerRound ?? null
     effectivePerRoundUsd = snapshot.effectivePerRoundUsd ?? null
     effectivePerRoundCny = snapshot.effectivePerRoundCny ?? null

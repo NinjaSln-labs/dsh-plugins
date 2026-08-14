@@ -35,13 +35,6 @@ export interface SessionHealthProjection {
   assistantMessages: number
   /** Number of compaction rounds (early detail summarized). */
   compactions: number
-  /**
-   * Session-aggregate cache-hit ratio, same formula as the core input-bar
-   * stats line (tokenUsage): cacheRead / (uncachedInput + cacheRead +
-   * cacheWrite) over the whole durable log — the badge, /health, the tool
-   * and the core UI all show the same value. Null before any usage report.
-   */
-  cacheHitRate: number | null
   /** Last request's uncached input tokens. Null before any usage report. */
   uncachedInputTokens: number | null
   /** Last request's tokens served from the provider cache. Null before any usage report. */
