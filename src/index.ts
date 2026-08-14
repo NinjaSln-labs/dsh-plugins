@@ -163,7 +163,10 @@ export class KnowledgeService extends Service {
   async list(scope: ScopeFilter, opts: { cursor?: string; limit?: number; includeDeleted?: boolean; includeExpired?: boolean } = {}): Promise<KnowledgeListResult> {
     const caller = this.readCaller()
     if (caller === null) return { items: [] }
-    return this.store.list(scope, opts, { ...caller.stamps, sessionId: caller.sessionId })
+    const result = this.store.list(scope, opts, { ...caller.stamps, sessionId: caller.sessionId })
+    // 工具层 JSON 校验拒绝 undefined 字段
+    if (result.nextCursor === undefined) delete result.nextCursor
+    return result
   }
 
   async delete(id: string): Promise<{ deleted: boolean } | { error: { code: string; message: string } }> {
@@ -315,7 +318,10 @@ export class KnowledgeService extends Service {
         if (tokens > opts.budget.maxTokens) break
       }
     }
-    return { hits, degraded, expansion }
+    // 工具层 JSON 校验拒绝 undefined 字段——返回对象只含已定义字段
+    const result: KnowledgeSearchResult = { hits, degraded }
+    if (expansion !== undefined) result.expansion = expansion
+    return result
   }
 
   // ============ 实验套件探针（阶段 3 门禁 e2e） ============
