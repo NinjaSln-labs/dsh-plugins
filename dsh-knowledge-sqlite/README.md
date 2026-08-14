@@ -48,6 +48,7 @@ Plugin row config (all optional, defaults are the V1.11 proposal defaults):
 - id: knowledge-sqlite
   name: 'dsh-knowledge-sqlite'
   config:
+    gating: 'ask'                              # 'ask'（默认，V1.11）：write/delete 经 approval 确认；'none'：跳过门控自动放行
     databasePath: '~/.dsh/knowledge.sqlite'   # default $DSH_HOME/knowledge.sqlite
     maxContentTokens: 2048
     queryExpansion:
