@@ -7,6 +7,7 @@ Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-a
 | Plugin | Package | Status |
 |---|---|---|
 | [dsh-session-health](./dsh-session-health) | session health badge + `/health` command (real token-meter data) | published to GitHub, npm pending |
+| [dsh-knowledge-sqlite](./dsh-knowledge-sqlite) | cross-session knowledge: `ctx.knowledge` + `knowledge_*` tools, FTS5 trigram + L1 query expansion (V1.11 contract) | prototype-verified, npm pending |
 
 ## Conventions
 
