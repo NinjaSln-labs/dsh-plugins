@@ -21,13 +21,6 @@ import type { ResolvedConfig } from './config.ts'
 import type { PricePeriod, ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
 
-/** Session-aggregate usage buckets (same shape as token-meter's tokenUsage totals). */
-export interface UsageTotals {
-  uncachedInputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-}
-
 /** Fold state (plain JSON per the unit contract — persisted-cache precondition). */
 export interface SessionHealthState {
   turns: number
@@ -39,17 +32,6 @@ export interface SessionHealthState {
   contextWindow?: number
   /** Buckets of the most recent usage report (per-round money math). */
   lastUsage?: { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
-  /**
-   * Session-aggregate usage buckets with token-meter's replace-not-double-count
-   * semantics: a usage report for the same (turn, step) replaces that step's
-   * earlier value (chunk early-sample + message final-sample). Feeds the
-   * cache-hit rate with the SAME formula the core input-bar stats line uses
-   * (cacheRead / (uncachedInput + cacheRead + cacheWrite)) so both displays
-   * always agree.
-   */
-  usageTotals?: UsageTotals
-  /** The newest (turn, step) usage sample already folded into usageTotals. */
-  lastUsageSample?: { turn: number; step: number; buckets: UsageTotals }
 }
 
 function init(): SessionHealthState {
@@ -67,34 +49,6 @@ function bucketsOf(usage: { inputTokens: number; cacheReadTokens?: number; cache
     inputTokens: usage.inputTokens,
     cacheReadTokens: usage.cacheReadTokens ?? 0,
     cacheWriteTokens: usage.cacheWriteTokens ?? 0,
-  }
-}
-
-/** token-meter usage-fold semantics: totals minus the previous same-step value plus the new one. */
-function foldTotals(
-  state: SessionHealthState,
-  turn: number,
-  step: number,
-  usage: { inputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number },
-): { totals: UsageTotals; sample: SessionHealthState['lastUsageSample'] } {
-  const buckets: UsageTotals = {
-    uncachedInputTokens: usage.inputTokens,
-    cacheReadTokens: usage.cacheReadTokens ?? 0,
-    cacheWriteTokens: usage.cacheWriteTokens ?? 0,
-  }
-  const totals = state.usageTotals ?? { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
-  const previous = state.lastUsageSample !== undefined
-    && state.lastUsageSample.turn === turn
-    && state.lastUsageSample.step === step
-    ? state.lastUsageSample.buckets
-    : undefined
-  return {
-    totals: {
-      uncachedInputTokens: totals.uncachedInputTokens - (previous?.uncachedInputTokens ?? 0) + buckets.uncachedInputTokens,
-      cacheReadTokens: totals.cacheReadTokens - (previous?.cacheReadTokens ?? 0) + buckets.cacheReadTokens,
-      cacheWriteTokens: totals.cacheWriteTokens - (previous?.cacheWriteTokens ?? 0) + buckets.cacheWriteTokens,
-    },
-    sample: { turn, step, buckets },
   }
 }
 
@@ -117,24 +71,18 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
     case 'assistant/message': {
       const next = { ...state, assistantMessages: state.assistantMessages + 1 }
       if (event.data.usage === undefined) return next
-      const { totals, sample } = foldTotals(state, event.data.turn, event.data.step, event.data.usage)
       return {
         ...next,
         pressureTokens: pressureOf(event.data.usage),
         lastUsage: bucketsOf(event.data.usage),
-        usageTotals: totals,
-        lastUsageSample: sample,
       }
     }
     case 'assistant/chunk': {
       if (event.data.chunk.type !== 'usage') return state
-      const { totals, sample } = foldTotals(state, event.data.turn, event.data.step, event.data.chunk.usage)
       return {
         ...state,
         pressureTokens: pressureOf(event.data.chunk.usage),
         lastUsage: bucketsOf(event.data.chunk.usage),
-        usageTotals: totals,
-        lastUsageSample: sample,
       }
     }
     case 'request/context': {
@@ -168,17 +116,11 @@ export function healthView(
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
   const t = config.thresholds
 
-  // Cache-hit accounting: last-wins buckets for the per-round money math; the
-  // session-aggregate totals for the hit rate — SAME formula as the core
-  // input-bar stats line (cacheRead / (uncached + cacheRead + cacheWrite)),
-  // so the badge, /health, the tool and the core UI always show one value.
+  // Last-request buckets for the per-round money math. The cache-hit RATE is
+  // deliberately NOT computed here: it lives in src/usage.ts and both the
+  // badge and /health read the core `tokenUsage` projection (the same value
+  // the input-bar stats line shows) — one data source, one algorithm spot.
   const lastUsage = state.lastUsage
-  const totals = state.usageTotals
-  let cacheHitRate: number | null = null
-  if (totals !== undefined) {
-    const denominator = totals.uncachedInputTokens + totals.cacheReadTokens + totals.cacheWriteTokens
-    cacheHitRate = denominator > 0 ? totals.cacheReadTokens / denominator : null
-  }
   const uncachedInputTokens = lastUsage?.inputTokens ?? null
   const cacheReadTokens = lastUsage?.cacheReadTokens ?? null
   // Money math: with an official pricing document the cache-hit ratio comes
@@ -251,7 +193,6 @@ export function healthView(
     userMessages: state.userMessages,
     assistantMessages: state.assistantMessages,
     compactions: state.compactions,
-    cacheHitRate,
     uncachedInputTokens,
     cacheReadTokens,
     effectivePerRound,
@@ -275,9 +216,9 @@ export function sessionHealthProjectionDefinition(
     // The fold stays event-pure; only the money view reads the live price
     // cache (falls back to the static config when no cache is mounted).
     view: state => healthView(state, config, pricing?.get(modelOf?.() ?? '')),
-    // v6: session-aggregate cache-hit rate with token-meter's tokenUsage
-    // semantics (per-(turn,step) dedupe, cacheWrite in the denominator) —
-    // same formula as the core input-bar stats line.
-    stateVersion: 6,
+    // v7: cache-hit rate removed from this unit — it now reads the core
+    // tokenUsage projection via src/usage.ts (single data source, single
+    // algorithm location shared with the input-bar stats line).
+    stateVersion: 7,
   }
 }

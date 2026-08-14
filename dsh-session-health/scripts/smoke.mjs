@@ -9,6 +9,7 @@
  */
 import assert from 'node:assert/strict'
 import { sessionHealthProjectionDefinition, applyHealthEvent, healthView } from '../lib/projection.js'
+import { cacheHitRateOf } from '../lib/usage.js'
 import { assess } from '../lib/assess.js'
 import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
@@ -55,18 +56,13 @@ await check('projection: fold counts (turns/messages/compactions)', () => {
   assert.equal(state.contextWindow, 100_000)
 })
 
-await check('projection: usage totals = (turn,step)-keyed session aggregate', () => {
-  // Two distinct requests (turn 1 step 1, turn 2 step 1); the turn-2 chunk
-  // replaces the turn-2 message's missing usage — never duplicates.
-  assert.deepEqual(state.usageTotals, { uncachedInputTokens: 92_000, cacheReadTokens: 300_000, cacheWriteTokens: 0 })
-  const view = healthView(state, ratioConfig)
-  assert.ok(view.cacheHitRate !== null && Math.abs(view.cacheHitRate - 300_000 / 392_000) < 1e-9)
-  // A repeated sample for the same step replaces the earlier one.
-  let s = fold.init()
-  s = applyHealthEvent(s, { type: 'assistant/chunk', data: { turn: 9, step: 2, chunk: { type: 'usage', usage: { inputTokens: 100, cacheReadTokens: 0 } } } })
-  s = applyHealthEvent(s, { type: 'assistant/chunk', data: { turn: 9, step: 2, chunk: { type: 'usage', usage: { inputTokens: 100, cacheReadTokens: 900 } } } })
-  assert.deepEqual(s.usageTotals, { uncachedInputTokens: 100, cacheReadTokens: 900, cacheWriteTokens: 0 })
-  assert.equal(healthView(s, ratioConfig).cacheHitRate, 0.9)
+await check('projection: fold keeps last-wins buckets only (rate lives in usage.ts)', () => {
+  // The fold no longer accumulates usage totals — the cache-hit rate is read
+  // from the core tokenUsage projection via cacheHitRateOf (one algorithm).
+  assert.equal(state.usageTotals, undefined)
+  assert.equal(state.usageWindow, undefined)
+  // Last-request buckets still feed the per-round money math.
+  assert.deepEqual(state.lastUsage, { inputTokens: 32_000, cacheReadTokens: 0, cacheWriteTokens: 0 })
 })
 
 await check('projection: blue severity at 32% occupancy', () => {
@@ -139,27 +135,30 @@ await check('projection: message-count proxy escalates green → blue', () => {
   assert.equal(low.severity, 'green') // 700 messages: no proxy, low occupancy
 })
 
-await check('projection: cache hit rate + effective per-round cost (token + USD)', () => {
+await check('usage: cacheHitRateOf — single algorithm for every surface', () => {
+  // Same formula as the core input-bar stats line (cacheRead / (uncached +
+  // cacheRead + cacheWrite)), operating on the core tokenUsage totals.
+  assert.ok(Math.abs(cacheHitRateOf({ uncachedInputTokens: 350_000, cacheReadTokens: 500_000, cacheWriteTokens: 0 }) - 500_000 / 850_000) < 1e-9)
+  // cacheWrite counts in the denominator, exactly like the core stats line.
+  assert.ok(Math.abs(cacheHitRateOf({ uncachedInputTokens: 100_000, cacheReadTokens: 400_000, cacheWriteTokens: 200_000 }) - 400_000 / 700_000) < 1e-9)
+  // Nothing billed → null; absent projection → null.
+  assert.equal(cacheHitRateOf({ uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }), null)
+  assert.equal(cacheHitRateOf(undefined), null)
+})
+
+await check('projection: per-round cost math (token + USD) — cacheHitRate no longer carried', () => {
   const state2 = {
     turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
     pressureTokens: 550_000, contextWindow: 1_000_000,
     lastUsage: { inputTokens: 50_000, cacheReadTokens: 500_000, cacheWriteTokens: 0 },
-    usageTotals: { uncachedInputTokens: 350_000, cacheReadTokens: 500_000, cacheWriteTokens: 0 },
   }
   const v = healthView(state2, config) // cacheHitDiscount 0.1, inputPricePerM 0.28
-  assert.ok(Math.abs(v.cacheHitRate - 500_000 / 850_000) < 1e-9) // session aggregate (core formula), not last-request
+  assert.equal(v.cacheHitRate, undefined) // rate lives in src/usage.ts off the core tokenUsage projection
   assert.equal(v.uncachedInputTokens, 50_000)
   assert.equal(v.cacheReadTokens, 500_000)
   assert.equal(v.effectivePerRound, 50_000 + 500_000 * 0.1) // 100K billable-equivalent
   assert.ok(Math.abs(v.effectivePerRoundUsd - (100_000 * 0.28) / 1_000_000) < 1e-9) // $0.028/轮
-  // cacheWrite counts in the denominator, exactly like the core stats line.
-  const withWrite = healthView({
-    ...state2,
-    usageTotals: { uncachedInputTokens: 100_000, cacheReadTokens: 400_000, cacheWriteTokens: 200_000 },
-  }, config)
-  assert.ok(Math.abs(withWrite.cacheHitRate - 400_000 / 700_000) < 1e-9)
-  const empty = healthView({ ...state2, lastUsage: undefined, usageTotals: undefined }, config)
-  assert.equal(empty.cacheHitRate, null)
+  const empty = healthView({ ...state2, lastUsage: undefined }, config)
   assert.equal(empty.effectivePerRound, null)
   assert.equal(empty.effectivePerRoundUsd, null)
 })
@@ -193,9 +192,11 @@ const services = {
         sessionHealth: {
           severity: 'yellow', advice: 'a', ratio: 0.3, total: 300_000, window: 1_000_000,
           turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
-          cacheHitRate: 0, uncachedInputTokens: 300_000, cacheReadTokens: 0,
+          uncachedInputTokens: 300_000, cacheReadTokens: 0,
           effectivePerRound: 300_000, effectivePerRoundUsd: 0.084, effectivePerRoundCny: null, pricePeriod: null,
         },
+        // Core tokenUsage projection — the cache-hit rate's single data source.
+        tokenUsage: { uncachedInputTokens: 300_000, cacheReadTokens: 0, cacheWriteTokens: 0 },
       },
     }),
   },
@@ -213,6 +214,7 @@ await check('assess: economy yellow + probes + counts', async () => {
   assert.equal(report.recommendation, 'suggest-switch')
   assert.ok(report.probes.some(p => p.includes('git 仓库')))
   assert.ok(report.probes.some(p => p.includes('交接文档：已就位')))
+  assert.ok(report.probes.some(p => p.includes('缓存命中率 0%')))
 })
 
 await check('assess: danger-zone when work depends on unrecorded early content', async () => {
@@ -286,10 +288,11 @@ await check('assess: cost expectation from cache-effective per-round', async () 
               sessionHealth: {
                 severity: 'yellow', advice: 'a', ratio: 0.13, total: 132_000, window: 1_000_000,
                 turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
-                cacheHitRate: 0.9, uncachedInputTokens: 13_200, cacheReadTokens: 118_800,
+                uncachedInputTokens: 13_200, cacheReadTokens: 118_800,
                 effectivePerRound: 25_080, // 13200 + 118800*0.1
                 effectivePerRoundUsd: (25_080 * 0.28) / 1_000_000, // $0.007/轮
               },
+              tokenUsage: { uncachedInputTokens: 13_200, cacheReadTokens: 118_800, cacheWriteTokens: 0 },
             },
           }),
         }
