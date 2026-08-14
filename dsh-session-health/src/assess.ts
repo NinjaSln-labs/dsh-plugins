@@ -420,7 +420,7 @@ export async function assess(
     } catch { /* degrade to unknown */ }
   }
   if (cacheHitRate !== null) {
-    probes.push(`缓存命中率 ${Math.round(cacheHitRate * 100)}%（上次请求；命中高说明上下文稳定，压缩会重置命中）`)
+    probes.push(`缓存命中率 ${Math.round(cacheHitRate * 1000) / 10}%（上次请求；命中高说明上下文稳定，压缩会重置命中）`)
   }
   const expectedTotalTokens = effectivePerRound !== null
     && opts.remainingRounds !== null && opts.remainingRounds !== undefined
