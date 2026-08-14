@@ -13,6 +13,7 @@
 
 ## 版本历史
 
+- **0.5.4** — 浮层「计费预期」行可点击切换显示口径：金额（默认，¥/$ 按 locale）↔ 计费当量 token 数（`effectivePerRound`，缓存折扣后）；偏好存 localStorage（`dsh-session-health/costDisplay`）；行内 hover/焦点态 + 键盘可达，底行提示更新
 - **0.5.3** — 浮层档位标签去掉颜色字（「绿（放心继续）」→「放心继续」——颜色由着色 chip 表达）；aria-label 保留颜色字（屏幕阅读器看不到颜色）
 - **0.5.2** — 徽章/浮层四档配色重做（跨主题可读）：蓝色不再用静态 `--dsw-static-blue-500`（暗色浮层上仅 ~1.6:1，看不清）；每档位引入 `--sh-accent`（点/边/条）/`--sh-ink`（文字）/`--sh-tint`（底纹）三个主题自适应角色——浅色主题加深、`body[data-ds-dark-theme]` 下提亮（color-mix），明暗两主题文字对比度均 ≥3:1，四色色相保持区分度；悬停底纹改用 color-mix 跟随 alias token
 - **0.5.1** — 定价源可达性修复：默认 `cost.priceUrl` 从 GitHub raw 改为 jsdelivr CDN 镜像（raw 在部分网络不可达 → 拉取静默失败 → 金额显示降级为静态 USD，zh 界面不显示 CNY）；新增 `cost.priceFallbackUrl`（默认 GitHub raw），同一刷新周期内自动回退，先成功者胜
