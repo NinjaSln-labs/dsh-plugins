@@ -68,6 +68,11 @@ function compact(n: number | null | undefined): string {
   return String(n)
 }
 
+/** Hit rate as a one-decimal percent string: 0.9993 -> '99.9%' (never rounds to a fake 100%). */
+function pctOf(rate: number): string {
+  return `${Math.round(rate * 1000) / 10}%`
+}
+
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   green: '绿（放心继续）',
   blue: '蓝（继续，留意）',
@@ -206,24 +211,22 @@ function HealthBadge(props: {
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
-          <span className="sh-v">约 {compact(merged.total)} token{proj?.cacheHitRate !== null && proj?.cacheHitRate !== undefined ? `（缓存命中 ${Math.round(proj.cacheHitRate * 100)}%）` : ''}</span>
+          <span className="sh-v">约 {compact(merged.total)} token{proj?.cacheHitRate !== null && proj?.cacheHitRate !== undefined ? `（缓存命中 ${pctOf(proj.cacheHitRate)}）` : ''}</span>
         </div>
         {merged.projected !== null ? (
           <div className="sh-tip-row">
             <span className="sh-k">预计下次输入</span>
             <span className="sh-v">
-              约 {compact(
-                proj?.cacheReadTokens !== null && proj?.cacheReadTokens !== undefined
-                  ? Math.max(0, merged.projected - proj.cacheReadTokens)
-                  : merged.projected,
-              )} token{proj?.cacheReadTokens !== null && proj?.cacheReadTokens !== undefined ? '（剔除缓存命中）' : ''}
+              {proj?.cacheReadTokens !== null && proj?.cacheReadTokens !== undefined
+                ? `约 ${compact(Math.max(0, merged.projected - proj.cacheReadTokens))} token 未命中 / 总量 ${compact(merged.projected)}`
+                : `约 ${compact(merged.projected)} token`}
             </span>
           </div>
         ) : null}
         {proj?.effectivePerRound !== null && proj?.effectivePerRound !== undefined ? (
           <div className="sh-tip-row">
             <span className="sh-k">计费预期</span>
-            <span className="sh-v">约 {compact(proj.effectivePerRound)} token/轮</span>
+            <span className="sh-v">约 {compact(proj.effectivePerRound)} token/轮（含缓存折扣）</span>
           </div>
         ) : null}
         <div className="sh-tip-row">

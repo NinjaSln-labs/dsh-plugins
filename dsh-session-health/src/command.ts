@@ -44,7 +44,7 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
     lines.push(`- 每轮输入约 ${formatCompact(s.total)} token${s.ratio !== null ? `（窗口 ${Math.round(s.ratio * 100)}%）` : ''}${s.window !== null ? `；窗口 ${formatCompact(s.window)}` : ''}`)
   }
   if (s.cacheHitRate !== null) {
-    lines.push(`- 缓存命中率 ${Math.round(s.cacheHitRate * 100)}%（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)
+    lines.push(`- 缓存命中率 ${Math.round(s.cacheHitRate * 1000) / 10}%（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)
   }
   if (s.effectivePerRound !== null) {
     lines.push(`- 计费当量约 ${formatCompact(s.effectivePerRound)} token/轮（缓存命中按折扣计，不含输出 token）`)
