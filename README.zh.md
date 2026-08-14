@@ -8,7 +8,7 @@
 
 | 插件 | 包 | 状态 |
 |---|---|---|
-| [dsh-session-health](./dsh-session-health) | 会话健康 v0.4.4：响应式徽章（投影驱动）、`/health` 命令、`session_health` 工具、缓存命中核算 + 计费预期、交接清单自动化 | 已发布（GitHub + npm） |
+| [dsh-session-health](./dsh-session-health) | 会话健康 v0.5.1：响应式徽章（投影驱动）、`/health` 命令、`session_health` 工具、官方峰谷双币定价（CNY/USD，jsdelivr 主源 + GitHub raw 回退）、缓存感知的窗口缩放经济档位、交接清单自动化 | 已发布（GitHub + npm） |
 | [dsh-knowledge-sqlite](./dsh-knowledge-sqlite) | 跨会话知识：`ctx.knowledge` + `knowledge_*` 工具，FTS5 trigram + L1 查询扩展（V1.11 契约） | 已发布（GitHub + npm） |
 
 ## 约定
