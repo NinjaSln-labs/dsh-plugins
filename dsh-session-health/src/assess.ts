@@ -23,12 +23,28 @@ export interface HealthSignals {
   userMessages: number | null
   assistantMessages: number | null
   compactions: number
+  /** Cache-hit ratio of the last request; null when unknown. */
+  cacheHitRate: number | null
+  /** Billable-equivalent per round (uncached + cacheRead × discount); null when unknown. */
+  effectivePerRound: number | null
+  /** effectivePerRound × remaining rounds; null unless remainingRounds provided. */
+  expectedTotalTokens: number | null
 }
 
 export interface HandoffReadiness {
   isGitRepo: boolean | null
   hasHandoff: boolean | null
   runningProcesses: string[]
+  /** True when the ps probe actually ran (even with zero findings). */
+  processesChecked: boolean
+  /** True when git status --short is empty; null when not checked. */
+  clean: boolean | null
+  /** Number of uncommitted changes; null when not checked. */
+  uncommittedCount: number | null
+  /** HEAD line of `git log --oneline -1`; null when not checked. */
+  lastCommit: string | null
+  /** `## branch...origin/branch [ahead N]` first line; null when not checked. */
+  branchLine: string | null
 }
 
 export interface HealthReport {
@@ -169,6 +185,61 @@ async function probeGit(
   }
 }
 
+/**
+ * Read-only git worktree probe through ctx.subprocess (whitelisted argv only:
+ * `git status --short`, `git log --oneline -1`, `git status -sb`). Feeds the
+ * handoff checklist's commit/push items with real state. Returns null when
+ * the subprocess seam is absent, the repo is not a git worktree, or a
+ * command fails (sandbox denial included) — the checklist then reports the
+ * item as unchecked with a note, never as done.
+ */
+async function probeGitState(
+  ctx: Context,
+  cwd: string,
+  signal: AbortSignal,
+  probes: string[],
+): Promise<{ clean: boolean; uncommitted: number; lastCommit: string | null; branchLine: string | null } | null> {
+  const subprocess = ctx.get('subprocess')
+  if (subprocess === undefined) return null
+  const run = async (argv: readonly string[]): Promise<string | null> => {
+    try {
+      const handle = subprocess.spawn({
+        argv: ['git', ...argv],
+        cwd,
+        stdio: { stdout: 'collect', stderr: 'collect' },
+        graceMs: 5000,
+        signal,
+      })
+      const outcome = await handle.done
+      if (outcome.exitCode !== 0) return null
+      return handle.collected?.stdout?.readFrom(0)?.text ?? ''
+    } catch {
+      return null
+    }
+  }
+  const [status, log, branch] = await Promise.all([
+    run(['status', '--short']),
+    run(['log', '--oneline', '-1']),
+    run(['status', '-sb']),
+  ])
+  if (status === null || log === null || branch === null) {
+    probes.push('git 工作树：无法自动检查（subprocess 拒绝或失败）')
+    return null
+  }
+  const uncommitted = status.trim() === '' ? 0 : status.trim().split('\n').length
+  const lastCommit = log.trim() || null
+  const branchLine = branch.split('\n')[0]?.trim() || null
+  probes.push(
+    uncommitted === 0
+      ? `git 工作树：干净（最新 commit ${lastCommit ?? '未知'}）`
+      : `git 工作树：${uncommitted} 个未提交变更（最新 commit ${lastCommit ?? '未知'}）`,
+  )
+  if (branchLine !== null && /ahead \d+/.test(branchLine)) {
+    probes.push(`git 分支：${branchLine}（未 push 的提交在切换前需推送）`)
+  }
+  return { clean: uncommitted === 0, uncommitted, lastCommit, branchLine }
+}
+
 /** Handoff-document probe: only names the user configured or passed inline. */
 async function probeHandoff(
   ctx: Context,
@@ -301,12 +372,31 @@ export async function assess(
   let isGitRepo: boolean | null = null
   let hasHandoff: boolean | null = null
   let runningProcesses: string[] = []
+  let processesChecked = false
+  let clean: boolean | null = null
+  let uncommittedCount: number | null = null
+  let lastCommit: string | null = null
+  let branchLine: string | null = null
   if (cwd !== null) {
-    if (gitEnabled) isGitRepo = await probeGit(ctx, cwd, signal, probes)
-    else if (opts.noGit) probes.push('git 检查：已跳过')
+    if (gitEnabled) {
+      isGitRepo = await probeGit(ctx, cwd, signal, probes)
+      // Automate the handoff checklist's commit/push items with real state.
+      if (isGitRepo === true) {
+        const gitState = await probeGitState(ctx, cwd, signal, probes)
+        if (gitState !== null) {
+          clean = gitState.clean
+          uncommittedCount = gitState.uncommitted
+          lastCommit = gitState.lastCommit
+          branchLine = gitState.branchLine
+        }
+      }
+    } else if (opts.noGit) probes.push('git 检查：已跳过')
     if (handoffEnabled) hasHandoff = await probeHandoff(ctx, cwd, signal, config, opts.docName ?? null, probes)
     else if (opts.noHandoff) probes.push('交接文档检查：已跳过')
-    if (processEnabled) runningProcesses = await probeProcesses(ctx, cwd, signal, probes)
+    if (processEnabled) {
+      runningProcesses = await probeProcesses(ctx, cwd, signal, probes)
+      processesChecked = true
+    }
   } else {
     probes.push('工作区根目录未知：git / 交接文档 / 进程检查已跳过')
   }
@@ -314,12 +404,40 @@ export async function assess(
     probes.push('DSH 会话持久化：会话自动落盘，新会话可从会话列表恢复')
   }
 
+  // Cache-hit accounting + cost expectation. The bucket figures ride the
+  // sessionHealth projection snapshot when the unit is mounted (the exact
+  // tokenMeter measurement above stays the primary pressure source).
+  let cacheHitRate: number | null = null
+  let effectivePerRound: number | null = null
+  const registry = ctx.get('sessionProjections')
+  if (registry !== undefined) {
+    try {
+      const value = registry.snapshot(session).values.sessionHealth
+      if (value !== undefined) {
+        cacheHitRate = value.cacheHitRate
+        effectivePerRound = value.effectivePerRound
+      }
+    } catch { /* degrade to unknown */ }
+  }
+  if (cacheHitRate !== null) {
+    probes.push(`缓存命中率 ${Math.round(cacheHitRate * 100)}%（上次请求；命中高说明上下文稳定，压缩会重置命中）`)
+  }
+  const expectedTotalTokens = effectivePerRound !== null
+    && opts.remainingRounds !== null && opts.remainingRounds !== undefined
+    ? effectivePerRound * opts.remainingRounds
+    : null
+
   // Human-readable verdict.
   const pct = ratio !== null ? Math.round(ratio * 100) : null
   const economy = total !== null && total >= config.thresholds.economyTokenFloor
+  const costNote = effectivePerRound !== null
+    ? `计费当量约 ${formatCompact(effectivePerRound)} token/轮（缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
+    : ''
   const remainingNote = opts.remainingRounds !== null && opts.remainingRounds !== undefined
     && opts.remainingRounds >= config.thresholds.economyRoundFloor
-    ? `（剩余约 ${opts.remainingRounds} 轮 × ${formatCompact(total ?? 0)} token/轮，费用累积明显）`
+    ? `（剩余约 ${opts.remainingRounds} 轮：${expectedTotalTokens !== null
+      ? `预计输入费用 ≈ ${formatCompact(expectedTotalTokens)} token`
+      : `按 ${formatCompact(total ?? 0)} token/轮估算，费用累积明显`}）`
     : ''
   let reason: string
   switch (view.severity) {
@@ -342,6 +460,7 @@ export async function assess(
   if (recommendation === 'danger-zone') {
     reason += ' 当前工作依赖早期内容且决策依据未记录——裸切会丢失隐性上下文，必须先补交接。'
   }
+  if (costNote !== '' && view.severity !== 'green') reason += ` ${costNote}`
 
   const summary = ({
     'danger-zone': '危险区：依赖早期内容且无记录——先补交接（文档 + commit）再考虑切换',
@@ -363,8 +482,19 @@ export async function assess(
       userMessages: counts.user,
       assistantMessages: counts.assistant,
       compactions,
+      cacheHitRate,
+      effectivePerRound,
+      expectedTotalTokens,
     },
     probes,
-    handoff: { isGitRepo, hasHandoff, runningProcesses },
+    handoff: {
+      isGitRepo,
+      hasHandoff,
+      runningProcesses,
+      clean,
+      uncommittedCount,
+      lastCommit,
+      branchLine,
+    },
   }
 }

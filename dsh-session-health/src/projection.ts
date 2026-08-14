@@ -29,6 +29,8 @@ export interface SessionHealthState {
   compactions: number
   pressureTokens?: number
   contextWindow?: number
+  /** Buckets of the most recent usage report (cache-hit accounting). */
+  lastUsage?: { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
 }
 
 function init(): SessionHealthState {
@@ -38,6 +40,15 @@ function init(): SessionHealthState {
 /** Prompt-side pressure of one usage report: input plus cache traffic, no output. */
 function pressureOf(usage: { inputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }): number {
   return usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
+}
+
+/** The last-wins bucket record of one usage report. */
+function bucketsOf(usage: { inputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }): SessionHealthState['lastUsage'] {
+  return {
+    inputTokens: usage.inputTokens,
+    cacheReadTokens: usage.cacheReadTokens ?? 0,
+    cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+  }
 }
 
 /** Pure transition: previous state + one committed event → next state. */
@@ -58,12 +69,14 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       return { ...state, userMessages: state.userMessages + 1 }
     case 'assistant/message': {
       const next = { ...state, assistantMessages: state.assistantMessages + 1 }
-      if (event.data.usage !== undefined) return { ...next, pressureTokens: pressureOf(event.data.usage) }
+      if (event.data.usage !== undefined) {
+        return { ...next, pressureTokens: pressureOf(event.data.usage), lastUsage: bucketsOf(event.data.usage) }
+      }
       return next
     }
     case 'assistant/chunk': {
       if (event.data.chunk.type !== 'usage') return state
-      return { ...state, pressureTokens: pressureOf(event.data.chunk.usage) }
+      return { ...state, pressureTokens: pressureOf(event.data.chunk.usage), lastUsage: bucketsOf(event.data.chunk.usage) }
     }
     case 'request/context': {
       if (event.data.contextWindow === undefined) return state
@@ -103,6 +116,18 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
 
   const pct = ratio !== null ? Math.round(ratio * 100) : null
   const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次）` : ''
+
+  // Cache-hit accounting of the last request (null before any usage report).
+  const lastUsage = state.lastUsage
+  const cacheHitRate = lastUsage !== undefined && lastUsage.inputTokens + lastUsage.cacheReadTokens > 0
+    ? lastUsage.cacheReadTokens / (lastUsage.inputTokens + lastUsage.cacheReadTokens)
+    : null
+  const uncachedInputTokens = lastUsage?.inputTokens ?? null
+  const cacheReadTokens = lastUsage?.cacheReadTokens ?? null
+  const effectivePerRound = lastUsage !== undefined
+    ? lastUsage.inputTokens + lastUsage.cacheReadTokens * config.cost.cacheHitDiscount
+    : null
+
   let advice: string
   switch (severity) {
     case 'red':
@@ -132,6 +157,10 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
     userMessages: state.userMessages,
     assistantMessages: state.assistantMessages,
     compactions: state.compactions,
+    cacheHitRate,
+    uncachedInputTokens,
+    cacheReadTokens,
+    effectivePerRound,
   }
 }
 
@@ -145,6 +174,7 @@ export function sessionHealthProjectionDefinition(
     init,
     apply: applyHealthEvent,
     view: state => healthView(state, config),
-    stateVersion: 1,
+    // v2: lastUsage buckets + cache/cost fields (invalidates persisted rows).
+    stateVersion: 2,
   }
 }
