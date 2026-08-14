@@ -12,7 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
 import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
-import { formatCompact, formatHitRate } from './util.ts'
+import { formatCompact, formatHitRate, formatUsd } from './util.ts'
 import type { HealthRecommendation, HealthSeverity } from './types.ts'
 
 export interface HealthSignals {
@@ -27,8 +27,14 @@ export interface HealthSignals {
   cacheHitRate: number | null
   /** Billable-equivalent per round (uncached + cacheRead × discount); null when unknown. */
   effectivePerRound: number | null
+  /** effectivePerRound in USD (inputPricePerM basis); null when unknown. */
+  effectivePerRoundUsd: number | null
   /** effectivePerRound × remaining rounds; null unless remainingRounds provided. */
   expectedTotalTokens: number | null
+  /** expectedTotalTokens in USD; null unless remainingRounds provided. */
+  expectedTotalUsd: number | null
+  /** The input price basis (USD per 1M tokens) used for the money figures. */
+  inputPricePerM: number
 }
 
 export interface HandoffReadiness {
@@ -409,6 +415,7 @@ export async function assess(
   // tokenMeter measurement above stays the primary pressure source).
   let cacheHitRate: number | null = null
   let effectivePerRound: number | null = null
+  let effectivePerRoundUsd: number | null = null
   const registry = ctx.get('sessionProjections')
   if (registry !== undefined) {
     try {
@@ -416,6 +423,7 @@ export async function assess(
       if (value !== undefined) {
         cacheHitRate = value.cacheHitRate
         effectivePerRound = value.effectivePerRound
+        effectivePerRoundUsd = value.effectivePerRoundUsd
       }
     } catch { /* degrade to unknown */ }
   }
@@ -426,17 +434,21 @@ export async function assess(
     && opts.remainingRounds !== null && opts.remainingRounds !== undefined
     ? effectivePerRound * opts.remainingRounds
     : null
+  const expectedTotalUsd = effectivePerRoundUsd !== null
+    && opts.remainingRounds !== null && opts.remainingRounds !== undefined
+    ? effectivePerRoundUsd * opts.remainingRounds
+    : null
 
   // Human-readable verdict.
   const pct = ratio !== null ? Math.round(ratio * 100) : null
   const economy = total !== null && total >= config.thresholds.economyTokenFloor
-  const costNote = effectivePerRound !== null
-    ? `计费当量约 ${formatCompact(effectivePerRound)} token/轮（缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
+  const costNote = effectivePerRoundUsd !== null
+    ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${config.cost.inputPricePerM}/M，缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
     : ''
   const remainingNote = opts.remainingRounds !== null && opts.remainingRounds !== undefined
     && opts.remainingRounds >= config.thresholds.economyRoundFloor
-    ? `（剩余约 ${opts.remainingRounds} 轮：${expectedTotalTokens !== null
-      ? `预计输入费用 ≈ ${formatCompact(expectedTotalTokens)} token`
+    ? `（剩余约 ${opts.remainingRounds} 轮：${expectedTotalUsd !== null
+      ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
       : `按 ${formatCompact(total ?? 0)} token/轮估算，费用累积明显`}）`
     : ''
   let reason: string
@@ -484,7 +496,10 @@ export async function assess(
       compactions,
       cacheHitRate,
       effectivePerRound,
+      effectivePerRoundUsd,
       expectedTotalTokens,
+      expectedTotalUsd,
+      inputPricePerM: config.cost.inputPricePerM,
     },
     probes,
     handoff: {

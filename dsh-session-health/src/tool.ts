@@ -86,8 +86,11 @@ const OUTPUT_SCHEMA = {
       properties: {
         cacheHitRate: { type: 'number', description: '上次请求的缓存命中率 0..1（未知时省略）' },
         effectivePerRound: { type: 'number', description: '每轮计费当量 token（未缓存输入 + 缓存命中×折扣；未知时省略）' },
+        effectivePerRoundUsd: { type: 'number', description: '每轮计费当量金额 USD（= effectivePerRound × inputPricePerM / 1e6；未知时省略）' },
+        inputPricePerM: { type: 'number', description: '输入价格基准（USD / 1M token，缓存命中按折扣）' },
         remainingRounds: { type: 'integer', description: '本次调用提供的剩余轮数（未提供时省略）' },
-        expectedTotalTokens: { type: 'number', description: '剩余轮数输入费用预期（= effectivePerRound × remainingRounds；未知时省略）' },
+        expectedTotalTokens: { type: 'number', description: '剩余轮数输入费用预期 token（= effectivePerRound × remainingRounds；未知时省略）' },
+        expectedTotalUsd: { type: 'number', description: '剩余轮数输入费用预期 USD（未知时省略）' },
       },
     },
   },
@@ -153,8 +156,11 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
       const cost: Record<string, number> = {}
       if (report.signals.cacheHitRate !== null) cost.cacheHitRate = report.signals.cacheHitRate
       if (report.signals.effectivePerRound !== null) cost.effectivePerRound = report.signals.effectivePerRound
+      if (report.signals.effectivePerRoundUsd !== null) cost.effectivePerRoundUsd = report.signals.effectivePerRoundUsd
+      cost.inputPricePerM = report.signals.inputPricePerM
       if (args.remainingRounds !== undefined) cost.remainingRounds = args.remainingRounds
       if (report.signals.expectedTotalTokens !== null) cost.expectedTotalTokens = report.signals.expectedTotalTokens
+      if (report.signals.expectedTotalUsd !== null) cost.expectedTotalUsd = report.signals.expectedTotalUsd
 
       return {
         severity: report.severity,

@@ -4,13 +4,13 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的会话健康插件：基于真实数据的「继续 vs 新开会话」指示器。
 
-- **头部徽章** — 会话日志按钮旁的有色圆点 + 边框（绿/蓝/黄/红），使用 DSH 主题令牌。**响应式**：完全由宿主计算的 `sessionHealth` 投影驱动（推送帧——这是社区插件唯一可用的线上数据通道；客户端 Remote 是构建期固定清单，因此本插件无 Remote、无轮询）。悬停显示建议、窗口占用条、每轮 token 成本与**缓存命中率**（命中率是上下文稳定度的表现；压缩会重置命中）、压缩感知的**预计下次输入（剔除缓存命中）**、**计费预期**（未缓存输入 + 缓存命中×折扣，`cost.cacheHitDiscount` 可配）、模型窗口、会话规模与压缩次数。**点击运行 `/health`** 查看完整报告。支持键盘操作。
+- **头部徽章** — 会话日志按钮旁的有色圆点 + 边框（绿/蓝/黄/红），使用 DSH 主题令牌。**响应式**：完全由宿主计算的 `sessionHealth` 投影驱动（推送帧——这是社区插件唯一可用的线上数据通道；客户端 Remote 是构建期固定清单，因此本插件无 Remote、无轮询）。悬停显示建议、窗口占用条、每轮 token 成本与**缓存命中率**（命中率是上下文稳定度的表现；压缩会重置命中）、压缩感知的**预计下次输入（剔除缓存命中）**、**计费预期（金额 USD）**（`cost.inputPricePerM` 默认 $0.28/M；缓存命中 × `cost.cacheHitDiscount`）、模型窗口、会话规模与压缩次数。**点击运行 `/health`** 查看完整报告。支持键盘操作。
 - **`/health` 命令** — 完整文本报告，可选探测：
   - `/health` — 全部（git / 交接文档 / 进程探测，可配置）
   - `/health minimal` — 仅核心指标（token / 窗口 / 规模）
   - `/health no-git` / `/health no-handoff` — 跳过某项探测
   - `/health doc=<你的文件名>` — 检查你自己的交接文档（不预设文件名；概念是你的，名字也是你的）
-  - `/health remaining=<轮数>` — 费用预期：`计费当量 × 剩余轮数 ≈ 输入费用预期`（含缓存折扣）
+  - `/health remaining=<轮数>` — 费用预期（金额）：`每轮成本 × 剩余轮数 ≈ 预计输入花费`（含缓存折扣）
   - `/health processes` — 强制进程探测
 - **`session_health` 工具** — 模型可调用的只读评估（长任务自查）：结构化结论（`severity` / `recommendation` / `signals` / `cost` / `handoffReady`），黄/红档附带完整 markdown 报告。工作性质问题由模型自查（`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`），其余全部由宿主精确测量。
 - **`sessionHealth` 投影** — 宿主计算的持久折叠（轮次、消息数、压缩次数、last-wins 压力/窗口、上次请求缓存桶、severity + 建议）推送到所有客户端；重放与页面刷新后依然存活。
@@ -49,7 +49,7 @@ checks: {
   processes: { enabled: true },                            // 经 ctx.subprocess 的 ps 探测
 }
 projection: { enabled: true }                              // 响应式徽章单元
-cost: { cacheHitDiscount: 0.1 }                            // 缓存命中价格比例
+cost: { cacheHitDiscount: 0.1, inputPricePerM: 0.28 }      // 缓存命中价格比例 + 输入价（USD / 1M token）
 ```
 
 ## 为什么用真实数据

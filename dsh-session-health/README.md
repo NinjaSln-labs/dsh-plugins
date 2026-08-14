@@ -4,13 +4,13 @@
 
 Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **cost expectation** (uncached input + cache hits × discount, `cost.cacheHitDiscount` configurable), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
+- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **per-round cost in USD** (`cost.inputPricePerM`, default $0.28/M; cache hits × `cost.cacheHitDiscount`), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
 - **`/health` command** — full textual report with optional probes:
   - `/health` — everything (git / handoff / process probes, configurable)
   - `/health minimal` — core metrics only (token / window / scale)
   - `/health no-git` / `/health no-handoff` — skip a probe
   - `/health doc=<your-file>` — check your own handoff document (no preset filename; the concept is yours, the name is yours)
-  - `/health remaining=<rounds>` — cost expectation: `billable-equivalent × remaining rounds ≈ expected input cost` (cache-discounted)
+  - `/health remaining=<rounds>` — cost expectation in USD: `per-round cost × remaining rounds ≈ expected input spend` (cache-discounted)
   - `/health processes` — force the process probe
 - **`session_health` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `cost`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
 - **`sessionHealth` projection** — durable host-computed fold (turns, messages, compactions, last-wins pressure/window, last-request cache buckets, severity + advice) pushed to every client; survives replay and page reloads.
@@ -49,7 +49,7 @@ checks: {
   processes: { enabled: true },                            // ps probe via ctx.subprocess
 }
 projection: { enabled: true }                              // reactive badge unit
-cost: { cacheHitDiscount: 0.1 }                            // cache-hit price fraction
+cost: { cacheHitDiscount: 0.1, inputPricePerM: 0.28 }      // cache-hit price fraction + USD input price per 1M tokens
 ```
 
 ## Why real data

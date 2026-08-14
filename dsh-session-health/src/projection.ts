@@ -127,6 +127,9 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
   const effectivePerRound = lastUsage !== undefined
     ? lastUsage.inputTokens + lastUsage.cacheReadTokens * config.cost.cacheHitDiscount
     : null
+  const effectivePerRoundUsd = effectivePerRound !== null
+    ? effectivePerRound * config.cost.inputPricePerM / 1_000_000
+    : null
 
   let advice: string
   switch (severity) {
@@ -161,6 +164,7 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
     uncachedInputTokens,
     cacheReadTokens,
     effectivePerRound,
+    effectivePerRoundUsd,
   }
 }
 
@@ -174,7 +178,7 @@ export function sessionHealthProjectionDefinition(
     init,
     apply: applyHealthEvent,
     view: state => healthView(state, config),
-    // v2: lastUsage buckets + cache/cost fields (invalidates persisted rows).
-    stateVersion: 2,
+    // v3: effectivePerRoundUsd money field (invalidates persisted rows).
+    stateVersion: 3,
   }
 }

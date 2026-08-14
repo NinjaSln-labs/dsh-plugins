@@ -43,6 +43,13 @@ export interface CostConfig {
    * figure ("计费预期") in the projection, /health, and the tool. Default 0.1.
    */
   cacheHitDiscount: number
+  /**
+   * Full-price input price in USD per 1M tokens (cache hits bill at
+   * cacheHitDiscount × this). Default 0.28 (DeepSeek-class pricing) — set it
+   * to your provider's real input price; used for the money display of
+   * 计费预期 / cost expectation.
+   */
+  inputPricePerM: number
 }
 
 /** Untrusted plugin configuration after Loader normalization; every field optional. */
@@ -77,7 +84,7 @@ export const Config: z<Config> = z.object({
     processes: z.object({ enabled: z.boolean().default(true) }),
   }),
   projection: z.object({ enabled: z.boolean().default(true) }),
-  cost: z.object({ cacheHitDiscount: z.number().min(0).max(1).default(0.1) }),
+  cost: z.object({ cacheHitDiscount: z.number().min(0).max(1).default(0.1), inputPricePerM: z.number().min(0).default(0.28) }),
 })
 
 export interface ResolvedConfig {
@@ -109,6 +116,6 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     processes: { enabled: config.checks?.processes?.enabled ?? true },
   }
   const projection: ProjectionConfig = { enabled: config.projection?.enabled ?? true }
-  const cost: CostConfig = { cacheHitDiscount: config.cost?.cacheHitDiscount ?? 0.1 }
+  const cost: CostConfig = { cacheHitDiscount: config.cost?.cacheHitDiscount ?? 0.1, inputPricePerM: config.cost?.inputPricePerM ?? 0.28 }
   return { thresholds, checks, projection, cost }
 }

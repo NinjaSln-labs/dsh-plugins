@@ -16,3 +16,8 @@ export function formatCompact(n: number): string {
 export function formatHitRate(rate: number): string {
   return `${Math.floor(rate * 100)}%`
 }
+
+/** USD formatting for per-round cost: >= $100 rounded, else 2 decimals ($0.02, $1.25, $45.00 -> $45). */
+export function formatUsd(v: number): string {
+  return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
+}

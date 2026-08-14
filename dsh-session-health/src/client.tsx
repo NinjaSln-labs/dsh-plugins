@@ -73,6 +73,11 @@ function pctOf(rate: number): string {
   return `${Math.floor(rate * 100)}%`
 }
 
+/** USD formatting for per-round cost: >= $100 rounded, else 2 decimals ($0.02, $1.25, $45). */
+function formatUsd(v: number): string {
+  return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
+}
+
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   green: '绿（放心继续）',
   blue: '蓝（继续，留意）',
@@ -223,10 +228,10 @@ function HealthBadge(props: {
             </span>
           </div>
         ) : null}
-        {proj?.effectivePerRound !== null && proj?.effectivePerRound !== undefined ? (
+        {proj?.effectivePerRoundUsd !== null && proj?.effectivePerRoundUsd !== undefined ? (
           <div className="sh-tip-row">
             <span className="sh-k">计费预期</span>
-            <span className="sh-v">约 {compact(proj.effectivePerRound)} token/轮（含缓存折扣）</span>
+            <span className="sh-v">约 {formatUsd(proj.effectivePerRoundUsd)}/轮（含缓存折扣）</span>
           </div>
         ) : null}
         <div className="sh-tip-row">
