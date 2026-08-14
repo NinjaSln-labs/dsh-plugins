@@ -2,7 +2,7 @@
 
 Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven by the host-computed `sessionHealth` projection (push frames, no polling); falls back to a slow Remote poll only when the projection is unavailable. Hover shows advice, window-ratio bar, per-round token cost, model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
+- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost, model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
 - **`/health` command** — full textual report with optional probes:
   - `/health` — everything (git / handoff / process probes, configurable)
   - `/health minimal` — core metrics only (token / window / scale)

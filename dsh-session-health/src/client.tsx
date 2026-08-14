@@ -5,19 +5,28 @@
  * (right side of the session header, next to the Session log button), styled
  * with DSH theme tokens and sized identically to the adjacent button.
  *
- * Data flow (progressive enhancement, zero polling in the common case):
- * 1. Reactive path — subscribes to the host-computed `sessionHealth`
- *    projection (`sessions.binding(...).session.projections.faceOf`), updated
- *    by session/projection push frames the moment the fold changes.
- * 2. Fallback path — when the projection value is absent (registry not
- *    mounted, frame not yet received), the Remote `healthState` RPC seeds the
- *    badge and re-polls on a slow interval (paused while the tab is hidden).
+ * Data flow: PURE projection push. The badge subscribes to the host-computed
+ * `sessionHealth` projection (`sessions.binding(...).session.projections
+ * .faceOf('sessionHealth')`), updated by `session/projection` frames the
+ * moment the host fold changes — zero polling, zero RPC. The projection seam
+ * is the one wire path community plugins own (client remotes are a fixed
+ * generated list; a plugin Remote would never mount — see src/schemas.ts).
  *
- * Clicking the badge runs `/health` for the full textual report.
+ * Clicking the badge runs `/health` through the core commands Remote for the
+ * full textual report.
  */
 import * as React from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SessionHealthProjection, HealthStateResult, HealthSeverity } from './types.ts'
+// Type-only: pulls the ui-conversation SlotMap merge (the header.utilities seat).
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { SessionHealthProjection, HealthSeverity } from './types.ts'
+
+/** Client plugin identity (loader diagnostics). */
+export const name = 'dsh-session-health'
+
+/** Required client services; `remote.commands` is the core, always-mounted Remote. */
+export const inject = ['slots', 'sessions', 'remote.commands']
+
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
 .sh-badge{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:6px 12px;gap:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:18px;color:var(--dsw-alias-label-secondary);background:transparent;font-size:13px;font-weight:400;line-height:20px;box-sizing:border-box;cursor:pointer;user-select:none;white-space:nowrap}
@@ -70,13 +79,6 @@ const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   red: '红（建议收尾）',
 }
 
-const FALLBACK_ADVICE: Record<HealthSeverity, string> = {
-  green: '空间充足，放心继续。',
-  blue: '占用中等，继续但留意窗口压力。',
-  yellow: '若剩余工作还多，开新会话更划算。',
-  red: '建议尽快在任务边界收尾。',
-}
-
 const stateToken = (c: string) =>
   c === 'green' ? 'var(--dsw-alias-state-success-primary)'
   : c === 'yellow' ? 'var(--dsw-alias-state-warn-primary)'
@@ -89,68 +91,48 @@ interface ProjectionFace {
   subscribe(listener: () => void): () => void
 }
 
-/** Minimal Remote face — the generated ./remote types give the full contract. */
-export interface HealthRemote {
-  healthState(request: { sessionId: string }): Promise<unknown>
+/** Commands Remote face (core, always mounted). */
+interface CommandsRemote {
+  execute(sessionId: string, line: string): Promise<unknown>
 }
 
 function HealthBadge(props: {
   sessionId: string
-  remote: HealthRemote
-  commandsRemote?: { execute(sessionId: string, line: string): unknown }
-  sessions?: {
+  commands: CommandsRemote
+  sessions: {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
   }
-  timer?: { interval(fn: () => void, delay: number): () => void }
 }): JSX.Element {
   const [proj, setProj] = React.useState<SessionHealthProjection | undefined>(undefined)
-  const [remoteHealth, setRemoteHealth] = React.useState<HealthStateResult | null>(null)
   const [hover, setHover] = React.useState(false)
 
   React.useEffect(() => {
     let alive = true
-
-    // 1) Reactive projection path — push frames, no polling.
-    const face = props.sessions?.binding?.(props.sessionId)?.session?.projections?.faceOf?.('sessionHealth')
-    let off: (() => void) | undefined
-    if (face !== undefined) {
-      const read = () => {
-        if (!alive) return
-        const v = face.getSnapshot()
-        if (v !== undefined && v !== null) setProj(v as SessionHealthProjection)
-      }
-      read()
-      off = face.subscribe(read)
+    // Projection push path — frames update the badge the moment the host fold
+    // changes. Absence of a value means "no frame yet" (gray state), never a
+    // reason to poll: the projection seam is the only client data path.
+    const face = props.sessions.binding?.(props.sessionId)?.session?.projections?.faceOf?.('sessionHealth')
+    if (face === undefined) return () => { alive = false }
+    const read = () => {
+      if (!alive) return
+      const v = face.getSnapshot()
+      if (v !== undefined && v !== null) setProj(v as SessionHealthProjection)
     }
-
-    // 2) Remote fallback — seeds/polls only while the projection is absent,
-    //    paused while the tab is hidden.
-    const fetchRemote = async () => {
-      if (document.hidden) return
-      try {
-        const h = await props.remote.healthState({ sessionId: props.sessionId })
-        if (alive && h !== null && typeof h === 'object') setRemoteHealth(h as HealthStateResult)
-      } catch { /* 静默 */ }
-    }
-    fetchRemote()
-    const dispose = props.timer !== undefined ? props.timer.interval(fetchRemote, 30000) : null
-
+    read()
+    const off = face.subscribe(read)
     return () => {
       alive = false
-      if (off) off()
-      if (dispose) dispose()
+      off()
     }
   }, [props.sessionId])
 
-  // Effective view: projection wins; Remote fallback fills the gap.
-  const severity: HealthSeverity | 'unknown' = proj?.severity ?? remoteHealth?.color ?? 'unknown'
-  const ratio = proj?.ratio ?? remoteHealth?.ratio ?? null
-  const total = proj?.total ?? remoteHealth?.total ?? null
-  const windowTokens = proj?.window ?? remoteHealth?.window ?? null
-  const pct = ratio !== null ? Math.min(Math.round(ratio * 100), 100) : null
+  const severity: HealthSeverity | 'unknown' = proj?.severity ?? 'unknown'
+  const pct = proj?.ratio !== null && proj?.ratio !== undefined
+    ? Math.min(Math.round(proj.ratio * 100), 100)
+    : null
 
   const runHealth = () => {
-    try { props.commandsRemote?.execute?.(props.sessionId, '/health') } catch { /* 静默 */ }
+    try { void props.commands.execute(props.sessionId, '/health') } catch { /* 静默 */ }
   }
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -166,7 +148,7 @@ function HealthBadge(props: {
   if (hover) {
     const color = severity === 'unknown' ? 'green' : severity
     const label = severity === 'unknown' ? '未知（等待数据）' : SEVERITY_LABEL[severity]
-    const advice = proj?.advice ?? (severity === 'unknown' ? '正在获取会话健康数据…' : FALLBACK_ADVICE[severity])
+    const advice = proj?.advice ?? '正在获取会话健康数据…'
     const bar = (
       <span className="sh-bar">
         <span className={`sh-bar-fill sh-bar-fill-${color}`} style={{ width: `${pct !== null ? Math.min(pct, 100) : 0}%` }} />
@@ -186,11 +168,11 @@ function HealthBadge(props: {
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
-          <span className="sh-v">约 {compact(total)} token</span>
+          <span className="sh-v">约 {compact(proj?.total)} token</span>
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">模型窗口</span>
-          <span className="sh-v">{compact(windowTokens)}</span>
+          <span className="sh-v">{compact(proj?.window)}</span>
         </div>
         {proj !== undefined ? (
           <>
@@ -235,34 +217,28 @@ function HealthBadge(props: {
 
 /** Client entry: register the badge in the session header utilities seat. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => { const s = ctx.get('styles'); if (s !== undefined) return s.insert(CSS); return () => {} }, 'dsh-session-health: styles')
-  const slots = ctx.get('slots') as unknown as {
-    inject(name: string, fn: () => unknown): unknown
-    register(...args: unknown[]): unknown
-  } | undefined
-  if (slots === undefined) return
-  const timer = ctx.get('timer') as { interval(fn: () => void, delay: number): () => void } | undefined
-  const remoteRoot = (ctx as unknown as {
-    remote: {
-      sessionHealth: HealthRemote
-      commands?: { execute(sessionId: string, line: string): unknown }
-    }
-  }).remote
-  const sessions = (ctx as unknown as {
-    sessions: {
-      binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
-    }
-  }).sessions
-  slots.inject('conversation.session.header.utilities', () => slots.register(
+  ctx.effect(() => {
+    const styles = ctx.get('styles') as { insert(css: string): () => void } | undefined
+    if (styles === undefined) return () => {}
+    return styles.insert(CSS)
+  }, 'dsh-session-health: styles')
+
+  const sessions = ctx.sessions as unknown as HealthBadgePropsSessions
+  const commands = (ctx.remote as unknown as { commands: CommandsRemote }).commands
+
+  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
     { name: 'conversation.session.header.utilities', id: 'session-health-dot', order: 10 } as never,
     (props: { sessionId: string }) => (
       <HealthBadge
         sessionId={props.sessionId}
-        remote={remoteRoot.sessionHealth}
-        commandsRemote={remoteRoot.commands}
         sessions={sessions}
-        timer={timer}
+        commands={commands}
       />
     ),
   ) as never)
+}
+
+/** The sessions face the badge needs (structural, cast at the service boundary). */
+type HealthBadgePropsSessions = {
+  binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
 }

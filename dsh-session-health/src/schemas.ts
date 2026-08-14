@@ -1,13 +1,16 @@
 /**
  * dsh-session-health — runtime schemas (host-only).
  *
- * The zod schema validates the projection value before every push; the
- * schemastery schemas back the typert Remote methods. Nothing in this module
- * is imported by the client bundle.
+ * The zod schema validates the projection value before every push. Nothing in
+ * this module is imported by the client bundle.
+ *
+ * NOTE: no Typert Remote here. Community plugins cannot expose a Remote to
+ * the browser client — the client mounts a fixed, build-time generated list
+ * of remotes (api-remotes), so an injected `remote.sessionHealth` would stay
+ * pending forever. The projection seam is the plugin's client data path.
  */
 import { z as zod } from 'zod'
-import z from '@deepseek-ai/schemastery'
-import type { HealthStateRequest, HealthStateResult, SessionHealthProjection } from './types.ts'
+import type { SessionHealthProjection } from './types.ts'
 
 /** Wire schema for the projection value (validated before every push). */
 export const sessionHealthProjectionSchema = zod.object({
@@ -21,19 +24,3 @@ export const sessionHealthProjectionSchema = zod.object({
   assistantMessages: zod.number().int().nonnegative(),
   compactions: zod.number().int().nonnegative(),
 }).strict() as unknown as zod.ZodType<SessionHealthProjection>
-
-export const HealthStateRequestSchema = z.object({
-  sessionId: z.string(),
-}) as unknown as z<HealthStateRequest>
-
-export const HealthStateResultSchema = z.object({
-  color: z.union([z.const('green'), z.const('blue'), z.const('yellow'), z.const('red')]),
-  ratio: z.union([z.number(), z.const(null)]),
-  total: z.union([z.number(), z.const(null)]),
-  window: z.union([z.number(), z.const(null)]),
-}) as unknown as z<HealthStateResult>
-
-/** Zod schemas for the Remote methods, consumed by typert generation. */
-export const remoteSchemas = {
-  healthState: { request: HealthStateRequestSchema, result: HealthStateResultSchema },
-}
