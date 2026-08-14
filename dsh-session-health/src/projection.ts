@@ -129,21 +129,21 @@ export function healthView(
     : null
   const uncachedInputTokens = lastUsage?.inputTokens ?? null
   const cacheReadTokens = lastUsage?.cacheReadTokens ?? null
-  // Money math: with an official pricing document the cache-hit ratio and
-  // the per-token price come from the doc (CNY, period-aware); in static mode
-  // they come from config (flat USD).
-  const discount = price !== undefined && price.missPerM > 0
-    ? price.hitPerM / price.missPerM
-    : config.cost.cacheHitDiscount
+  // Money math: with an official pricing document the cache-hit ratio comes
+  // from the official USD pair and each currency uses its own official miss
+  // price (zh docs: CNY, en docs: USD — no conversion); static mode uses the
+  // config's flat USD values.
+  const missPerMUsd = price !== undefined ? price.missPerMUsd : config.cost.inputPricePerM
+  const hitPerMUsd = price !== undefined ? price.hitPerMUsd : missPerMUsd * config.cost.cacheHitDiscount
+  const discount = missPerMUsd > 0 ? hitPerMUsd / missPerMUsd : config.cost.cacheHitDiscount
   const effectivePerRound = lastUsage !== undefined
     ? lastUsage.inputTokens + lastUsage.cacheReadTokens * discount
     : null
-  const pricePerM = price !== undefined ? price.missPerM : config.cost.inputPricePerM
   const effectivePerRoundUsd = effectivePerRound !== null
-    ? effectivePerRound * pricePerM / 1_000_000 * (price?.usdPerCny ?? 1)
+    ? effectivePerRound * missPerMUsd / 1_000_000
     : null
-  const effectivePerRoundCny = effectivePerRound !== null && price !== undefined && price.currency === 'cny'
-    ? effectivePerRound * price.missPerM / 1_000_000
+  const effectivePerRoundCny = effectivePerRound !== null && price?.missPerMCny !== null && price?.missPerMCny !== undefined
+    ? effectivePerRound * price.missPerMCny / 1_000_000
     : null
   const pricePeriod: PricePeriod = price?.period ?? null
 
@@ -200,7 +200,7 @@ export function sessionHealthProjectionDefinition(
     // The fold stays event-pure; only the money view reads the live price
     // cache (falls back to the static config when no cache is mounted).
     view: state => healthView(state, config, pricing?.get(modelOf?.() ?? '')),
-    // v4: effectivePerRoundCny + pricePeriod (invalidates persisted rows).
-    stateVersion: 4,
+    // v5: both official currencies (CNY/USD price pairs) in the money math.
+    stateVersion: 5,
   }
 }

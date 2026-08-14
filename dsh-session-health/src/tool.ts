@@ -88,11 +88,12 @@ const OUTPUT_SCHEMA = {
         effectivePerRound: { type: 'number', description: '每轮计费当量 token（未缓存输入 + 缓存命中×折扣；未知时省略）' },
         effectivePerRoundUsd: { type: 'number', description: '每轮计费当量金额 USD（未知时省略）' },
         effectivePerRoundCny: { type: 'number', description: '每轮计费当量金额 CNY（官方峰谷定价文档激活时；未知时省略）' },
-        inputPricePerM: { type: 'number', description: '输入价格基准（USD 归一化 / 1M token）' },
-        inputMissPerM: { type: 'number', description: '文档货币下的未命中输入价 /1M（静态模式省略）' },
-        inputHitPerM: { type: 'number', description: '文档货币下的缓存命中输入价 /1M（静态模式省略）' },
+        inputPricePerM: { type: 'number', description: '输入价格基准（USD / 1M token）' },
+        inputMissPerMCny: { type: 'number', description: '官方 CNY 未命中输入价 /1M（静态模式省略）' },
+        inputHitPerMCny: { type: 'number', description: '官方 CNY 缓存命中输入价 /1M（静态模式省略）' },
+        inputMissPerMUsd: { type: 'number', description: '官方 USD 未命中输入价 /1M' },
+        inputHitPerMUsd: { type: 'number', description: '官方 USD 缓存命中输入价 /1M' },
         pricePeriod: { type: 'string', enum: ['peak', 'offpeak'], description: '当前忙/闲时段（北京时间；静态模式省略）' },
-        priceCurrency: { type: 'string', enum: ['cny', 'usd'], description: '价格文档货币' },
         remainingRounds: { type: 'integer', description: '本次调用提供的剩余轮数（未提供时省略）' },
         expectedTotalTokens: { type: 'number', description: '剩余轮数输入费用预期 token（= effectivePerRound × remainingRounds；未知时省略）' },
         expectedTotalUsd: { type: 'number', description: '剩余轮数输入费用预期 USD（未知时省略）' },
@@ -165,9 +166,10 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
       if (report.signals.effectivePerRoundUsd !== null) cost.effectivePerRoundUsd = report.signals.effectivePerRoundUsd
       if (report.signals.effectivePerRoundCny !== null) cost.effectivePerRoundCny = report.signals.effectivePerRoundCny
       cost.inputPricePerM = report.signals.inputPricePerM
-      if (report.signals.inputMissPerM !== null) cost.inputMissPerM = report.signals.inputMissPerM
-      if (report.signals.inputHitPerM !== null) cost.inputHitPerM = report.signals.inputHitPerM
-      cost.priceCurrency = report.signals.priceCurrency
+      if (report.signals.inputMissPerMCny !== null) cost.inputMissPerMCny = report.signals.inputMissPerMCny
+      if (report.signals.inputHitPerMCny !== null) cost.inputHitPerMCny = report.signals.inputHitPerMCny
+      cost.inputMissPerMUsd = report.signals.inputMissPerMUsd
+      cost.inputHitPerMUsd = report.signals.inputHitPerMUsd
       if (report.signals.pricePeriod !== null) cost.pricePeriod = report.signals.pricePeriod
       if (args.remainingRounds !== undefined) cost.remainingRounds = args.remainingRounds
       if (report.signals.expectedTotalTokens !== null) cost.expectedTotalTokens = report.signals.expectedTotalTokens

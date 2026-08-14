@@ -67,20 +67,22 @@ cache driven by the **official DeepSeek pricing document** (default
 [api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)):
 
 - **Peak/off-peak (峰谷定价)**: evaluated against **Beijing wall time** on
-  every read — peak 9:00–12:00 / 14:00–18:00 Beijing, everything else is
-  off-peak at half price. The badge tags the row `忙时价/闲时价`.
+  every read — peak 9:00–12:00 / 14:00–18:00 Beijing (01–04 / 06–10 UTC),
+  everything else is off-peak at half price. The badge tags the row
+  `忙时价/闲时价`.
 - **Per model**: prices picked by the current model name (`models."*"` is the
-  fallback), e.g. deepseek-v4-flash: off-peak ¥1.5/M miss / ¥0.05/M hit,
-  peak ¥3.0/M / ¥0.10/M.
-- **Currency by region**: the document is CNY-denominated; USD derives
-  through its `usdPerCny` rate. The badge shows **CNY when the app locale is
-  zh, USD otherwise**.
+  fallback). Both official currencies ride along — CNY from the zh docs,
+  **USD straight from the en docs** (no exchange-rate conversion):
+  deepseek-v4-flash off-peak ¥1.5/M / $0.22/M miss, ¥0.05/M / $0.007/M hit;
+  peak ¥3.0/M / $0.44/M miss, ¥0.10/M / $0.014/M hit.
+- **Currency by region**: the badge shows **CNY when the app locale is zh,
+  USD otherwise**; /health lists both.
 - Refresh every `priceRefreshHours` (default 24h); failures keep the last
   good document; static `inputPricePerM` / `cacheHitDiscount` (flat USD, no
   period) apply until the first success or with `priceSource: 'static'`.
 
-Document shape:
-`{ "currency": "cny", "usdPerCny": 0.14, "peakHours": [[9,12],[14,18]], "models": { "<model>": { "peak": { "inputMissPerM": 3.0, "inputHitPerM": 0.10 }, "offpeak": { "inputMissPerM": 1.5, "inputHitPerM": 0.05 } }, "*": { ... } } }`
+Document shape (per period, both currencies required):
+`{ "peakHours": [[9,12],[14,18]], "models": { "<model>": { "peak": { "inputMissPerMCny": 3.0, "inputHitPerMCny": 0.10, "inputMissPerMUsd": 0.44, "inputHitPerMUsd": 0.014 }, "offpeak": { ... } }, "*": { ... } } }`
 
 ## Why real data
 

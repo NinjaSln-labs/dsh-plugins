@@ -1,22 +1,50 @@
 {
-  "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
-  "currency": "cny",
+  "source": "https://api-docs.deepseek.com/quick_start/pricing/",
   "updatedAt": "2026-08-14",
-  "usdPerCny": 0.14,
   "peakHours": [[9, 12], [14, 18]],
   "models": {
     "deepseek-v4-flash": {
-      "peak": { "inputMissPerM": 3.0, "inputHitPerM": 0.10 },
-      "offpeak": { "inputMissPerM": 1.5, "inputHitPerM": 0.05 }
+      "peak": {
+        "inputMissPerMCny": 3.0,
+        "inputHitPerMCny": 0.10,
+        "inputMissPerMUsd": 0.44,
+        "inputHitPerMUsd": 0.014
+      },
+      "offpeak": {
+        "inputMissPerMCny": 1.5,
+        "inputHitPerMCny": 0.05,
+        "inputMissPerMUsd": 0.22,
+        "inputHitPerMUsd": 0.007
+      }
     },
     "deepseek-v4-pro": {
-      "peak": { "inputMissPerM": 9.0, "inputHitPerM": 0.30 },
-      "offpeak": { "inputMissPerM": 4.5, "inputHitPerM": 0.15 }
+      "peak": {
+        "inputMissPerMCny": 9.0,
+        "inputHitPerMCny": 0.30,
+        "inputMissPerMUsd": 1.32,
+        "inputHitPerMUsd": 0.044
+      },
+      "offpeak": {
+        "inputMissPerMCny": 4.5,
+        "inputHitPerMCny": 0.15,
+        "inputMissPerMUsd": 0.66,
+        "inputHitPerMUsd": 0.022
+      }
     },
     "*": {
-      "peak": { "inputMissPerM": 3.0, "inputHitPerM": 0.10 },
-      "offpeak": { "inputMissPerM": 1.5, "inputHitPerM": 0.05 }
+      "peak": {
+        "inputMissPerMCny": 3.0,
+        "inputHitPerMCny": 0.10,
+        "inputMissPerMUsd": 0.44,
+        "inputHitPerMUsd": 0.014
+      },
+      "offpeak": {
+        "inputMissPerMCny": 1.5,
+        "inputHitPerMCny": 0.05,
+        "inputMissPerMUsd": 0.22,
+        "inputHitPerMUsd": 0.007
+      }
     }
   },
-  "note": "官方峰谷定价（北京时间 2026-08-17 00:00 生效；此前为平价：未命中 ¥1/M、命中 ¥0.02/M）。高峰 = 北京时间 9:00-12:00、14:00-18:00，其余为闲时（半价）。USD 显示按 usdPerCny 汇率换算。价格变更时更新本文件（同时更新 updatedAt）。"
+  "note": "官方峰谷定价（北京时间 2026-08-17 00:00 生效；此前为平价：CNY 未命中 ¥1/M、命中 ¥0.02/M；USD 未命中 $0.14/M、命中 $0.0028/M）。高峰 = 北京时间 9:00-12:00、14:00-18:00（英文页写作 UTC 01:00-04:00 / 06:00-10:00），其余闲时半价。CNY 来自中文页、USD 来自英文页，均为官方价格，无需汇率换算。价格变更时更新本文件（同时更新 updatedAt）。"
 }
