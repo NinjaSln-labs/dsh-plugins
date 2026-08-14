@@ -84,6 +84,19 @@ await check('projection: economy floor outranks ratio (default config)', () => {
   assert.equal(viewOf(100_000, 1_000_000).severity, 'yellow') // 10% ratio but economy 100K
 })
 
+await check('projection: message-count proxy escalates green → blue', () => {
+  const base = {
+    turns: 40, lastTurn: null, userMessages: 500, assistantMessages: 500,
+    compactions: 0, pressureTokens: 20_000, contextWindow: 1_000_000,
+  }
+  const view = healthView(base, config) // 2% occupancy, 1000 messages ≥ 800 proxy
+  assert.equal(view.severity, 'blue')
+  assert.ok(view.advice.includes('代理指标'))
+  assert.ok(view.advice.includes('1000'))
+  const low = healthView({ ...base, userMessages: 400, assistantMessages: 300 }, config)
+  assert.equal(low.severity, 'green') // 700 messages: no proxy, low occupancy
+})
+
 /* ---------- assess() core ---------- */
 const signal = new AbortController().signal
 const session = { header: { cwd: '/tmp/ws' } }

@@ -78,8 +78,9 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
  * State → wire payload: severity + advice from the config thresholds.
  *
  * Priority mirrors the skill: economy (absolute per-round cost, paid every
- * round) outranks capacity (window ratio); the message-count proxy only
- * annotates. The exact threshold values live in config, never here.
+ * round) outranks capacity (window ratio); the message-count proxy annotates
+ * only at the bottom tier (green → blue). The exact threshold values live in
+ * config, never here.
  */
 export function healthView(state: SessionHealthState, config: ResolvedConfig): SessionHealthProjection {
   const total = state.pressureTokens ?? null
@@ -92,6 +93,13 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
   if (ratio !== null && ratio >= t.windowCritical) severity = 'red'
   else if ((ratio !== null && ratio >= t.windowHigh) || economy) severity = 'yellow'
   else if (ratio !== null && ratio >= t.windowMid) severity = 'blue'
+
+  // Message-count proxy (dimension-A annotation): a very long message history
+  // means early detail is likely summarized even when occupancy looks low —
+  // bottom-tier sessions escalate to "留意" instead of "放心继续".
+  const messages = state.userMessages + state.assistantMessages
+  const proxyHit = messages >= t.messageCountProxy
+  if (severity === 'green' && proxyHit) severity = 'blue'
 
   const pct = ratio !== null ? Math.round(ratio * 100) : null
   const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次）` : ''
@@ -106,7 +114,9 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
         : `每轮输入约 ${formatCompact(total ?? 0)} token，费用可观；若剩余工作还多，开新会话更划算。`
       break
     case 'blue':
-      advice = `上下文占用 ${pct}%（中等），继续但留意窗口压力。`
+      advice = proxyHit && ratio !== null && ratio < t.windowMid
+        ? `消息量已达 ${messages} 条（代理指标），早期内容可能被压缩——继续但留意，必要时开新会话。`
+        : `上下文占用 ${pct}%（中等），继续但留意窗口压力。`
       break
     default:
       advice = ratio !== null ? `空间充足（占用 ${pct}%），放心继续。` : '各项信号正常，放心继续。'

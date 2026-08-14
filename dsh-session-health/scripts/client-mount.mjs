@@ -47,6 +47,26 @@ assert.ok(plugin.inject.includes('remote.commands'), 'remote.commands sub-servic
 assert.ok(!plugin.inject.includes('remote.sessionHealth'), 'a plugin Remote can never mount client-side — must not be injected')
 console.log('  ok  bundle registered via __ModuleLoader__ with apply/inject/name')
 
+// 2b) The compaction-aware merge helper is exported and correct.
+const proj = {
+  severity: 'yellow', advice: 'a', ratio: 0.6, total: 600_000, window: 1_000_000,
+  turns: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
+}
+const merged = plugin.mergePressure(proj, { pressureTokens: 650_000, projectedTokens: 300_000, contextWindow: 1_000_000 })
+assert.equal(merged.total, 600_000, 'sessionHealth total wins when present')
+assert.equal(merged.projected, 300_000, 'projectedTokens surfaces for the tooltip row')
+assert.equal(merged.ratio, 0.6)
+const fallback = plugin.mergePressure(undefined, { pressureTokens: 650_000, projectedTokens: 300_000, contextWindow: 2_000_000 })
+assert.equal(fallback.total, 650_000)
+assert.equal(fallback.window, 2_000_000)
+assert.equal(fallback.ratio, 0.325)
+const compacted = plugin.mergePressure(
+  { severity: 'green', advice: 'a', ratio: null, total: null, window: 1_000_000, turns: 0, userMessages: 0, assistantMessages: 0, compactions: 0 },
+  { projectedTokens: 300_000 },
+)
+assert.equal(compacted.total, 300_000, 'projectedTokens fills a missing host total')
+console.log('  ok  mergePressure: compaction-aware occupancy merge')
+
 // 3) Mount through a real cordis Context with the injected services provided
 //    the way the web shell provides them. A minimal document stub records the
 //    stylesheet tag the apply path must create (the client-modules contract:

@@ -87,6 +87,35 @@ interface ProjectionFace {
   subscribe(listener: () => void): () => void
 }
 
+/**
+ * token-meter's contextPressure projection value (the harness core publishes
+ * it alongside sessionHealth; compaction-aware).
+ */
+export interface ContextPressureLike {
+  /** Provider-reported prompt size of the most recent request. */
+  pressureTokens?: number
+  /** What the NEXT request's prompt would cost (reacts to compaction). */
+  projectedTokens?: number
+  /** Newest known route capacity. */
+  contextWindow?: number
+}
+
+/**
+ * Merge the sessionHealth verdict with token-meter's compaction-aware
+ * contextPressure numbers: the occupancy figure the badge displays should be
+ * "what the next request costs", not a stale pre-compaction sample. Pure.
+ */
+export function mergePressure(
+  proj: SessionHealthProjection | undefined,
+  pressure: ContextPressureLike | undefined,
+): { total: number | null; window: number | null; ratio: number | null; projected: number | null } {
+  const total = proj?.total ?? pressure?.pressureTokens ?? pressure?.projectedTokens ?? null
+  const window = proj?.window ?? pressure?.contextWindow ?? null
+  const ratio = total !== null && window !== null && window > 0 ? total / window : null
+  const projected = pressure?.projectedTokens ?? null
+  return { total, window, ratio, projected }
+}
+
 /** Commands Remote face (core, always mounted). */
 interface CommandsRemote {
   execute(sessionId: string, line: string): Promise<unknown>
@@ -100,6 +129,7 @@ function HealthBadge(props: {
   }
 }): JSX.Element {
   const [proj, setProj] = React.useState<SessionHealthProjection | undefined>(undefined)
+  const [pressure, setPressure] = React.useState<ContextPressureLike | undefined>(undefined)
   const [hover, setHover] = React.useState(false)
 
   React.useEffect(() => {
@@ -107,25 +137,37 @@ function HealthBadge(props: {
     // Projection push path — frames update the badge the moment the host fold
     // changes. Absence of a value means "no frame yet" (gray state), never a
     // reason to poll: the projection seam is the only client data path.
-    const face = props.sessions.binding?.(props.sessionId)?.session?.projections?.faceOf?.('sessionHealth')
-    if (face === undefined) return () => { alive = false }
-    const read = () => {
+    const binding = props.sessions.binding?.(props.sessionId)?.session?.projections
+    const face = binding?.faceOf?.('sessionHealth')
+    const pressureFace = binding?.faceOf?.('contextPressure')
+    if (face === undefined && pressureFace === undefined) return () => { alive = false }
+    const readHealth = () => {
       if (!alive) return
-      const v = face.getSnapshot()
+      const v = face?.getSnapshot()
       if (v !== undefined && v !== null) setProj(v as SessionHealthProjection)
     }
-    read()
-    const off = face.subscribe(read)
+    const readPressure = () => {
+      if (!alive) return
+      const v = pressureFace?.getSnapshot()
+      if (v !== undefined && v !== null) setPressure(v as ContextPressureLike)
+    }
+    readHealth()
+    readPressure()
+    const offs = [
+      face !== undefined ? face.subscribe(readHealth) : () => {},
+      pressureFace !== undefined ? pressureFace.subscribe(readPressure) : () => {},
+    ]
     return () => {
       alive = false
-      off()
+      for (const off of offs) off()
     }
   }, [props.sessionId])
 
+  // The verdict (color/advice) is host-computed and authoritative; the
+  // displayed occupancy merges in token-meter's compaction-aware numbers.
+  const merged = mergePressure(proj, pressure)
   const severity: HealthSeverity | 'unknown' = proj?.severity ?? 'unknown'
-  const pct = proj?.ratio !== null && proj?.ratio !== undefined
-    ? Math.min(Math.round(proj.ratio * 100), 100)
-    : null
+  const pct = merged.ratio !== null ? Math.min(Math.round(merged.ratio * 100), 100) : null
 
   const runHealth = () => {
     try { void props.commands.execute(props.sessionId, '/health') } catch { /* 静默 */ }
@@ -164,11 +206,17 @@ function HealthBadge(props: {
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
-          <span className="sh-v">约 {compact(proj?.total)} token</span>
+          <span className="sh-v">约 {compact(merged.total)} token</span>
         </div>
+        {merged.projected !== null && merged.projected !== merged.total ? (
+          <div className="sh-tip-row">
+            <span className="sh-k">预计下次输入</span>
+            <span className="sh-v">约 {compact(merged.projected)} token</span>
+          </div>
+        ) : null}
         <div className="sh-tip-row">
           <span className="sh-k">模型窗口</span>
-          <span className="sh-v">{compact(proj?.window)}</span>
+          <span className="sh-v">{compact(merged.window)}</span>
         </div>
         {proj !== undefined ? (
           <>
