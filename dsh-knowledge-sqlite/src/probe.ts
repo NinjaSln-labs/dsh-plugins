@@ -265,9 +265,11 @@ async function variance(
   runs: number,
 ): Promise<Record<string, unknown>> {
   const perRun: Array<{ run: number; recall1: string; ranks: string; degraded: string | null }> = []
+  // 目标 id 按 dedupeKey 解析（确定性 id 是 k-<hash> 前缀，与语料 target 名不同）
+  const dedupeMap = await deps.service._dedupeIds()
   for (let i = 0; i < runs; i++) {
     deps.expander.clear()
-    const arm = await evalArm(deps, HARD_QUERIES, 'rich', true, null, new Map())
+    const arm = await evalArm(deps, HARD_QUERIES, 'rich', true, null, dedupeMap)
     perRun.push({
       run: i + 1,
       recall1: String(arm.recall1),
