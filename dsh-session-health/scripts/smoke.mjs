@@ -74,15 +74,42 @@ await check('projection: severity tiers across thresholds', () => {
   assert.equal(viewOf(900_000, 1_000_000).severity, 'red')     // 90%
 })
 
-await check('projection: economy floor outranks ratio (default config)', () => {
+await check('projection: economy bills cache-discounted effective per round', () => {
   const base = { turns: 0, lastTurn: null, userMessages: 0, assistantMessages: 0, compactions: 0 }
-  const viewOf = (pressure, window) => healthView(
-    { ...base, ...(pressure !== null ? { pressureTokens: pressure } : {}), ...(window !== null ? { contextWindow: window } : {}) },
+  const viewOf = (pressure, window, lastUsage) => healthView(
+    {
+      ...base,
+      ...(pressure !== null ? { pressureTokens: pressure } : {}),
+      ...(window !== null ? { contextWindow: window } : {}),
+      ...(lastUsage !== undefined ? { lastUsage } : {}),
+    },
     config,
   )
-  assert.equal(viewOf(60_000, null).severity, 'yellow') // economy floor, no window
-  assert.equal(viewOf(10_000, null).severity, 'green')
-  assert.equal(viewOf(100_000, 1_000_000).severity, 'yellow') // 10% ratio but economy 100K
+  // No window: the absolute floor (50K) applies to the billable-equivalent.
+  assert.equal(viewOf(60_000, null, { inputTokens: 60_000, cacheReadTokens: 0, cacheWriteTokens: 0 }).severity, 'yellow')
+  assert.equal(viewOf(10_000, null, { inputTokens: 10_000, cacheReadTokens: 0, cacheWriteTokens: 0 }).severity, 'green')
+})
+
+await check('projection: economy floor scales with the window (no 15%-yellow)', () => {
+  const base = { turns: 0, lastTurn: null, userMessages: 0, assistantMessages: 0, compactions: 0 }
+  const viewOf = (pressure, window, lastUsage) => healthView(
+    { ...base, ...(pressure !== null ? { pressureTokens: pressure } : {}), ...(window !== null ? { contextWindow: window } : {}), lastUsage },
+    config,
+  )
+  // 1M window → economy floor = max(50K, 0.3 × 1M) = 300K billable-equivalent.
+  // The old 50K floor fired at 10% occupancy; now 15% stays green (cached or not).
+  assert.equal(
+    viewOf(100_000, 1_000_000, { inputTokens: 100_000, cacheReadTokens: 0, cacheWriteTokens: 0 }).severity,
+    'green', // 10% occupancy, billable 100K < 300K
+  )
+  assert.equal(
+    viewOf(150_000, 1_000_000, { inputTokens: 15_000, cacheReadTokens: 135_000, cacheWriteTokens: 0 }).severity,
+    'green', // 15% occupancy, 90% cache hit → billable 28.5K < 300K
+  )
+  // Uncached at 32%: billable 320K ≥ 300K → economy outranks the blue tier.
+  const v = viewOf(320_000, 1_000_000, { inputTokens: 320_000, cacheReadTokens: 0, cacheWriteTokens: 0 })
+  assert.equal(v.severity, 'yellow')
+  assert.ok(v.advice.includes('已计缓存折扣'))
 })
 
 await check('projection: message-count proxy escalates green → blue', () => {
@@ -127,7 +154,7 @@ const queryEvents = [
   { type: 'user/message', data: {} },
 ]
 const services = {
-  tokenMeter: { measure: () => ({ totalTokens: 132_000 }) },
+  tokenMeter: { measure: () => ({ totalTokens: 300_000 }) },
   llm: { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) },
   agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) },
   sessionQuery: { listEvents: async () => queryEvents },
@@ -137,15 +164,29 @@ const services = {
     stat: async p => (p === '.git' || p === 'HANDOFF.md' ? {} : undefined),
   },
   subprocess: undefined,
+  // Projection snapshot: uncached 300K/round on a 1M window — billable 300K
+  // hits the window-scaled economy floor (max(50K, 0.3×1M)), yellow.
+  sessionProjections: {
+    snapshot: () => ({
+      values: {
+        sessionHealth: {
+          severity: 'yellow', advice: 'a', ratio: 0.3, total: 300_000, window: 1_000_000,
+          turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
+          cacheHitRate: 0, uncachedInputTokens: 300_000, cacheReadTokens: 0,
+          effectivePerRound: 300_000, effectivePerRoundUsd: 0.084, effectivePerRoundCny: null, pricePeriod: null,
+        },
+      },
+    }),
+  },
 }
 const ctx = { get: name => services[name] }
 
 await check('assess: economy yellow + probes + counts', async () => {
   const report = await assess(ctx, session, 'agent-1', signal, config, { docName: 'HANDOFF.md' })
-  assert.equal(report.severity, 'yellow') // 132K >= 50K economy floor
+  assert.equal(report.severity, 'yellow') // billable 300K >= max(50K, 0.3×1M) economy floor
   assert.equal(report.signals.turns, 2)
   assert.equal(report.signals.userMessages, 2)
-  assert.equal(report.signals.total, 132_000)
+  assert.equal(report.signals.total, 300_000)
   assert.equal(report.handoff.isGitRepo, true)
   assert.equal(report.handoff.hasHandoff, true)
   assert.equal(report.recommendation, 'suggest-switch')
@@ -389,8 +430,8 @@ await check('tool: execute returns structured verdict + report', async () => {
   })
   assert.equal(value.severity, 'yellow')
   assert.equal(value.recommendation, 'suggest-switch')
-  assert.equal(value.signals.windowPercent, 13)
-  assert.equal(value.signals.tokensPerRound, 132_000)
+  assert.equal(value.signals.windowPercent, 30)
+  assert.equal(value.signals.tokensPerRound, 300_000)
   assert.equal(value.signals.messageCount, 3) // 2 user + 1 assistant in the stub events
   assert.equal(value.handoffReady.isGitRepo, true)
   assert.ok(typeof value.report === 'string' && value.report.length > 0)

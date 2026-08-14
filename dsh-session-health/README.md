@@ -25,12 +25,12 @@ Two-dimensional continue-vs-switch (community session-health methodology), param
 
 | Severity | Condition (defaults) | Advice |
 |---|---|---|
-| Green | window ratio < 30%, per-round < 50K | keep going |
+| Green | window ratio < 30%, per-round billable < 50K | keep going |
 | Blue | ratio 30–50%, or messages ≥ 800 (proxy) | keep going, watch the window |
-| Yellow | ratio ≥ 50% or per-round ≥ 50K | wrap at the next task boundary |
+| Yellow | ratio ≥ 50%, or per-round billable ≥ max(50K, 30% × window) | wrap at the next task boundary |
 | Red | ratio ≥ 80% | wrap up soon, hand off |
 
-Economy (absolute per-round cost) outranks capacity (window ratio), per the methodology. The tool escalates to `danger-zone` when the work depends on early content that was never recorded (git/docs) — never suggest a blind switch there.
+Economy (per-round **billable-equivalent**, cache-hit discounted) outranks capacity (window ratio), per the methodology. The economy floor scales with the window (`economyWindowRatio`): the 50K absolute default was calibrated for ~128K-window models, and using it raw on a 1M window flagged yellow at single-digit occupancy — the billable threshold no longer fires there. The tool escalates to `danger-zone` when the work depends on early content that was never recorded (git/docs) — never suggest a blind switch there.
 
 ## Configuration
 
@@ -38,7 +38,8 @@ Economy (absolute per-round cost) outranks capacity (window ratio), per the meth
 // thresholds: decision-model parameters
 thresholds: {
   windowMid: 0.3, windowHigh: 0.5, windowCritical: 0.8,   // window-ratio tiers
-  economyTokenFloor: 50000, economyRoundFloor: 10,        // economy dimension
+  economyTokenFloor: 50000, economyWindowRatio: 0.3,      // economy: billable ≥ max(50K, 30%×window) turns yellow
+  economyRoundFloor: 10,                                  // remaining-rounds threshold (cost-expectation copy)
   messageCountProxy: 800,                                  // context-bloat proxy
 }
 // checks: probe switches (all read-only)

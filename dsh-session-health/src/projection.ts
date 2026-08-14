@@ -91,10 +91,14 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
 /**
  * State → wire payload: severity + advice from the config thresholds.
  *
- * Priority mirrors the skill: economy (absolute per-round cost, paid every
+ * Priority mirrors the skill: economy (per-round billable cost, paid every
  * round) outranks capacity (window ratio); the message-count proxy annotates
- * only at the bottom tier (green → blue). The exact threshold values live in
- * config, never here.
+ * only at the bottom tier (green → blue). The economy trigger bills the same
+ * cache-discounted figure the badge displays (`effectivePerRound`), and its
+ * floor scales with the model window — the 50K absolute default was
+ * calibrated for ~128K-window models and would otherwise fire at single-digit
+ * occupancy on 1M windows. The exact threshold values live in config, never
+ * here.
  */
 export function healthView(
   state: SessionHealthState,
@@ -105,22 +109,6 @@ export function healthView(
   const window = state.contextWindow ?? null
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
   const t = config.thresholds
-
-  const economy = total !== null && total >= t.economyTokenFloor
-  let severity: HealthSeverity = 'green'
-  if (ratio !== null && ratio >= t.windowCritical) severity = 'red'
-  else if ((ratio !== null && ratio >= t.windowHigh) || economy) severity = 'yellow'
-  else if (ratio !== null && ratio >= t.windowMid) severity = 'blue'
-
-  // Message-count proxy (dimension-A annotation): a very long message history
-  // means early detail is likely summarized even when occupancy looks low —
-  // bottom-tier sessions escalate to "留意" instead of "放心继续".
-  const messages = state.userMessages + state.assistantMessages
-  const proxyHit = messages >= t.messageCountProxy
-  if (severity === 'green' && proxyHit) severity = 'blue'
-
-  const pct = ratio !== null ? Math.round(ratio * 100) : null
-  const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次）` : ''
 
   // Cache-hit accounting of the last request (null before any usage report).
   const lastUsage = state.lastUsage
@@ -147,15 +135,38 @@ export function healthView(
     : null
   const pricePeriod: PricePeriod = price?.period ?? null
 
+  // Severity ladder. Economy = billable-equivalent per round (what the badge
+  // money row shows) against a floor that grows with the window:
+  // max(economyTokenFloor, economyWindowRatio × window).
+  const capacityHigh = ratio !== null && ratio >= t.windowHigh
+  const economyFloor = window !== null && window > 0
+    ? Math.max(t.economyTokenFloor, window * t.economyWindowRatio)
+    : t.economyTokenFloor
+  const economy = effectivePerRound !== null && effectivePerRound >= economyFloor
+  let severity: HealthSeverity = 'green'
+  if (ratio !== null && ratio >= t.windowCritical) severity = 'red'
+  else if (capacityHigh || economy) severity = 'yellow'
+  else if (ratio !== null && ratio >= t.windowMid) severity = 'blue'
+
+  // Message-count proxy (dimension-A annotation): a very long message history
+  // means early detail is likely summarized even when occupancy looks low —
+  // bottom-tier sessions escalate to "留意" instead of "放心继续".
+  const messages = state.userMessages + state.assistantMessages
+  const proxyHit = messages >= t.messageCountProxy
+  if (severity === 'green' && proxyHit) severity = 'blue'
+
+  const pct = ratio !== null ? Math.round(ratio * 100) : null
+  const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次）` : ''
+
   let advice: string
   switch (severity) {
     case 'red':
       advice = `上下文已占窗口 ${pct}%${compacted}，建议尽快在任务边界收尾并交接。`
       break
     case 'yellow':
-      advice = ratio !== null
+      advice = capacityHigh
         ? `上下文已占窗口 ${pct}%${compacted}，建议在任务边界收尾；若剩余工作还多，开新会话更划算。`
-        : `每轮输入约 ${formatCompact(total ?? 0)} token，费用可观；若剩余工作还多，开新会话更划算。`
+        : `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣），费用可观；若剩余工作还多，开新会话更划算。`
       break
     case 'blue':
       advice = proxyHit && ratio !== null && ratio < t.windowMid

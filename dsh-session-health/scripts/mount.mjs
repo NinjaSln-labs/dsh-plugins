@@ -21,7 +21,7 @@ const session = { header: { cwd: '/tmp/ws' } }
 const registrations = { commands: null, tools: null, projections: null }
 
 const ctx = new Context()
-ctx.provide('tokenMeter', { measure: () => ({ totalTokens: 132_000 }) })
+ctx.provide('tokenMeter', { measure: () => ({ totalTokens: 300_000 }) })
 ctx.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) })
 ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
 ctx.provide('sessions', { get: id => (id === 's1' ? session : undefined) })
@@ -45,7 +45,21 @@ ctx.provide('subprocess', {
 })
 ctx.provide('commands', { register: def => { registrations.commands = def } })
 ctx.provide('tools', { register: tool => { registrations.tools = tool } })
-ctx.provide('sessionProjections', { register: def => { registrations.projections = def } })
+ctx.provide('sessionProjections', {
+  register: def => { registrations.projections = def },
+  // assess() reads usage buckets from the pushed snapshot — uncached 300K/round
+  // on a 1M window hits the window-scaled economy floor (max(50K, 0.3×1M)).
+  snapshot: () => ({
+    values: {
+      sessionHealth: {
+        severity: 'yellow', advice: 'a', ratio: 0.3, total: 300_000, window: 1_000_000,
+        turns: 0, userMessages: 0, assistantMessages: 0, compactions: 0,
+        cacheHitRate: 0, uncachedInputTokens: 300_000, cacheReadTokens: 0,
+        effectivePerRound: 300_000, effectivePerRoundUsd: 0.084, effectivePerRoundCny: null, pricePeriod: null,
+      },
+    },
+  }),
+})
 
 // The exact loader normalization path (cordis-plugin-loader unwrapExports).
 const mod = await import('../lib/index.js')
