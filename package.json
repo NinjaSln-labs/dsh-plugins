@@ -24,7 +24,8 @@
     "lib/probe.js",
     "lib/types.js",
     "lib/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "README.zh.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
