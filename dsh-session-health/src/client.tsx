@@ -50,6 +50,9 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-tip-row{display:flex;align-items:center;gap:10px;line-height:2}
 .sh-tip-row .sh-k{color:var(--dsw-alias-label-secondary);flex:none}
 .sh-tip-row .sh-v{color:var(--dsw-alias-label-secondary);margin-left:auto;font-variant-numeric:tabular-nums}
+.sh-cost-toggle{cursor:pointer;border-radius:4px}
+.sh-cost-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-cost-toggle:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
 .sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
@@ -142,6 +145,10 @@ function HealthBadge(props: {
   const [proj, setProj] = React.useState<SessionHealthProjection | undefined>(undefined)
   const [pressure, setPressure] = React.useState<ContextPressureLike | undefined>(undefined)
   const [hover, setHover] = React.useState(false)
+  // 计费预期行的显示口径：金额（默认）↔ 计费当量 token 数。点击行切换，localStorage 记住。
+  const [costAsTokens, setCostAsTokens] = React.useState<boolean>(() => {
+    try { return window.localStorage.getItem('dsh-session-health/costDisplay') === 'tokens' } catch { return false }
+  })
 
   React.useEffect(() => {
     let alive = true
@@ -182,6 +189,19 @@ function HealthBadge(props: {
 
   const runHealth = () => {
     try { void props.commands.execute(props.sessionId, '/health') } catch { /* 静默 */ }
+  }
+  const toggleCost = () => {
+    setCostAsTokens(v => {
+      const next = !v
+      try { window.localStorage.setItem('dsh-session-health/costDisplay', next ? 'tokens' : 'money') } catch { /* 静默 */ }
+      return next
+    })
+  }
+  const onCostKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleCost()
+    }
   }
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -236,12 +256,29 @@ function HealthBadge(props: {
           const money = isZh && cny !== null && cny !== undefined
             ? `¥${cny.toFixed(2)}`
             : usd !== null && usd !== undefined ? formatUsd(usd) : null
+          const effective = proj?.effectivePerRound
+          if (money === null && effective === null) return null
           const period = proj?.pricePeriod === 'peak' ? '（忙时价）' : proj?.pricePeriod === 'offpeak' ? '（闲时价）' : ''
-          if (money === null) return null
           return (
-            <div className="sh-tip-row">
-              <span className="sh-k">计费预期</span>
-              <span className="sh-v">约 {money}/轮（含缓存折扣）{period}</span>
+            <div
+              className="sh-tip-row sh-cost-toggle"
+              role="button"
+              tabIndex={0}
+              title={costAsTokens ? '点击切换为金额显示' : '点击切换为 token 数量显示'}
+              aria-label={costAsTokens ? '计费预期，以 token 数量显示，点击切换为金额' : '计费预期，以金额显示，点击切换为 token 数量'}
+              onClick={toggleCost}
+              onKeyDown={onCostKeyDown}
+            >
+              <span className="sh-k">计费预期{costAsTokens ? '（token）' : ''}</span>
+              <span className="sh-v">
+                {costAsTokens
+                  ? effective !== null
+                    ? `约 ${compact(effective)} token/轮（计费当量）`
+                    : `约 ${money ?? '未知'}/轮（含缓存折扣）${period}`
+                  : money !== null
+                    ? `约 ${money}/轮（含缓存折扣）${period}`
+                    : `约 ${compact(effective ?? 0)} token/轮（计费当量）`}
+              </span>
             </div>
           )
         })()}
@@ -263,7 +300,7 @@ function HealthBadge(props: {
             ) : null}
           </>
         ) : null}
-        <div className="sh-tip-hint">点击运行 /health 查看完整报告</div>
+        <div className="sh-tip-hint">点击运行 /health 查看完整报告；点击计费预期切换金额 / token 显示</div>
       </div>
     )
   }
