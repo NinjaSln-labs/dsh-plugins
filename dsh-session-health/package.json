@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-health",
   "description": "Session health for DeepSeek Harness: real token-meter data, configurable continue-vs-new decision model. Reactive header badge (compaction-aware), /health command, session_health tool.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publishConfig": {
     "access": "public"
   },
