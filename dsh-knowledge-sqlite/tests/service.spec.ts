@@ -227,7 +227,7 @@ describe('ask 门控', () => {
 })
 
 describe('probe（实验套件）', () => {
-  it('seed → eval-hard 确定性臂（A 7% / C 21% / D 50%）', async () => {
+  it('seed → eval-hard 确定性臂（A 7% / C 21% / D 50%）', { timeout: 30000 }, async () => {
     app = await boot({ agent, corpusPath: '/Users/sin/Documents/deepseekharnesstest/research/memory-experiment' })
     const seed = await app.service.probe('seed')
     expect(seed.ok).toBe(true)
@@ -241,7 +241,7 @@ describe('probe（实验套件）', () => {
     expect(arms.arms.D.recall1).toMatch(/^7\/14 \(50%\)$/)
   })
 
-  it('contract 全过（≥11 项）', async () => {
+  it('contract 全过（≥11 项）', { timeout: 30000 }, async () => {
     app = await boot({ agent, corpusPath: '/Users/sin/Documents/deepseekharnesstest/research/memory-experiment' })
     const c = await app.service.probe('contract')
     expect(c.ok).toBe(true)

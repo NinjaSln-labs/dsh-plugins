@@ -317,17 +317,17 @@ export class KnowledgeService extends Service {
 
   // ============ 实验套件探针（阶段 3 门禁 e2e） ============
   async probe(
-    suite: 'seed' | 'hard' | 'human' | 'contract' | 'latency' | 'all',
-    opts: { fresh?: boolean } = {},
+    suite: 'seed' | 'hard' | 'human' | 'contract' | 'latency' | 'variance' | 'all',
+    opts: { fresh?: boolean; runs?: number } = {},
   ): Promise<{ ok: boolean; parts: Array<Record<string, unknown>> }> {
-    // fresh：清扩展缓存——L1 方差门禁需要每轮独立扩展（缓存会杀死随机性）
+    // fresh：清扩展缓存——单轮方差需要独立扩展（缓存会杀死随机性）
     if (opts.fresh === true) this.expander.clear()
     const caller = this.readCaller()
     const workspaceId = caller?.stamps.workspaceId
     const corpusPath = workspaceId !== undefined
       ? (this.config.corpusPath.startsWith('/') ? this.config.corpusPath : join(workspaceId, this.config.corpusPath))
       : this.config.corpusPath
-    return runProbe({ store: this.store, expander: this.expander, service: this, corpusPath }, suite, caller)
+    return runProbe({ store: this.store, expander: this.expander, service: this, corpusPath }, suite, caller, opts.runs ?? 10)
   }
 }
 
