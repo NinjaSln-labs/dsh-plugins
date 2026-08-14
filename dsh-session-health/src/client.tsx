@@ -75,11 +75,20 @@ function formatUsd(v: number): string {
   return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
 }
 
+/** Visible tooltip label — the tier's color is already shown by the chip, so no color word. */
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
-  green: '绿（放心继续）',
-  blue: '蓝（继续，留意）',
-  yellow: '黄（建议留意）',
-  red: '红（建议收尾）',
+  green: '放心继续',
+  blue: '继续，留意',
+  yellow: '建议留意',
+  red: '建议收尾',
+}
+
+/** aria-label variant keeps the color word: screen readers cannot see the chip color. */
+const SEVERITY_ARIA: Record<HealthSeverity, string> = {
+  green: '绿：放心继续',
+  blue: '蓝：继续，留意',
+  yellow: '黄：建议留意',
+  red: '红：建议收尾',
 }
 
 /** Projection face shape from the runtime client. */
@@ -269,7 +278,7 @@ function HealthBadge(props: {
         className={`sh-badge${state !== 'unknown' ? ` sh-sev-${state}` : ''}`}
         role="button"
         tabIndex={0}
-        aria-label={`会话健康：${severity === 'unknown' ? '未知' : SEVERITY_LABEL[severity]}`}
+        aria-label={`会话健康：${severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]}`}
         onClick={runHealth}
         onKeyDown={onKeyDown}
       >
