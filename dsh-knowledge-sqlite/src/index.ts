@@ -305,10 +305,13 @@ export class KnowledgeService extends Service {
     for (const r of rows) {
       if (hits.length >= maxItems) break
       const item: StoredItem = r.item
+      // score 归一化：Math.round 可能产出 -0（极小 bm25 分数），工具层 JSON 校验拒绝 -0/NaN
+      const rounded = Math.round(r.score * 1000) / 1000
+      const score = Object.is(rounded, -0) || !Number.isFinite(rounded) ? 0 : rounded
       hits.push({
         id: item.id,
         content: item.content,
-        score: Math.round(r.score * 1000) / 1000,
+        score,
         snippet: snippetOf(item.content, qgrams),
         provenance: provenanceOf(item.content, item.keywords, item.synonyms, item.questions, qgrams),
         authorTier: item.authorTier,
