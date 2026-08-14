@@ -54,7 +54,8 @@ cost: {
   cacheHitDiscount: 0.1,       // 缓存命中价格比例
   inputPricePerM: 0.28,        // 静态兜底：USD / 1M 输入 token
   priceSource: 'auto',         // 'auto'：定期拉取；'static'：从不拉取
-  priceUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
+  priceUrl: 'https://cdn.jsdelivr.net/gh/NinjaSln-labs/dsh-plugins@main/pricing/deepseek.json',   // 主源（jsdelivr，CN 可达）
+  priceFallbackUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json', // 同轮回退（GitHub raw）
   priceRefreshHours: 24,
 }
 ```
@@ -62,8 +63,10 @@ cost: {
 ## 价格（金额显示）
 
 harness 不携带价格数据，金额显示通过实时缓存解析，数据源为**官方 DeepSeek 定价文档**
-（默认 `priceUrl` = 本仓库维护的 [`pricing/deepseek.json`](../../../pricing/deepseek.json)，
-与 [api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 同步）：
+（默认 `priceUrl` = jsdelivr CDN 镜像，`priceFallbackUrl` = GitHub raw 同轮回退；
+文档即本仓库维护的 [`pricing/deepseek.json`](../../../pricing/deepseek.json)，
+与 [api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 同步）。
+主源不可达时（如部分网络屏蔽 GitHub raw）自动回退，避免金额显示降级为静态 USD。
 
 - **峰谷定价**：每次读取按**北京时间**判定时段——高峰 9:00–12:00 / 14:00–18:00
   （英文页写作 UTC 01–04 / 06–10），其余闲时半价；badge 标注 `忙时价/闲时价`。

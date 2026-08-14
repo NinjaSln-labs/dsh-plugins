@@ -54,7 +54,8 @@ cost: {
   cacheHitDiscount: 0.1,       // cache-hit price fraction
   inputPricePerM: 0.28,        // static fallback: USD per 1M input tokens
   priceSource: 'auto',         // 'auto': periodic fetch; 'static': never fetch
-  priceUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
+  priceUrl: 'https://cdn.jsdelivr.net/gh/NinjaSln-labs/dsh-plugins@main/pricing/deepseek.json',   // primary (jsdelivr, CN-reachable)
+  priceFallbackUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json', // same-cycle fallback (GitHub raw)
   priceRefreshHours: 24,
 }
 ```
@@ -63,9 +64,13 @@ cost: {
 
 The harness carries no pricing, so the money figures resolve through a live
 cache driven by the **official DeepSeek pricing document** (default
-`priceUrl` = the dsh-plugins repo's maintained
+`priceUrl` = the jsdelivr CDN mirror, `priceFallbackUrl` = GitHub raw in the
+same refresh cycle; the document is the dsh-plugins repo's maintained
 [`pricing/deepseek.json`](../../../pricing/deepseek.json), synced from
-[api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)):
+[api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)).
+If the primary source is unreachable (e.g. GitHub raw blocked on CN
+networks) the fallback is tried automatically, instead of silently degrading
+the money display to static USD.
 
 - **Peak/off-peak (峰谷定价)**: evaluated against **Beijing wall time** on
   every read — peak 9:00–12:00 / 14:00–18:00 Beijing (01–04 / 06–10 UTC),
