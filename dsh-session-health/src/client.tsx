@@ -25,36 +25,33 @@ import type { SessionHealthProjection, HealthSeverity } from './types.ts'
 
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
-.sh-badge{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:6px 12px;gap:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:18px;color:var(--dsw-alias-label-secondary);background:transparent;font-size:13px;font-weight:400;line-height:20px;box-sizing:border-box;cursor:pointer;user-select:none;white-space:nowrap}
+.sh-badge{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:6px 12px;gap:6px;border:1px solid var(--dsw-alias-border-l2);border-color:var(--sh-accent,var(--dsw-alias-border-l2));border-radius:18px;color:var(--dsw-alias-label-secondary);background:transparent;font-size:13px;font-weight:400;line-height:20px;box-sizing:border-box;cursor:pointer;user-select:none;white-space:nowrap}
 .sh-badge:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-badge:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:2px}
-.sh-badge .sh-dot{width:10px;height:10px;border-radius:50%;flex:none}
-.sh-badge-green{border-color:var(--dsw-alias-state-success-primary)}
-.sh-badge-green .sh-dot{background:var(--dsw-alias-state-success-primary)}
-.sh-badge-yellow{border-color:var(--dsw-alias-state-warn-primary)}
-.sh-badge-yellow .sh-dot{background:var(--dsw-alias-state-warn-primary)}
-.sh-badge-red{border-color:var(--dsw-alias-state-error-primary)}
-.sh-badge-red .sh-dot{background:var(--dsw-alias-state-error-primary)}
-.sh-badge-blue{border-color:var(--dsw-static-blue-500)}
-.sh-badge-blue .sh-dot{background:var(--dsw-static-blue-500)}
-.sh-badge-unknown{border-color:var(--dsw-alias-border-l2)}
-.sh-badge-unknown .sh-dot{background:var(--dsw-alias-label-secondary)}
+.sh-badge .sh-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
+/* Severity palette — three theme-adaptive roles per tier:
+   --sh-accent (dot/border/bar), --sh-ink (severity text), --sh-tint (chip bg).
+   Light themes deepen the hues for contrast on pale surfaces; dark themes
+   lighten them for contrast on the dark overlay. All text ratios >= 3:1 in
+   both themes (WCAG AA for graphical objects / emphasis); hue separation
+   between the four tiers is kept wide in both themes. */
+.sh-sev-green{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-success-primary) 30%,black);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-success-primary) 42%,black);--sh-tint:color-mix(in srgb,var(--dsw-alias-state-success-primary) 13%,transparent)}
+.sh-sev-blue{--sh-accent:var(--dsw-static-blue-600);--sh-ink:var(--dsw-static-blue-600);--sh-tint:color-mix(in srgb,var(--dsw-static-blue-500) 13%,transparent)}
+.sh-sev-yellow{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 30%,black);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 42%,black);--sh-tint:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 14%,transparent)}
+.sh-sev-red{--sh-accent:var(--dsw-alias-state-error-primary);--sh-ink:var(--dsw-alias-state-error-primary);--sh-tint:color-mix(in srgb,var(--dsw-alias-state-error-primary) 13%,transparent)}
+body[data-ds-dark-theme] .sh-sev-green{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-success-primary) 40%,white);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-success-primary) 55%,white)}
+body[data-ds-dark-theme] .sh-sev-blue{--sh-accent:color-mix(in srgb,var(--dsw-static-blue-500) 50%,white);--sh-ink:color-mix(in srgb,var(--dsw-static-blue-500) 55%,white)}
+body[data-ds-dark-theme] .sh-sev-yellow{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,white);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 55%,white)}
+body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-error-primary) 35%,white);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-error-primary) 55%,white)}
 .sh-tip{position:absolute;top:calc(100% + 8px);right:0;min-width:280px;background:var(--dsw-alias-bg-overlay);color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px 12px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.22);z-index:50;text-align:left}
 .sh-tip-title{font-size:13px;color:var(--dsw-alias-label-secondary);margin-bottom:8px}
-.sh-tip-advice{font-size:13px;line-height:1.6;padding:8px 10px;border-radius:8px;font-weight:600;margin-bottom:8px}
-.sh-tip-advice-green{color:var(--dsw-alias-state-success-primary);background:rgba(34,197,94,.12)}
-.sh-tip-advice-yellow{color:var(--dsw-alias-state-warn-primary);background:rgba(234,179,8,.14)}
-.sh-tip-advice-red{color:var(--dsw-alias-state-error-primary);background:rgba(239,68,68,.12)}
-.sh-tip-advice-blue{color:var(--dsw-static-blue-500);background:rgba(59,130,246,.12)}
+.sh-tip-title .sh-sev-label{color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600}
+.sh-tip-advice{font-size:13px;line-height:1.6;padding:8px 10px;border-radius:8px;font-weight:600;color:var(--sh-ink,var(--dsw-alias-label-primary));background:var(--sh-tint,transparent);margin-bottom:8px}
 .sh-tip-row{display:flex;align-items:center;gap:10px;line-height:2}
 .sh-tip-row .sh-k{color:var(--dsw-alias-label-secondary);flex:none}
 .sh-tip-row .sh-v{color:var(--dsw-alias-label-secondary);margin-left:auto;font-variant-numeric:tabular-nums}
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
-.sh-bar-fill{height:100%;border-radius:3px;display:block}
-.sh-bar-fill-green{background:var(--dsw-alias-state-success-primary)}
-.sh-bar-fill-yellow{background:var(--dsw-alias-state-warn-primary)}
-.sh-bar-fill-red{background:var(--dsw-alias-state-error-primary)}
-.sh-bar-fill-blue{background:var(--dsw-static-blue-500)}
+.sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
 `
 
@@ -84,12 +81,6 @@ const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   yellow: '黄（建议留意）',
   red: '红（建议收尾）',
 }
-
-const stateToken = (c: string) =>
-  c === 'green' ? 'var(--dsw-alias-state-success-primary)'
-  : c === 'yellow' ? 'var(--dsw-alias-state-warn-primary)'
-  : c === 'blue' ? 'var(--dsw-static-blue-500)'
-  : 'var(--dsw-alias-state-error-primary)'
 
 /** Projection face shape from the runtime client. */
 interface ProjectionFace {
@@ -195,21 +186,21 @@ function HealthBadge(props: {
 
   let tip: JSX.Element | null = null
   if (hover) {
-    const color = severity === 'unknown' ? 'green' : severity
+    const color = severity === 'unknown' ? null : severity
     const label = severity === 'unknown' ? '未知（等待数据）' : SEVERITY_LABEL[severity]
     const advice = proj?.advice ?? '正在获取会话健康数据…'
     const bar = (
       <span className="sh-bar">
-        <span className={`sh-bar-fill sh-bar-fill-${color}`} style={{ width: `${pct !== null ? Math.min(pct, 100) : 0}%` }} />
+        <span className="sh-bar-fill" style={{ width: `${pct !== null ? Math.min(pct, 100) : 0}%` }} />
       </span>
     )
     tip = (
-      <div className="sh-tip">
+      <div className={`sh-tip${color !== null ? ` sh-sev-${color}` : ''}`}>
         <div className="sh-tip-title">
           会话健康：
-          <span style={{ color: stateToken(color), fontWeight: 600 }}>{label}</span>
+          <span className="sh-sev-label">{label}</span>
         </div>
-        <div className={`sh-tip-advice sh-tip-advice-${color}`}>{advice}</div>
+        <div className="sh-tip-advice">{advice}</div>
         <div className="sh-tip-row">
           <span className="sh-k">上下文占用</span>
           {bar}
@@ -275,7 +266,7 @@ function HealthBadge(props: {
       onMouseLeave={() => setHover(false)}
     >
       <span
-        className={`sh-badge sh-badge-${state}`}
+        className={`sh-badge${state !== 'unknown' ? ` sh-sev-${state}` : ''}`}
         role="button"
         tabIndex={0}
         aria-label={`会话健康：${severity === 'unknown' ? '未知' : SEVERITY_LABEL[severity]}`}

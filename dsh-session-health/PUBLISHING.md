@@ -13,6 +13,7 @@
 
 ## 版本历史
 
+- **0.5.2** — 徽章/浮层四档配色重做（跨主题可读）：蓝色不再用静态 `--dsw-static-blue-500`（暗色浮层上仅 ~1.6:1，看不清）；每档位引入 `--sh-accent`（点/边/条）/`--sh-ink`（文字）/`--sh-tint`（底纹）三个主题自适应角色——浅色主题加深、`body[data-ds-dark-theme]` 下提亮（color-mix），明暗两主题文字对比度均 ≥3:1，四色色相保持区分度；悬停底纹改用 color-mix 跟随 alias token
 - **0.5.1** — 定价源可达性修复：默认 `cost.priceUrl` 从 GitHub raw 改为 jsdelivr CDN 镜像（raw 在部分网络不可达 → 拉取静默失败 → 金额显示降级为静态 USD，zh 界面不显示 CNY）；新增 `cost.priceFallbackUrl`（默认 GitHub raw），同一刷新周期内自动回退，先成功者胜
 - **0.5.0** — 经济维度校准（修复大窗口模型下「15% 占用即黄色」）：经济触发从原始压力 token 改为缓存折扣后的计费当量 `effectivePerRound`（与徽章金额显示一致，消除 cacheWrite 双计）；新增 `thresholds.economyWindowRatio`（默认 0.3），经济门槛 = max(economyTokenFloor, 0.3×窗口)——1M 窗口模型上需 ≥300K 计费当量/轮才由经济维度拉黄；黄档文案按成因区分（容量 vs 经济）；assess 的 severity 与投影单元同口径（同一价格折扣、同一 usage 桶）
 - **0.4.8** — 官方双币峰谷定价（CNY 中文页 / USD 英文页，无汇率换算）；按北京时间忙闲时；客户端按 locale 显示 CNY/USD
