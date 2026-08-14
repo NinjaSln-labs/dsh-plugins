@@ -37,12 +37,12 @@ const events = [
   { type: 'step/end', data: { turn: 1 } },
   { type: 'step/end', data: { turn: 1 } }, // same turn: must not double count
   { type: 'user/message', data: {} },
-  { type: 'assistant/message', data: { usage: { inputTokens: 60_000, outputTokens: 500, cacheReadTokens: 300_000 } } },
+  { type: 'assistant/message', data: { turn: 1, step: 1, usage: { inputTokens: 60_000, outputTokens: 500, cacheReadTokens: 300_000 } } },
   { type: 'step/end', data: { turn: 2 } },
   { type: 'user/message', data: {} },
-  { type: 'assistant/message', data: {} },
+  { type: 'assistant/message', data: { turn: 2, step: 1 } },
   { type: 'compaction/end', data: {} },
-  { type: 'assistant/chunk', data: { chunk: { type: 'usage', usage: { inputTokens: 32_000, cacheReadTokens: 0 } } } },
+  { type: 'assistant/chunk', data: { turn: 2, step: 1, chunk: { type: 'usage', usage: { inputTokens: 32_000, cacheReadTokens: 0 } } } },
 ]
 for (const e of events) state = applyHealthEvent(state, e)
 
@@ -53,6 +53,23 @@ await check('projection: fold counts (turns/messages/compactions)', () => {
   assert.equal(state.compactions, 1)
   assert.equal(state.pressureTokens, 32_000) // last usage sample wins
   assert.equal(state.contextWindow, 100_000)
+})
+
+await check('projection: usage window = (turn,step)-keyed distinct requests', () => {
+  // Two distinct requests (turn 1 step 1, turn 2 step 1); the turn-2 chunk
+  // replaces the turn-2 message's missing usage — never duplicates.
+  assert.deepEqual(state.usageWindow, [
+    { turn: 1, step: 1, inputTokens: 60_000, cacheReadTokens: 300_000 },
+    { turn: 2, step: 1, inputTokens: 32_000, cacheReadTokens: 0 },
+  ])
+  const view = healthView(state, ratioConfig)
+  assert.ok(view.cacheHitRate !== null && Math.abs(view.cacheHitRate - 300_000 / 392_000) < 1e-9)
+  // A repeated sample for the same step replaces the earlier one.
+  let s = fold.init()
+  s = applyHealthEvent(s, { type: 'assistant/chunk', data: { turn: 9, step: 2, chunk: { type: 'usage', usage: { inputTokens: 100, cacheReadTokens: 0 } } } })
+  s = applyHealthEvent(s, { type: 'assistant/chunk', data: { turn: 9, step: 2, chunk: { type: 'usage', usage: { inputTokens: 100, cacheReadTokens: 900 } } } })
+  assert.equal(s.usageWindow?.length, 1)
+  assert.equal(healthView(s, ratioConfig).cacheHitRate, 0.9)
 })
 
 await check('projection: blue severity at 32% occupancy', () => {
@@ -130,14 +147,18 @@ await check('projection: cache hit rate + effective per-round cost (token + USD)
     turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
     pressureTokens: 550_000, contextWindow: 1_000_000,
     lastUsage: { inputTokens: 50_000, cacheReadTokens: 500_000, cacheWriteTokens: 0 },
+    usageWindow: [
+      { turn: 1, step: 1, inputTokens: 50_000, cacheReadTokens: 500_000 },
+      { turn: 2, step: 1, inputTokens: 300_000, cacheReadTokens: 0 }, // a miss round dilutes but doesn't flip the rate
+    ],
   }
   const v = healthView(state2, config) // cacheHitDiscount 0.1, inputPricePerM 0.28
-  assert.ok(Math.abs(v.cacheHitRate - 500_000 / 550_000) < 1e-9)
+  assert.ok(Math.abs(v.cacheHitRate - 500_000 / 850_000) < 1e-9) // window aggregate, not last-request
   assert.equal(v.uncachedInputTokens, 50_000)
   assert.equal(v.cacheReadTokens, 500_000)
   assert.equal(v.effectivePerRound, 50_000 + 500_000 * 0.1) // 100K billable-equivalent
   assert.ok(Math.abs(v.effectivePerRoundUsd - (100_000 * 0.28) / 1_000_000) < 1e-9) // $0.028/轮
-  const empty = healthView({ ...state2, lastUsage: undefined }, config)
+  const empty = healthView({ ...state2, lastUsage: undefined, usageWindow: undefined }, config)
   assert.equal(empty.cacheHitRate, null)
   assert.equal(empty.effectivePerRound, null)
   assert.equal(empty.effectivePerRoundUsd, null)

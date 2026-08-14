@@ -36,10 +36,12 @@ export interface SessionHealthProjection {
   /** Number of compaction rounds (early detail summarized). */
   compactions: number
   /**
-   * Cache-hit ratio of the LAST request: cacheRead / (uncached input +
-   * cacheRead). A high ratio means most of the context is served from the
-   * provider cache — cheap, and a sign of stable context; compactions reset
-   * it. Null before any usage report.
+   * Session-level cache-hit ratio over the last CACHE_WINDOW_SIZE distinct
+   * requests: cacheRead / (uncached input + cacheRead). Stable — the badge,
+   * /health and the tool all read the same value (a last-request sample
+   * would flip between e.g. 93% and 3% across readings). Compactions reset
+   * it as fresh uncached requests re-fill the window. Null before any usage
+   * report.
    */
   cacheHitRate: number | null
   /** Last request's uncached input tokens. Null before any usage report. */

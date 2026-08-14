@@ -21,6 +21,20 @@ import type { ResolvedConfig } from './config.ts'
 import type { PricePeriod, ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
 
+/** Rolling window size for the session-level cache-hit rate (distinct requests). */
+export const CACHE_WINDOW_SIZE = 20
+
+/** One distinct request's usage sample (turn/step-keyed, deduped). */
+export interface UsageSample {
+  turn: number
+  step: number
+  inputTokens: number
+  cacheReadTokens: number
+}
+
+/** Rolling window of recent request usage samples. */
+export type UsageWindow = UsageSample[]
+
 /** Fold state (plain JSON per the unit contract — persisted-cache precondition). */
 export interface SessionHealthState {
   turns: number
@@ -32,6 +46,13 @@ export interface SessionHealthState {
   contextWindow?: number
   /** Buckets of the most recent usage report (cache-hit accounting). */
   lastUsage?: { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
+  /**
+   * Rolling window of the last CACHE_WINDOW_SIZE distinct request usage
+   * samples, keyed by (turn, step): a repeated sample for the same step
+   * replaces the earlier one (chunk early-sample + message final-sample),
+   * never double-counts — the same semantics token-meter's usage fold uses.
+   */
+  usageWindow?: UsageWindow
 }
 
 function init(): SessionHealthState {
@@ -52,6 +73,19 @@ function bucketsOf(usage: { inputTokens: number; cacheReadTokens?: number; cache
   }
 }
 
+/** Push one (turn, step)-keyed sample; a repeat of the newest step replaces it. */
+function windowPush(window: UsageWindow, sample: UsageSample): UsageWindow {
+  const last = window[window.length - 1]
+  if (last !== undefined && last.turn === sample.turn && last.step === sample.step) {
+    const next = window.slice()
+    next[next.length - 1] = sample
+    return next
+  }
+  const next = window.length >= CACHE_WINDOW_SIZE ? window.slice(window.length - CACHE_WINDOW_SIZE + 1) : window.slice()
+  next.push(sample)
+  return next
+}
+
 /** Pure transition: previous state + one committed event → next state. */
 export function applyHealthEvent(state: SessionHealthState, event: SessionEvent): SessionHealthState {
   // Compaction events are appended by the compaction plugin and are not part
@@ -70,14 +104,32 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       return { ...state, userMessages: state.userMessages + 1 }
     case 'assistant/message': {
       const next = { ...state, assistantMessages: state.assistantMessages + 1 }
-      if (event.data.usage !== undefined) {
-        return { ...next, pressureTokens: pressureOf(event.data.usage), lastUsage: bucketsOf(event.data.usage) }
+      if (event.data.usage === undefined) return next
+      return {
+        ...next,
+        pressureTokens: pressureOf(event.data.usage),
+        lastUsage: bucketsOf(event.data.usage),
+        usageWindow: windowPush(next.usageWindow ?? [], {
+          turn: event.data.turn,
+          step: event.data.step,
+          inputTokens: event.data.usage.inputTokens,
+          cacheReadTokens: event.data.usage.cacheReadTokens ?? 0,
+        }),
       }
-      return next
     }
     case 'assistant/chunk': {
       if (event.data.chunk.type !== 'usage') return state
-      return { ...state, pressureTokens: pressureOf(event.data.chunk.usage), lastUsage: bucketsOf(event.data.chunk.usage) }
+      return {
+        ...state,
+        pressureTokens: pressureOf(event.data.chunk.usage),
+        lastUsage: bucketsOf(event.data.chunk.usage),
+        usageWindow: windowPush(state.usageWindow ?? [], {
+          turn: event.data.turn,
+          step: event.data.step,
+          inputTokens: event.data.chunk.usage.inputTokens,
+          cacheReadTokens: event.data.chunk.usage.cacheReadTokens ?? 0,
+        }),
+      }
     }
     case 'request/context': {
       if (event.data.contextWindow === undefined) return state
@@ -110,11 +162,23 @@ export function healthView(
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
   const t = config.thresholds
 
-  // Cache-hit accounting of the last request (null before any usage report).
+  // Cache-hit accounting: last-wins buckets for the per-round money math; a
+  // rolling window over distinct requests for the STABLE session-level hit
+  // rate every surface reads (a single last-request sample flips between
+  // e.g. 93% on a cached round and 3% on a miss round — same session, two
+  // readings, "缓存命中不统一").
   const lastUsage = state.lastUsage
-  const cacheHitRate = lastUsage !== undefined && lastUsage.inputTokens + lastUsage.cacheReadTokens > 0
-    ? lastUsage.cacheReadTokens / (lastUsage.inputTokens + lastUsage.cacheReadTokens)
-    : null
+  const win = state.usageWindow
+  let cacheHitRate: number | null = null
+  if (win !== undefined && win.length > 0) {
+    let input = 0
+    let read = 0
+    for (const s of win) {
+      input += s.inputTokens
+      read += s.cacheReadTokens
+    }
+    cacheHitRate = input + read > 0 ? read / (input + read) : null
+  }
   const uncachedInputTokens = lastUsage?.inputTokens ?? null
   const cacheReadTokens = lastUsage?.cacheReadTokens ?? null
   // Money math: with an official pricing document the cache-hit ratio comes
@@ -211,7 +275,8 @@ export function sessionHealthProjectionDefinition(
     // The fold stays event-pure; only the money view reads the live price
     // cache (falls back to the static config when no cache is mounted).
     view: state => healthView(state, config, pricing?.get(modelOf?.() ?? '')),
-    // v5: both official currencies (CNY/USD price pairs) in the money math.
-    stateVersion: 5,
+    // v6: session-level cache-hit rate over a rolling request window
+    // (CACHE_WINDOW_SIZE, (turn,step)-deduped) instead of a last-request sample.
+    stateVersion: 6,
   }
 }
