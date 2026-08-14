@@ -16,7 +16,6 @@
     "types": []
   },
   "include": [
-    "src",
-    "tsdown.config.ts"
+    "src"
   ]
 }
