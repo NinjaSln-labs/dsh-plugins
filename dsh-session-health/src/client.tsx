@@ -225,13 +225,29 @@ export const name = 'dsh-session-health'
  */
 export const inject = ['slots', 'sessions', 'remote', 'remote.commands']
 
+/**
+ * Inject the badge stylesheet the client-modules way: a
+ * `<style data-plugin="<id>">` tag on document.head. There is no 'styles'
+ * service — in-tree bundles auto-inject CSS Modules as exactly such tags at
+ * factory execution (tsdown preset `dsh-css-modules-inline`), and the module
+ * system claims untagged tags on materialization while HMR removes
+ * `style[data-plugin=<id>]` on unload. The data-plugin-css guard makes the
+ * injection idempotent across plugin re-applies.
+ */
+function injectStyles(): void {
+  if (typeof document === 'undefined') return
+  const tagId = 'dsh-session-health/badge'
+  if (document.querySelector(`style[data-plugin-css=${JSON.stringify(tagId)}]`) !== null) return
+  const tag = document.createElement('style')
+  tag.dataset.plugin = name
+  tag.dataset.pluginCss = tagId
+  tag.textContent = CSS
+  document.head.appendChild(tag)
+}
+
 /** Client entry: register the badge in the session header utilities seat. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => {
-    const styles = ctx.get('styles') as { insert(css: string): () => void } | undefined
-    if (styles === undefined) return () => {}
-    return styles.insert(CSS)
-  }, 'dsh-session-health: styles')
+  injectStyles()
 
   const sessions = ctx.sessions as unknown as {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined

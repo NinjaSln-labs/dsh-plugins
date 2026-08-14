@@ -48,7 +48,19 @@ assert.ok(!plugin.inject.includes('remote.sessionHealth'), 'a plugin Remote can 
 console.log('  ok  bundle registered via __ModuleLoader__ with apply/inject/name')
 
 // 3) Mount through a real cordis Context with the injected services provided
-//    the way the web shell provides them.
+//    the way the web shell provides them. A minimal document stub records the
+//    stylesheet tag the apply path must create (the client-modules contract:
+//    a <style data-plugin> tag on document.head — there is no 'styles' service).
+const styleTags = []
+const documentStub = {
+  querySelector: () => null,
+  createElement: tag => ({ tag, dataset: {}, textContent: '' }),
+  head: {
+    appendChild: el => { styleTags.push(el) },
+  },
+}
+globalThis.document = documentStub
+
 const seats = []
 const ctx = new Context()
 ctx.provide('slots', {
@@ -64,8 +76,6 @@ ctx.provide('remote', {
 ctx.provide('remote.commands', {
   execute: async () => ({ ok: true }),
 })
-ctx.provide('styles', { insert: () => () => {} })
-ctx.provide('timer', { interval: () => () => {} })
 
 try {
   await ctx.plugin(plugin).await()
@@ -81,6 +91,12 @@ assert.equal(seats[0].name, 'conversation.session.header.utilities')
 const registration = seats[0].fn()
 assert.equal(registration[0].id, 'session-health-dot')
 console.log('  ok  apply ran: badge seat registered in conversation.session.header.utilities')
+
+// 5) The stylesheet was injected the client-modules way.
+assert.equal(styleTags.length, 1, 'apply must create exactly one style tag')
+assert.equal(styleTags[0].dataset.plugin, 'dsh-session-health', 'style tag must carry data-plugin (HMR ownership)')
+assert.ok(styleTags[0].textContent.includes('.sh-badge'), 'style tag must carry the badge CSS')
+console.log('  ok  stylesheet injected as <style data-plugin="dsh-session-health">')
 
 console.log('\nclient mount smoke passed')
 process.exit(0)
