@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import knowledgeSqlite from '../src/index.ts'
@@ -113,6 +114,17 @@ describe('apply() 装配', () => {
 describe('V1.11 契约（服务方法）', () => {
   beforeEach(async () => {
     app = await boot({ agent })
+  })
+
+  it('search/list 返回值通过工具层 lossless-JSON 校验（-0/undefined 归一化）', async () => {
+    await app.service._seedWrite({ content: '极小分数条目 写入链路', dedupeKey: 'json-1' }, { workspaceId: '/ws/one', ownerId: 'sess-1', authorTier: 'explicit' })
+    const s1 = await app.service.search('写入链路', { expand: false })
+    expect(snapshotJsonValue(s1)).not.toBeUndefined()
+    const l1 = await app.service.list('all', { limit: 5 })
+    expect(snapshotJsonValue(l1)).not.toBeUndefined()
+    // 空结果也要通过
+    const s2 = await app.service.search('无匹配词XYZ', { expand: false })
+    expect(snapshotJsonValue(s2)).not.toBeUndefined()
   })
 
   it('write → search → update → list → delete 往返 + 事件', async () => {
