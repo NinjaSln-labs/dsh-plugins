@@ -12,9 +12,9 @@ export function formatCompact(n: number): string {
   return String(n)
 }
 
-/** Hit rate display: floored integer percent — 0.9993 -> '99%' (true lower bound, never a fake 100%). The raw 0..1 value stays in the data. */
+/** Hit rate display: integer percent, Math.round — matches the core input-bar stats line. */
 export function formatHitRate(rate: number): string {
-  return `${Math.floor(rate * 100)}%`
+  return `${Math.round(rate * 100)}%`
 }
 
 /** USD formatting for per-round cost: >= $100 rounded, else 2 decimals ($0.02, $1.25, $45.00 -> $45). */

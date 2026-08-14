@@ -8,7 +8,7 @@
 
 | 插件 | 包 | 状态 |
 |---|---|---|
-| [dsh-session-health](./dsh-session-health) | 会话健康 v0.5.6：响应式徽章（投影驱动）、`/health` 命令、`session_health` 工具、官方峰谷双币定价（CNY/USD，jsdelivr 主源 + GitHub raw 回退）、主题自适应四档配色、缓存感知的窗口缩放经济档位、计费金额/token 切换、交接清单自动化 | 已发布（GitHub + npm） |
+| [dsh-session-health](./dsh-session-health) | 会话健康 v0.5.7：响应式徽章（投影驱动）、`/health` 命令、`session_health` 工具、官方峰谷双币定价（CNY/USD，jsdelivr 主源 + GitHub raw 回退）、主题自适应四档配色、缓存感知的窗口缩放经济档位、计费金额/token 切换、交接清单自动化 | 已发布（GitHub + npm） |
 | [dsh-knowledge-sqlite](./dsh-knowledge-sqlite) | 跨会话知识：`ctx.knowledge` + `knowledge_*` 工具，FTS5 trigram + L1 查询扩展（V1.11 契约） | 已发布（GitHub + npm） |
 | [dsh-subagent-model-picker](./dsh-subagent-model-picker) | 子代理自由选模型：`subagent_model` 工具（每次调用可指定 provider/model/max_tokens）+ `subagent_models` 目录工具 | 已发布（GitHub + npm） |
 
