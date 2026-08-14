@@ -53,8 +53,9 @@ export async function runProbe(
     service: KnowledgeService
     corpusPath: string
   },
-  suite: 'seed' | 'hard' | 'human' | 'contract' | 'latency' | 'all',
+  suite: 'seed' | 'hard' | 'human' | 'contract' | 'latency' | 'variance' | 'all',
   caller: { stamps: KnowledgeStamps; sessionId: string } | null,
+  runs = 10,
 ): Promise<ProbeReport> {
   const report: ProbeReport = { ok: true, parts: [] }
   try {
@@ -65,6 +66,7 @@ export async function runProbe(
     if (suite === 'human' || suite === 'all') report.parts.push(await evalHuman(deps, caller, base))
     if (suite === 'contract' || suite === 'all') report.parts.push(await contract(deps, caller))
     if (suite === 'latency' || suite === 'all') report.parts.push(await latency(deps, caller, base))
+    if (suite === 'variance') report.parts.push(await variance(deps, runs))
     if (suite === 'all') {
       report.parts.push({ name: 'expansion-stats', ...deps.expander.stats })
     }
@@ -251,6 +253,45 @@ async function evalArm(
     targets: scored.length,
     ranks: ranks.join(' '),
     degraded: degraded.length > 0 ? degraded.join(',') : null,
+  }
+}
+
+/**
+ * L1 方差门禁（V1.11：10 次运行，均值 ≥30% 且无单次 <20%）。
+ * 每轮 expander.clear()（清扩展缓存）→ hard 查询集 L1-live 臂独立扩展 14 次。
+ */
+async function variance(
+  deps: { expander: QueryExpander; service: KnowledgeService },
+  runs: number,
+): Promise<Record<string, unknown>> {
+  const perRun: Array<{ run: number; recall1: string; ranks: string; degraded: string | null }> = []
+  for (let i = 0; i < runs; i++) {
+    deps.expander.clear()
+    const arm = await evalArm(deps, HARD_QUERIES, 'rich', true, null, new Map())
+    perRun.push({
+      run: i + 1,
+      recall1: String(arm.recall1),
+      ranks: String(arm.ranks),
+      degraded: arm.degraded === null || arm.degraded === undefined ? null : String(arm.degraded),
+    })
+  }
+  const values = perRun.map((r) => Number(r.recall1.split('/')[0]))
+  const mean = values.reduce((a, b) => a + b, 0) / values.length
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const pct = (n: number): number => Math.round((100 * n) / 14)
+  return {
+    name: 'variance',
+    ok: true,
+    runs,
+    perRun: perRun.map((r) => `${r.run}: ${r.recall1}${r.degraded !== null ? ` (deg:${r.degraded})` : ''}`),
+    recall1Values: values,
+    meanRecall1Pct: pct(mean),
+    minRecall1Pct: pct(min),
+    maxRecall1Pct: pct(max),
+    range: `${pct(min)}%-${pct(max)}%`,
+    gateMean: mean / 14 >= 0.3,
+    gateFloor: min / 14 >= 0.2,
   }
 }
 
