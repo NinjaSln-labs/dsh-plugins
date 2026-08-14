@@ -27,4 +27,5 @@ export const sessionHealthProjectionSchema = zod.object({
   uncachedInputTokens: zod.number().int().nonnegative().nullable(),
   cacheReadTokens: zod.number().int().nonnegative().nullable(),
   effectivePerRound: zod.number().nonnegative().nullable(),
+  effectivePerRoundUsd: zod.number().nonnegative().nullable(),
 }).strict() as unknown as zod.ZodType<SessionHealthProjection>

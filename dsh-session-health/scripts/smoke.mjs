@@ -97,20 +97,22 @@ await check('projection: message-count proxy escalates green → blue', () => {
   assert.equal(low.severity, 'green') // 700 messages: no proxy, low occupancy
 })
 
-await check('projection: cache hit rate + effective per-round cost', () => {
+await check('projection: cache hit rate + effective per-round cost (token + USD)', () => {
   const state2 = {
     turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
     pressureTokens: 550_000, contextWindow: 1_000_000,
     lastUsage: { inputTokens: 50_000, cacheReadTokens: 500_000, cacheWriteTokens: 0 },
   }
-  const v = healthView(state2, config) // cacheHitDiscount 0.1
+  const v = healthView(state2, config) // cacheHitDiscount 0.1, inputPricePerM 0.28
   assert.ok(Math.abs(v.cacheHitRate - 500_000 / 550_000) < 1e-9)
   assert.equal(v.uncachedInputTokens, 50_000)
   assert.equal(v.cacheReadTokens, 500_000)
   assert.equal(v.effectivePerRound, 50_000 + 500_000 * 0.1) // 100K billable-equivalent
+  assert.ok(Math.abs(v.effectivePerRoundUsd - (100_000 * 0.28) / 1_000_000) < 1e-9) // $0.028/轮
   const empty = healthView({ ...state2, lastUsage: undefined }, config)
   assert.equal(empty.cacheHitRate, null)
   assert.equal(empty.effectivePerRound, null)
+  assert.equal(empty.effectivePerRoundUsd, null)
 })
 
 /* ---------- assess() core ---------- */
@@ -223,6 +225,7 @@ await check('assess: cost expectation from cache-effective per-round', async () 
                 turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
                 cacheHitRate: 0.9, uncachedInputTokens: 13_200, cacheReadTokens: 118_800,
                 effectivePerRound: 25_080, // 13200 + 118800*0.1
+                effectivePerRoundUsd: (25_080 * 0.28) / 1_000_000, // $0.007/轮
               },
             },
           }),
@@ -235,11 +238,14 @@ await check('assess: cost expectation from cache-effective per-round', async () 
   assert.equal(report.signals.cacheHitRate, 0.9)
   assert.equal(report.signals.effectivePerRound, 25_080)
   assert.equal(report.signals.expectedTotalTokens, 250_800)
+  assert.equal(report.signals.inputPricePerM, 0.28)
+  assert.ok(report.signals.effectivePerRoundUsd !== null && Math.abs(report.signals.effectivePerRoundUsd - 0.0070224) < 1e-9)
+  assert.ok(report.signals.expectedTotalUsd !== null && Math.abs(report.signals.expectedTotalUsd - 0.070224) < 1e-9)
   assert.ok(report.probes.some(p => p.includes('缓存命中率 90%')))
   const text = buildCommandText(report, { minimal: false })
   assert.ok(text.includes('- 缓存命中率 90%'))
-  assert.ok(text.includes('计费当量约 25K token/轮'))
-  assert.ok(text.includes('剩余轮数输入费用预期 ≈ 251K token'))
+  assert.ok(text.includes('计费预期：约 $0.01/轮'), `got: ${text}`)
+  assert.ok(text.includes('剩余轮数输入费用预期 ≈ $0.07（约 251K token 计费当量）'))
 })
 
 /* ---------- /health command handler ---------- */

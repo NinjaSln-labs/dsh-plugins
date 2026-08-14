@@ -51,6 +51,11 @@ export interface SessionHealthProjection {
    * cost.cacheHitDiscount (host config). Null before any usage report.
    */
   effectivePerRound: number | null
+  /**
+   * effectivePerRound × cost.inputPricePerM / 1e6 — the per-round cost in
+   * USD, the money figure the badge displays. Null before any usage report.
+   */
+  effectivePerRoundUsd: number | null
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
