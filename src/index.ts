@@ -30,6 +30,8 @@ import { runProbe } from './probe.ts'
 
 // ---------- 配置（V1.11 配置 schema 的插件落地；可选，默认值即提案默认） ----------
 export interface KnowledgeSqliteConfig {
+  /** 写入门控：'ask'（默认，V1.11）经 tools/pre-execute 请求确认；'none' 跳过门控（部署方选择，headless 自动放行） */
+  gating?: 'ask' | 'none'
   /** SQLite 数据库路径；默认 $DSH_HOME/knowledge.sqlite */
   databasePath?: string
   /** probe 语料目录；默认 '<workspace>/research/memory-experiment'（实验套件） */
@@ -54,6 +56,7 @@ export interface KnowledgeSqliteConfig {
 }
 
 export interface ResolvedConfig {
+  gating: 'ask' | 'none'
   databasePath: string
   corpusPath: string
   maxContentTokens: number
@@ -344,6 +347,7 @@ const knowledgeSqlitePlugin = {
   async apply(ctx: Context, config: KnowledgeSqliteConfig = {}) {
     {
       const resolved: ResolvedConfig = {
+        gating: config.gating ?? 'ask',
         databasePath: config.databasePath ?? defaultDbPath(),
         corpusPath: config.corpusPath ?? 'research/memory-experiment',
         maxContentTokens: config.maxContentTokens ?? 2048,
@@ -376,14 +380,17 @@ const knowledgeSqlitePlugin = {
       // 注：cordis Service 构造器已通过 ctx.reflect.provide 注册 'knowledge'，勿再 ctx.provide
       registerKnowledgeTools(ctx, service)
 
-      // ask 门控（V1.11 批准层）：knowledge_write/delete 是跨会话持久变更，需要用户确认。
+      // ask 门控（V1.11 批准层，默认开）：knowledge_write/delete 是跨会话持久变更，需要用户确认。
       // headless（approval=never）自动拒绝——config gating 替代交互确认。
-      ctx.on('tools/pre-execute', (exec, next) => {
-        if (exec.name === 'knowledge_write' || exec.name === 'knowledge_delete') {
-          return Promise.resolve({ kind: 'ask' as const, reason: '知识库写入/删除是跨会话持久变更（V1.11 ask 门控）' })
-        }
-        return Promise.resolve(next())
-      })
+      // gating: 'none'（部署配置）跳过门控：模型写入自动放行（信任模型场景）。
+      if (resolved.gating === 'ask') {
+        ctx.on('tools/pre-execute', (exec, next) => {
+          if (exec.name === 'knowledge_write' || exec.name === 'knowledge_delete') {
+            return Promise.resolve({ kind: 'ask' as const, reason: '知识库写入/删除是跨会话持久变更（V1.11 ask 门控）' })
+          }
+          return Promise.resolve(next())
+        })
+      }
     }
   },
 }

@@ -222,6 +222,25 @@ describe('V1.11 契约（服务方法）', () => {
   })
 })
 
+describe('gating 配置', () => {
+  it("gating:'none' 时不注册 ask 门控监听器（tools/pre-execute 无 knowledge 拦截）", async () => {
+    const ctx = new Context()
+    ctx.provide('agents', { currentInitiator: () => agent })
+    ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'mock', model: 'mock' }) })
+    ctx.provide('llm', { stream: () => ({ async *[Symbol.asyncIterator]() {} }) })
+    ctx.provide('tools', { register: () => () => undefined })
+    ctx.provide('timer', { timeout: () => () => undefined, interval: () => () => undefined, throttle: () => () => undefined, debounce: () => () => undefined })
+    const fiber = ctx.plugin(knowledgeSqlite, { databasePath: join(mkdtempSync(join(tmpdir(), 'knl-gate-')), 'k.sqlite'), gating: 'none' })
+    await fiber.await()
+    const svc = ctx.get('knowledge') as KnowledgeService
+    expect(svc).toBeDefined()
+    // 无门控下 write 直接成功（不需要 approval）
+    const w = await svc.write({ content: 'gating none 写入测试', dedupeKey: 'gate-none-1' })
+    expect('error' in w).toBe(false)
+    await fiber.dispose()
+  })
+})
+
 describe('ask 门控', () => {
   it('knowledge_write/delete 挂 ask（tools/pre-execute 监听器在真实 cordis 中生效）', async () => {
     app = await boot({ agent })
