@@ -49,8 +49,23 @@ checks: {
   processes: { enabled: true },                            // 经 ctx.subprocess 的 ps 探测
 }
 projection: { enabled: true }                              // 响应式徽章单元
-cost: { cacheHitDiscount: 0.1, inputPricePerM: 0.28 }      // 缓存命中价格比例 + 输入价（USD / 1M token）
+cost: {
+  cacheHitDiscount: 0.1,       // 缓存命中价格比例
+  inputPricePerM: 0.28,        // 静态兜底：USD / 1M 输入 token
+  priceSource: 'auto',         // 'auto'：定期拉取；'static'：从不拉取
+  priceUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
+  priceRefreshHours: 24,
+}
 ```
+
+## 价格（金额显示）
+
+harness 不携带价格数据，金额显示通过实时缓存解析：`priceSource: 'auto'`（默认）每
+`priceRefreshHours` 拉取 `priceUrl` 的 JSON 文档（默认：本仓库维护的
+[`pricing/deepseek.json`](../../../pricing/deepseek.json)），失败时保留上次有效价格，
+首次成功前回退静态 `inputPricePerM` / `cacheHitDiscount`。可把 `priceUrl` 指向任意
+形如 `{ "currency": "usd", "inputPerM": 0.28, "cacheHitDiscount": 0.1 }` 的 JSON，
+或设 `priceSource: 'static'` 完全关闭拉取。
 
 ## 为什么用真实数据
 

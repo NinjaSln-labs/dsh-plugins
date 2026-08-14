@@ -45,11 +45,24 @@ export interface CostConfig {
   cacheHitDiscount: number
   /**
    * Full-price input price in USD per 1M tokens (cache hits bill at
-   * cacheHitDiscount × this). Default 0.28 (DeepSeek-class pricing) — set it
-   * to your provider's real input price; used for the money display of
-   * 计费预期 / cost expectation.
+   * cacheHitDiscount × this). Static fallback AND the value used when
+   * priceSource is 'static'. Default 0.28 (DeepSeek-class pricing).
    */
   inputPricePerM: number
+  /**
+   * 'auto' (default): periodically fetch the price from priceUrl and use the
+   * last good document (falling back to the static values on failure).
+   * 'static': never fetch; use inputPricePerM / cacheHitDiscount directly.
+   */
+  priceSource: 'auto' | 'static'
+  /**
+   * JSON pricing document URL for priceSource 'auto'. Default: the
+   * dsh-plugins repo's maintained pricing/deepseek.json.
+   * Shape: { "currency": "usd", "inputPerM": 0.28, "cacheHitDiscount": 0.1 }
+   */
+  priceUrl: string
+  /** Refresh cadence for priceSource 'auto', in hours. Default 24. */
+  priceRefreshHours: number
 }
 
 /** Untrusted plugin configuration after Loader normalization; every field optional. */
@@ -84,7 +97,13 @@ export const Config: z<Config> = z.object({
     processes: z.object({ enabled: z.boolean().default(true) }),
   }),
   projection: z.object({ enabled: z.boolean().default(true) }),
-  cost: z.object({ cacheHitDiscount: z.number().min(0).max(1).default(0.1), inputPricePerM: z.number().min(0).default(0.28) }),
+  cost: z.object({
+    cacheHitDiscount: z.number().min(0).max(1).default(0.1),
+    inputPricePerM: z.number().min(0).default(0.28),
+    priceSource: z.union([z.const('auto'), z.const('static')]).default('auto'),
+    priceUrl: z.string().default('https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json'),
+    priceRefreshHours: z.number().min(1).max(24 * 30).default(24),
+  }),
 })
 
 export interface ResolvedConfig {
@@ -116,6 +135,12 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     processes: { enabled: config.checks?.processes?.enabled ?? true },
   }
   const projection: ProjectionConfig = { enabled: config.projection?.enabled ?? true }
-  const cost: CostConfig = { cacheHitDiscount: config.cost?.cacheHitDiscount ?? 0.1, inputPricePerM: config.cost?.inputPricePerM ?? 0.28 }
+  const cost: CostConfig = {
+    cacheHitDiscount: config.cost?.cacheHitDiscount ?? 0.1,
+    inputPricePerM: config.cost?.inputPricePerM ?? 0.28,
+    priceSource: config.cost?.priceSource ?? 'auto',
+    priceUrl: config.cost?.priceUrl ?? 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
+    priceRefreshHours: config.cost?.priceRefreshHours ?? 24,
+  }
   return { thresholds, checks, projection, cost }
 }

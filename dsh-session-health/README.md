@@ -49,8 +49,26 @@ checks: {
   processes: { enabled: true },                            // ps probe via ctx.subprocess
 }
 projection: { enabled: true }                              // reactive badge unit
-cost: { cacheHitDiscount: 0.1, inputPricePerM: 0.28 }      // cache-hit price fraction + USD input price per 1M tokens
+cost: {
+  cacheHitDiscount: 0.1,       // cache-hit price fraction
+  inputPricePerM: 0.28,        // static fallback: USD per 1M input tokens
+  priceSource: 'auto',         // 'auto': periodic fetch; 'static': never fetch
+  priceUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json',
+  priceRefreshHours: 24,
+}
 ```
+
+## Pricing (money display)
+
+The harness carries no pricing, so the USD figures resolve through a live
+cache: `priceSource: 'auto'` (default) fetches the JSON document at
+`priceUrl` (default: the dsh-plugins repo's maintained
+[`pricing/deepseek.json`](../../../pricing/deepseek.json)) every
+`priceRefreshHours`, keeps the last good price across failures, and falls
+back to the static `inputPricePerM` / `cacheHitDiscount` until the first
+success. Point `priceUrl` at any JSON of the shape
+`{ "currency": "usd", "inputPerM": 0.28, "cacheHitDiscount": 0.1 }`, or set
+`priceSource: 'static'` to disable fetching entirely.
 
 ## Why real data
 

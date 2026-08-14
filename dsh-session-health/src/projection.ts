@@ -18,6 +18,7 @@ import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { sessionHealthProjectionSchema } from './schemas.ts'
 import type { HealthSeverity, SessionHealthProjection } from './types.ts'
 import type { ResolvedConfig } from './config.ts'
+import type { ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
 
 /** Fold state (plain JSON per the unit contract — persisted-cache precondition). */
@@ -171,13 +172,18 @@ export function healthView(state: SessionHealthState, config: ResolvedConfig): S
 /** Build the unit for one registration; the fold functions close over config. */
 export function sessionHealthProjectionDefinition(
   config: ResolvedConfig,
+  pricing?: { get(): ResolvedPricing },
 ): ProjectionDefinition<'sessionHealth', SessionHealthState> {
   return {
     key: 'sessionHealth',
     schema: sessionHealthProjectionSchema,
     init,
     apply: applyHealthEvent,
-    view: state => healthView(state, config),
+    // The fold stays event-pure; only the money view reads the live price
+    // cache (falls back to the static config when no cache is mounted).
+    view: state => healthView(state, pricing === undefined
+      ? config
+      : { ...config, cost: { ...config.cost, ...pricing.get() } }),
     // v3: effectivePerRoundUsd money field (invalidates persisted rows).
     stateVersion: 3,
   }

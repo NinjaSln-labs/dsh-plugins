@@ -13,6 +13,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
 import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
+import type { PriceCache } from './pricing.ts'
 import type { HealthRecommendation, HealthSeverity } from './types.ts'
 
 export interface HealthSignals {
@@ -442,8 +443,10 @@ export async function assess(
   // Human-readable verdict.
   const pct = ratio !== null ? Math.round(ratio * 100) : null
   const economy = total !== null && total >= config.thresholds.economyTokenFloor
+  // Live pricing (ctx-provided cache when mounted; static config otherwise).
+  const pricing = (ctx.get('sessionHealthPricing') as PriceCache | undefined)?.get() ?? config.cost
   const costNote = effectivePerRoundUsd !== null
-    ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${config.cost.inputPricePerM}/M，缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
+    ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${pricing.inputPricePerM}/M，缓存命中按 ${Math.round(pricing.cacheHitDiscount * 100)}% 计，不含输出）`
     : ''
   const remainingNote = opts.remainingRounds !== null && opts.remainingRounds !== undefined
     && opts.remainingRounds >= config.thresholds.economyRoundFloor
@@ -499,7 +502,7 @@ export async function assess(
       effectivePerRoundUsd,
       expectedTotalTokens,
       expectedTotalUsd,
-      inputPricePerM: config.cost.inputPricePerM,
+      inputPricePerM: pricing.inputPricePerM,
     },
     probes,
     handoff: {
