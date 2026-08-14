@@ -206,12 +206,24 @@ function HealthBadge(props: {
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
-          <span className="sh-v">约 {compact(merged.total)} token</span>
+          <span className="sh-v">约 {compact(merged.total)} token{proj?.cacheHitRate !== null && proj?.cacheHitRate !== undefined ? `（缓存命中 ${Math.round(proj.cacheHitRate * 100)}%）` : ''}</span>
         </div>
-        {merged.projected !== null && merged.projected !== merged.total ? (
+        {merged.projected !== null ? (
           <div className="sh-tip-row">
             <span className="sh-k">预计下次输入</span>
-            <span className="sh-v">约 {compact(merged.projected)} token</span>
+            <span className="sh-v">
+              约 {compact(
+                proj?.cacheReadTokens !== null && proj?.cacheReadTokens !== undefined
+                  ? Math.max(0, merged.projected - proj.cacheReadTokens)
+                  : merged.projected,
+              )} token{proj?.cacheReadTokens !== null && proj?.cacheReadTokens !== undefined ? '（剔除缓存命中）' : ''}
+            </span>
+          </div>
+        ) : null}
+        {proj?.effectivePerRound !== null && proj?.effectivePerRound !== undefined ? (
+          <div className="sh-tip-row">
+            <span className="sh-k">计费预期</span>
+            <span className="sh-v">约 {compact(proj.effectivePerRound)} token/轮</span>
           </div>
         ) : null}
         <div className="sh-tip-row">

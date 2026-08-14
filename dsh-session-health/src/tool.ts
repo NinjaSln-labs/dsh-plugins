@@ -72,8 +72,22 @@ const OUTPUT_SCHEMA = {
       additionalProperties: false,
       properties: {
         isGitRepo: { type: 'boolean', description: '工作区是否为 git 仓库（未知时省略）' },
+        clean: { type: 'boolean', description: 'git 工作树是否干净（0 个未提交变更；未知时省略）' },
+        uncommittedCount: { type: 'integer', description: '未提交变更数（未知时省略）' },
+        lastCommit: { type: 'string', description: '最新 commit 行（未知时省略）' },
         hasHandoff: { type: 'boolean', description: '交接文档是否就位（未知时省略）' },
         runningProcesses: { type: 'array', items: { type: 'string' }, description: '工作区相关运行中进程（名称）' },
+      },
+    },
+    cost: {
+      type: 'object',
+      required: true,
+      additionalProperties: false,
+      properties: {
+        cacheHitRate: { type: 'number', description: '上次请求的缓存命中率 0..1（未知时省略）' },
+        effectivePerRound: { type: 'number', description: '每轮计费当量 token（未缓存输入 + 缓存命中×折扣；未知时省略）' },
+        remainingRounds: { type: 'integer', description: '本次调用提供的剩余轮数（未提供时省略）' },
+        expectedTotalTokens: { type: 'number', description: '剩余轮数输入费用预期（= effectivePerRound × remainingRounds；未知时省略）' },
       },
     },
   },
@@ -131,7 +145,16 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
 
       const handoffReady: Record<string, unknown> = { runningProcesses: report.handoff.runningProcesses }
       if (report.handoff.isGitRepo !== null) handoffReady.isGitRepo = report.handoff.isGitRepo
+      if (report.handoff.clean !== null) handoffReady.clean = report.handoff.clean
+      if (report.handoff.uncommittedCount !== null) handoffReady.uncommittedCount = report.handoff.uncommittedCount
+      if (report.handoff.lastCommit !== null) handoffReady.lastCommit = report.handoff.lastCommit
       if (report.handoff.hasHandoff !== null) handoffReady.hasHandoff = report.handoff.hasHandoff
+
+      const cost: Record<string, number> = {}
+      if (report.signals.cacheHitRate !== null) cost.cacheHitRate = report.signals.cacheHitRate
+      if (report.signals.effectivePerRound !== null) cost.effectivePerRound = report.signals.effectivePerRound
+      if (args.remainingRounds !== undefined) cost.remainingRounds = args.remainingRounds
+      if (report.signals.expectedTotalTokens !== null) cost.expectedTotalTokens = report.signals.expectedTotalTokens
 
       return {
         severity: report.severity,
@@ -142,6 +165,7 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
           : {}),
         signals,
         handoffReady,
+        cost,
       }
     },
     presentCall: (args) => ({

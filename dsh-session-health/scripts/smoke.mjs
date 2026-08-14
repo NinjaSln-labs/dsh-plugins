@@ -97,6 +97,22 @@ await check('projection: message-count proxy escalates green → blue', () => {
   assert.equal(low.severity, 'green') // 700 messages: no proxy, low occupancy
 })
 
+await check('projection: cache hit rate + effective per-round cost', () => {
+  const state2 = {
+    turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
+    pressureTokens: 550_000, contextWindow: 1_000_000,
+    lastUsage: { inputTokens: 50_000, cacheReadTokens: 500_000, cacheWriteTokens: 0 },
+  }
+  const v = healthView(state2, config) // cacheHitDiscount 0.1
+  assert.ok(Math.abs(v.cacheHitRate - 500_000 / 550_000) < 1e-9)
+  assert.equal(v.uncachedInputTokens, 50_000)
+  assert.equal(v.cacheReadTokens, 500_000)
+  assert.equal(v.effectivePerRound, 50_000 + 500_000 * 0.1) // 100K billable-equivalent
+  const empty = healthView({ ...state2, lastUsage: undefined }, config)
+  assert.equal(empty.cacheHitRate, null)
+  assert.equal(empty.effectivePerRound, null)
+})
+
 /* ---------- assess() core ---------- */
 const signal = new AbortController().signal
 const session = { header: { cwd: '/tmp/ws' } }
@@ -147,6 +163,83 @@ await check('assess: minimal skips probes', async () => {
   const report = await assess(ctx, session, 'agent-1', signal, config, { minimal: true })
   assert.ok(!report.probes.some(p => p.includes('git')))
   assert.ok(!report.probes.some(p => p.includes('交接')))
+})
+
+/* ---------- git-state automation + cost expectation ---------- */
+const GIT_OUT = {
+  'status --short': ' M a.ts\n?? b.ts\n',
+  'log --oneline -1': '166f5ac feat: x\n',
+  'status -sb': '## main...origin/main [ahead 2]\n',
+}
+const gitCtx = {
+  get: name => (name === 'subprocess'
+    ? {
+      spawn: ({ argv }) => ({
+        done: Promise.resolve({ exitCode: 0 }),
+        collected: { stdout: { readFrom: () => ({ text: GIT_OUT[argv.slice(1).join(' ')] ?? '' }) } },
+      }),
+    }
+    : services[name]),
+}
+await check('assess: git worktree state automates the handoff checklist', async () => {
+  const report = await assess(gitCtx, session, 'agent-1', signal, config, {})
+  assert.equal(report.handoff.clean, false)
+  assert.equal(report.handoff.uncommittedCount, 2)
+  assert.equal(report.handoff.lastCommit, '166f5ac feat: x')
+  assert.ok(report.handoff.branchLine.includes('ahead 2'))
+  assert.ok(report.probes.some(p => p.includes('git 工作树：2 个未提交变更')))
+  const text = buildCommandText(report, { minimal: false })
+  assert.ok(text.includes('- [ ] 未提交变更：2 个'))
+  assert.ok(text.includes('- [ ] 已 push：## main...origin/main [ahead 2]'))
+})
+
+await check('assess: clean worktree marks the commit/push items done', async () => {
+  const cleanOut = { ...GIT_OUT, 'status --short': '' }
+  const cleanCtx = {
+    get: name => (name === 'subprocess'
+      ? {
+        spawn: ({ argv }) => ({
+          done: Promise.resolve({ exitCode: 0 }),
+          collected: { stdout: { readFrom: () => ({ text: cleanOut[argv.slice(1).join(' ')] ?? '' }) } },
+        }),
+      }
+      : services[name]),
+  }
+  const report = await assess(cleanCtx, session, 'agent-1', signal, config, {})
+  assert.equal(report.handoff.clean, true)
+  assert.equal(report.handoff.uncommittedCount, 0)
+  assert.ok(report.probes.some(p => p.includes('git 工作树：干净')))
+})
+
+await check('assess: cost expectation from cache-effective per-round', async () => {
+  const costCtx = {
+    get: name => {
+      if (name === 'sessionProjections') {
+        return {
+          snapshot: () => ({
+            values: {
+              sessionHealth: {
+                severity: 'yellow', advice: 'a', ratio: 0.13, total: 132_000, window: 1_000_000,
+                turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
+                cacheHitRate: 0.9, uncachedInputTokens: 13_200, cacheReadTokens: 118_800,
+                effectivePerRound: 25_080, // 13200 + 118800*0.1
+              },
+            },
+          }),
+        }
+      }
+      return services[name]
+    },
+  }
+  const report = await assess(costCtx, session, 'agent-1', signal, config, { remainingRounds: 10 })
+  assert.equal(report.signals.cacheHitRate, 0.9)
+  assert.equal(report.signals.effectivePerRound, 25_080)
+  assert.equal(report.signals.expectedTotalTokens, 250_800)
+  assert.ok(report.probes.some(p => p.includes('缓存命中率 90%')))
+  const text = buildCommandText(report, { minimal: false })
+  assert.ok(text.includes('- 缓存命中率 90%'))
+  assert.ok(text.includes('计费当量约 25K token/轮'))
+  assert.ok(text.includes('剩余轮数输入费用预期 ≈ 251K token'))
 })
 
 /* ---------- /health command handler ---------- */
