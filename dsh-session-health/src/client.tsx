@@ -56,6 +56,12 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
 .sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
+/* Invisible bridge over the badge↔tooltip gap: the mouse path into the
+   tooltip never leaves the wrapper, so the popover stays clickable. */
+.sh-tip::before{content:'';position:absolute;top:-8px;left:0;right:0;height:8px}
+.sh-tip{animation:sh-tip-in .15s ease-out}
+@keyframes sh-tip-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.sh-tip{animation:none}}
 `
 
 function compact(n: number | null | undefined): string {
@@ -149,6 +155,20 @@ function HealthBadge(props: {
   const [costAsTokens, setCostAsTokens] = React.useState<boolean>(() => {
     try { return window.localStorage.getItem('dsh-session-health/costDisplay') === 'tokens' } catch { return false }
   })
+  // 浮层消失延迟：徽章↔浮层的空隙由 .sh-tip::before 桥接，延迟兜底快速抖动；
+  // 键盘聚焦（Tab 进徽章）也打开浮层，blur 移出子树才关闭。
+  const hoverTimer = React.useRef<number | null>(null)
+  const showTip = () => {
+    if (hoverTimer.current !== null) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null }
+    setHover(true)
+  }
+  const hideTip = () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = window.setTimeout(() => setHover(false), 250)
+  }
+  React.useEffect(() => () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
+  }, [])
 
   React.useEffect(() => {
     let alive = true
@@ -308,8 +328,12 @@ function HealthBadge(props: {
   return (
     <span
       className="sh-wrap"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseEnter={showTip}
+      onMouseLeave={hideTip}
+      onFocus={showTip}
+      onBlur={(e: React.FocusEvent) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hideTip()
+      }}
     >
       <span
         className={`sh-badge${state !== 'unknown' ? ` sh-sev-${state}` : ''}`}
