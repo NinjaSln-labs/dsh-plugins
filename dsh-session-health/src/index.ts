@@ -19,7 +19,7 @@ import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { remoteSchemas, HealthStateRequestSchema, HealthStateResultSchema } from './schemas.ts'
 import type { HealthStateRequest, HealthStateResult } from './types.ts'
-import { Config, resolveConfig, type Config as ConfigType, type ResolvedConfig } from './config.ts'
+import { Config, resolveConfig, type ResolvedConfig } from './config.ts'
 import { applyHealthEvent, healthView, sessionHealthProjectionDefinition, type SessionHealthState } from './projection.ts'
 import { assess } from './assess.ts'
 import { healthCommandDefinition } from './command.ts'
@@ -94,32 +94,45 @@ export class SessionHealthService extends TypertRemoteService {
 
 export const name = 'dsh-session-health'
 
-/** Host plugin: Remote service + projection unit + tool + /health command. */
-export default function sessionHealthHost(config: ConfigType = {}) {
-  return {
-    apply(ctx: Context) {
-      const resolved = resolveConfig(config)
-      // The Service constructor registers `sessionHealth` on the context
-      // (cordis Service semantics); no explicit provide needed.
-      new SessionHealthService(ctx, resolved)
+/**
+ * Cordis plugin — OBJECT form (never a factory).
+ *
+ * The loader mounts `module.default` directly through `ctx.plugin()`: a
+ * FUNCTION default is treated as the plugin body and invoked as
+ * `(ctx, config)`, so a factory that merely RETURNS `{ apply }` is silently
+ * ignored — no error, entry shows ACTIVE, apply never runs. The default
+ * export must BE the plugin object (knowledge-sqlite hit this exact pitfall
+ * on mount; fixed the same way).
+ */
+export default {
+  name,
+  Config,
+  apply(ctx: Context, config: Config = {}): void {
+    const resolved = resolveConfig(config)
+    // The Service constructor registers `sessionHealth` on the context
+    // (cordis Service semantics); no explicit provide needed.
+    new SessionHealthService(ctx, resolved)
 
-      // Reactive badge data (optional child: headless assemblies without the
-      // projection registry just lose the push path, not the plugin).
-      if (resolved.projection.enabled) {
-        ctx.inject(['sessionProjections'], (projectionCtx) => {
-          projectionCtx.sessionProjections.register(sessionHealthProjectionDefinition(resolved))
-        })
-      }
-
-      // Model-callable self-check (optional child).
-      ctx.inject(['tools'], (toolCtx) => {
-        toolCtx.tools.register(sessionHealthTool(toolCtx, resolved))
+    // Reactive badge data (optional child: headless assemblies without the
+    // projection registry just lose the push path, not the plugin).
+    if (resolved.projection.enabled) {
+      ctx.inject(['sessionProjections'], (projectionCtx) => {
+        projectionCtx.sessionProjections.register(sessionHealthProjectionDefinition(resolved))
       })
+    }
 
-      // User-initiated report (optional child).
-      ctx.inject(['commands'], (commandCtx) => {
-        commandCtx.commands.register(healthCommandDefinition(commandCtx, resolved))
-      })
-    },
-  }
+    // Model-callable self-check (optional child).
+    ctx.inject(['tools'], (toolCtx) => {
+      toolCtx.tools.register(sessionHealthTool(toolCtx, resolved))
+    })
+
+    // User-initiated report (optional child).
+    ctx.inject(['commands'], (commandCtx) => {
+      commandCtx.commands.register(healthCommandDefinition(commandCtx, resolved))
+    })
+  },
+} satisfies {
+  name: string
+  Config: typeof Config
+  apply(ctx: Context, config?: Config): void
 }

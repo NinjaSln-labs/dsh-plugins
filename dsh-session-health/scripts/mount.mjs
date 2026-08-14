@@ -1,16 +1,23 @@
 /**
  * dsh-session-health — mount smoke test.
  *
- * Mounts the built plugin in a REAL cordis Context with stub services and
+ * Mounts the built plugin the way the harness LOADER does (cordis-plugin-loader
+ * unwrapExports: `module.default ?? module`, then `ctx.plugin(...)`) and
  * verifies the wiring: Remote service provision, conditional registration of
  * the projection unit / tool / command through ctx.inject children, and a
  * live healthState RPC call.
+ *
+ * Regression guard: the plugin default export MUST be an object with `apply`
+ * (loader pitfall — a factory function default is called as the plugin body
+ * and its returned `{ apply }` is silently ignored: no error, entry ACTIVE,
+ * apply never runs). If apply does not run, `ctx.get('sessionHealth')` stays
+ * undefined and the registrations below stay null → this test fails.
  *
  *   npm run build && node scripts/mount.mjs
  */
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
-import sessionHealthHost, { SessionHealthService } from '../lib/index.js'
+import { SessionHealthService } from '../lib/index.js'
 
 const session = { header: { cwd: '/tmp/ws' } }
 const registrations = { commands: null, tools: null, projections: null }
@@ -26,25 +33,31 @@ ctx.provide('fs', {
   resolve: async p => p,
   stat: async p => (p === '.git' ? {} : undefined),
 })
-ctx.provide('subprocess', undefined)
 ctx.provide('commands', { register: def => { registrations.commands = def } })
 ctx.provide('tools', { register: tool => { registrations.tools = tool } })
 ctx.provide('sessionProjections', { register: def => { registrations.projections = def } })
 
-const plugin = sessionHealthHost({})
+// The exact loader normalization path (cordis-plugin-loader unwrapExports).
+const mod = await import('../lib/index.js')
+const plugin = mod.default ?? mod
+assert.equal(typeof plugin, 'object', 'plugin must be an OBJECT, not a factory function')
+assert.equal(typeof plugin.apply, 'function', 'plugin object must carry apply')
+assert.equal(plugin.name, 'dsh-session-health')
+assert.ok(plugin.Config, 'plugin object must carry Config')
+
 await ctx.plugin(plugin).await()
 // Let the ctx.inject children (projection / tool / command) settle.
 await new Promise(resolve => setTimeout(resolve, 50))
 
 try {
-  // 1) Remote service is provided and callable.
+  // 1) apply RAN (the loader-pitfall guard): Remote service is provided and callable.
   const service = ctx.get('sessionHealth')
-  assert.ok(service instanceof SessionHealthService, 'ctx.sessionHealth is the Remote service')
+  assert.ok(service instanceof SessionHealthService, 'ctx.sessionHealth is the Remote service (apply ran)')
   const health = await service.healthState({ sessionId: 's1' })
   assert.equal(health.color, 'yellow') // 132K >= 50K economy floor
   assert.equal(health.total, 132_000)
   assert.equal(health.window, 1_000_000)
-  console.log('  ok  Remote service provided + healthState RPC')
+  console.log('  ok  apply ran: Remote service provided + healthState RPC')
 
   // 2) /health command registered.
   assert.ok(registrations.commands !== null, 'command registered')
