@@ -36,12 +36,10 @@ export interface SessionHealthProjection {
   /** Number of compaction rounds (early detail summarized). */
   compactions: number
   /**
-   * Session-level cache-hit ratio over the last CACHE_WINDOW_SIZE distinct
-   * requests: cacheRead / (uncached input + cacheRead). Stable — the badge,
-   * /health and the tool all read the same value (a last-request sample
-   * would flip between e.g. 93% and 3% across readings). Compactions reset
-   * it as fresh uncached requests re-fill the window. Null before any usage
-   * report.
+   * Session-aggregate cache-hit ratio, same formula as the core input-bar
+   * stats line (tokenUsage): cacheRead / (uncachedInput + cacheRead +
+   * cacheWrite) over the whole durable log — the badge, /health, the tool
+   * and the core UI all show the same value. Null before any usage report.
    */
   cacheHitRate: number | null
   /** Last request's uncached input tokens. Null before any usage report. */

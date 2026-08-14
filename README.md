@@ -8,7 +8,7 @@ Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-a
 
 | Plugin | Package | Status |
 |---|---|---|
-| [dsh-session-health](./dsh-session-health) | session health v0.5.6: reactive badge (projection-driven), `/health` command, `session_health` tool, official peak/off-peak dual-currency pricing (CNY/USD, jsdelivr + GitHub-raw fallback), theme-adaptive severity palette, cache-aware window-scaled economy tier, money/token cost toggle, automated handoff checklist | published (GitHub + npm) |
+| [dsh-session-health](./dsh-session-health) | session health v0.5.7: reactive badge (projection-driven), `/health` command, `session_health` tool, official peak/off-peak dual-currency pricing (CNY/USD, jsdelivr + GitHub-raw fallback), theme-adaptive severity palette, cache-aware window-scaled economy tier, money/token cost toggle, automated handoff checklist | published (GitHub + npm) |
 | [dsh-knowledge-sqlite](./dsh-knowledge-sqlite) | cross-session knowledge: `ctx.knowledge` + `knowledge_*` tools, FTS5 trigram + L1 query expansion (V1.11 contract) | published (GitHub + npm) |
 | [dsh-subagent-model-picker](./dsh-subagent-model-picker) | model-chosen subagent delegation: `subagent_model` tool with per-call provider/model/max_tokens overrides + `subagent_models` catalog tool | published (GitHub + npm) |
 

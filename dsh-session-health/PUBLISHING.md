@@ -13,7 +13,7 @@
 
 ## 版本历史
 
-- **0.5.6** — 缓存命中率改为会话级稳定值（修复不同展示面/时刻读到 93% vs 3% 的「不统一」）：投影折叠新增最近 20 次请求的滚动窗口（`CACHE_WINDOW_SIZE`，按 turn/step 去重，与 token-meter 同语义），命中率 = 窗口内 ΣcacheRead/(Σinput+ΣcacheRead)；徽章、`/health`、工具读到同一个值；压缩后窗口被未命中请求刷新（保持「压缩重置命中」意图）。**host 侧改动，需重启 dsh web 生效**
+- **0.5.7** — 缓存命中率与 **dsh 核心输入栏统计（`tokenUsage`）完全同口径**：会话累计 `cacheRead/(uncachedInput+cacheRead+cacheWrite)`（分母含 cacheWrite），折叠语义与 token-meter 一致（per-(turn,step) 去重替换，绝不双计）；显示舍入统一为 `Math.round`——徽章浮层、`/health`、工具、输入栏四处数值一致（修复「浮层 3% vs 输入栏 93%」）。**0.5.6（窗口方案）未发布，被本版取代**。**host 侧改动，需重启 dsh web 生效**
 - **0.5.5** — 浮层可达性：徽章↔浮层空隙加隐形桥接层（`.sh-tip::before`，悬停路径不断）+ 250ms 消失延迟（防抖动）+ 键盘聚焦打开（Tab 到徽章即显示，移出子树才关）+ 150ms 入场动画（尊重 prefers-reduced-motion）——修复「浮层难进去、计费预期切换行点不到」
 - **0.5.4** — 浮层「计费预期」行可点击切换显示口径：金额（默认，¥/$ 按 locale）↔ 计费当量 token 数（`effectivePerRound`，缓存折扣后）；偏好存 localStorage（`dsh-session-health/costDisplay`）；行内 hover/焦点态 + 键盘可达，底行提示更新
 - **0.5.3** — 浮层档位标签去掉颜色字（「绿（放心继续）」→「放心继续」——颜色由着色 chip 表达）；aria-label 保留颜色字（屏幕阅读器看不到颜色）
