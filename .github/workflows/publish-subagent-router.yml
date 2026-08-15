@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-          cache: npm
+          # 无 cache: npm —— 本仓库 lockfile 不入库（pnpm workspace），setup-node 找不到锁文件会直接报错
       - name: 'Guard: tag version matches package.json'
         run: |
           EXPECTED="refs/tags/subagent-router-v$(node -p "require('./package.json').version")"
