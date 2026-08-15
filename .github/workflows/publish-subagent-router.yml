@@ -1,0 +1,75 @@
+# dsh-subagent-router 发布工作流（人工审批门）——与 dsh-session-health 同款
+#
+# 安全模型：
+# - 触发 = 本机人工创建的 tag（subagent-router-vX.Y.Z），发布决策永远是人的决定
+# - 权限最小化：workflow 仅 contents: read；NPM_TOKEN 只注入 publish 步骤的 env
+# - token = npm granular access token（仅授权 dsh-subagent-router 包），存 GitHub secrets
+# - 审批门：environment `npm-publish` + required reviewers——CI 全自动跑完验证后，
+#   需仓库管理员在 GitHub 页面批准才真正执行 npm publish（与 session-health 共用同一环境）
+# - 版本一致性守卫：tag 版本必须与 package.json version 完全一致，防误发/伪造 tag
+# - actions 按 SHA 固定，防 action 供应链投毒
+#
+# 一次性配置（首次发布前必须完成）：
+# 1. npm（https://www.npmjs.com/settings/<user>/tokens）→ Generate New Token →
+#    Granular Access Token → Packages 勾选 dsh-subagent-router（Read and write）→ Automation
+#    （或新建一个同时授权 dsh-session-health + dsh-subagent-router 的 token）
+# 2. GitHub 仓库 Settings → Secrets and variables → Actions → 更新/新建 secret
+#    名称 NPM_TOKEN，粘贴上述 token（不要发到聊天里；session-health 工作流共用此 secret）
+# 3. environment `npm-publish` 已存在（session-health 建过），Required reviewers 已配置，
+#    无需重复创建
+#
+# 发布流程（日常）：
+#   cd dsh-plugins/dsh-subagent-router
+#   npm version patch -m "chore: release v%s"
+#   V=$(node -p "require('./package.json').version") && git tag -d "v$V" && git tag "subagent-router-v$V"
+#   git push && git push --tags     # CI 接手：验证链 → 等你在 GitHub 批准 → publish
+name: publish-subagent-router
+
+on:
+  push:
+    tags:
+      - 'subagent-router-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    defaults:
+      run:
+        working-directory: dsh-subagent-router
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Guard: tag version matches package.json
+        run: |
+          EXPECTED="refs/tags/subagent-router-v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF" != "$EXPECTED" ]; then
+            echo "::error::tag/version mismatch: $GITHUB_REF vs $EXPECTED"
+            exit 1
+          fi
+      - name: Install
+        # 无 package-lock.json（pnpm workspace，lock 不入库）：npm install 每次全新解析；
+        # peer 依赖 @deepseek-ai/*@^0.1.0-rc.5 在公共 registry 可解析（0.1.0-rc.6）。
+        run: npm install
+      - name: Verify (strict typecheck + unit tests + build)
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          npm test
+          npm run build
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
