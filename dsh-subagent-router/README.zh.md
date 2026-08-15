@@ -80,6 +80,10 @@ pnpm run build  # tsc -> lib/
 
 测试套件在真实的 `ToolRuntime` + `SubagentRuntime` 上驱动真实插件体，使用脚本化子代理 provider 与伪造的 `llm` 路由注册表；不触网、不用凭据。
 
+## 路线图
+
+自动路由策略的后续计划（目录元数据、推荐工具、反馈闭环、预算上限）：见 [ROADMAP.md](./ROADMAP.md)。
+
 ## License
 
 MIT
