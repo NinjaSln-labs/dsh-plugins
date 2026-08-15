@@ -80,6 +80,10 @@ pnpm run build  # tsc -> lib/
 
 The test suite drives the real plugin body on a real `ToolRuntime` + `SubagentRuntime` with a scripted subagent provider and a faked `llm` route registry; no network or credentials are touched.
 
+## Roadmap
+
+Planned work for the auto-routing policy (catalog metadata, recommend tool, feedback loop, budgets): see [ROADMAP.md](./ROADMAP.md).
+
 ## License
 
 MIT
