@@ -1,5 +1,5 @@
 /**
- * dsh-subagent-model-picker — model-chosen subagent delegation.
+ * dsh-subagent-router — model-chosen subagent delegation.
  *
  * Drives the REAL plugin body on a real `ToolRuntime` + `SubagentRuntime`,
  * with a package-local scripted subagent provider and a faked `llm` route
@@ -150,7 +150,7 @@ afterEach(() => {
   callCounter = 0
 })
 
-describe('dsh-subagent-model-picker delegation tool', () => {
+describe('dsh-subagent-router delegation tool', () => {
   it('registers `subagent_model` exposing description/prompt/provider/model/max_tokens/run_in_background', async () => {
     const { ctx } = await setup()
     expect(Object.keys(propsOf(ctx, 'subagent_model')).sort())
@@ -298,7 +298,7 @@ describe('dsh-subagent-model-picker delegation tool', () => {
   })
 })
 
-describe('dsh-subagent-model-picker catalog tool', () => {
+describe('dsh-subagent-router catalog tool', () => {
   it('lists every registered provider with its models', async () => {
     const { ctx } = await setup()
     const result = await callTool(ctx, 'subagent_models', {})
@@ -345,7 +345,7 @@ describe('dsh-subagent-model-picker catalog tool', () => {
   })
 })
 
-describe('dsh-subagent-model-picker auto selection (model "auto")', () => {
+describe('dsh-subagent-router auto selection (model "auto")', () => {
   it('picks the cheapest model for a trivial task and records the audit line', async () => {
     const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
     const result = await callTool(ctx, 'subagent_model', {

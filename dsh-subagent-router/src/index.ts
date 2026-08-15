@@ -1,5 +1,5 @@
 /**
- * dsh-subagent-model-picker — model-chosen subagent delegation for DeepSeek Harness.
+ * dsh-subagent-router — model-chosen subagent delegation for DeepSeek Harness.
  *
  * The shipped `subagent` tool inherits the parent's model route (or a static
  * `agentOptions` in the composition row). This plugin registers a sibling tool
@@ -63,7 +63,7 @@ export interface ModelPickerConfig {
   maxDepth?: number | 'provider-managed'
 }
 
-export const name = 'dsh-subagent-model-picker'
+export const name = 'dsh-subagent-router'
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
 export const defaultConfig = {
@@ -108,14 +108,14 @@ export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
     // at mount (the earliest point capabilities are known), not on delegation.
     if (typeof resolved.maxDepth === 'number' && !provider.capabilities.depthLimit) {
       throw new Error(
-        `dsh-subagent-model-picker: provider "${provider.name}" cannot enforce maxDepth `
+        `dsh-subagent-router: provider "${provider.name}" cannot enforce maxDepth `
         + `(no depthLimit capability) — set maxDepth: 'provider-managed' to leave the recursion `
         + 'budget to the provider',
       )
     }
     if (continuable && provider.prepareContinuable === undefined) {
       throw new Error(
-        `dsh-subagent-model-picker: provider "${provider.name}" does not support `
+        `dsh-subagent-router: provider "${provider.name}" does not support `
         + '`backgroundMode: continuable`',
       )
     }
@@ -135,7 +135,7 @@ export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
     mount(present)
   } else {
     ctx.logger.info(
-      `dsh-subagent-model-picker: subagent provider "${resolved.subagentProvider}" not registered yet; `
+      `dsh-subagent-router: subagent provider "${resolved.subagentProvider}" not registered yet; `
       + `the "${resolved.toolName}" tool will register when it appears`,
     )
   }

@@ -1,4 +1,4 @@
 packages:
   - 'dsh-session-health'
   - 'dsh-knowledge-sqlite'
-  - 'dsh-subagent-model-picker'
+  - 'dsh-subagent-router'
