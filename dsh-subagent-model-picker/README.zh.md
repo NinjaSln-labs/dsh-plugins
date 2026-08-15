@@ -6,7 +6,7 @@
 
 | 工具 | 用途 |
 |---|---|
-| `subagent_model` | 委派任务给子代理，并在本次调用中指定 `provider` / `model` / `max_tokens`。省略的字段继承调用方代理的路由。 |
+| `subagent_model` | 委派任务给子代理，并在本次调用中指定 `provider` / `model` / `max_tokens`。省略的字段继承调用方代理的路由。传 `model: "auto"` 可把模型选择交给内置自动策略。 |
 | `subagent_models` | 只读目录：列出当前 `ctx.llm` 上注册的 provider 路由（`listProviders()`）及每个 provider 广告的模型列表。 |
 
 ### 模型选择如何工作
@@ -15,6 +15,18 @@
 - **`model`** 原样透传。Harness 把模型目录视为「参考性」信息：DeepSeek 适配器接受任意模型 id，而 pi-ai 路由会拒绝未配置的模型 —— 所以模型有效性由 provider 自己裁决，与你自己会话的行为完全一致。`subagent_models` 的存在就是为了让模型能做出有依据的选择。
 - **`max_tokens`** 限制子代理输出（正整数），透传为 `agentOptions.maxTokens`。
 - 子代理通过 `ctx.subagents.start()` / `startContinuable()` 创建，携带 `agentOptions = { provider, model, maxTokens }`；harness 的 `resolveChildAgentOptions` 会把本次覆盖与父级路由合并，因此省略的字段自动继承。
+
+### 自动选择（`model: "auto"`）
+
+把模型选择交给一个确定性、可审计的策略 —— 不引入额外 LLM 调用：
+
+1. **确定 provider**：显式 `provider` 参数优先，否则取调用方代理自己的路由（`parent.options.provider`）。需要 `llm` 服务。
+2. **任务分档**：`trivial`（短任务，≤160 字符且无重标记）、`complex`（≥1200 字符，或含代码块 / 结构化输出诉求 / 推理动词如 analyze、design、debug、refactor、evaluate），其余为 `standard`。
+3. **从目录选模型**：按命名打分 —— 强信号（`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`）+1，廉价信号（`flash` / `mini` / `lite` / `fast` / `small` / `quick` / `nano` / `light`）−1。`trivial` 取最低分，`complex` 取最高分，`standard` 取第一个 0 分 id（同分保持目录顺序）。
+4. **可审计**：每次 auto 调用都会在工具结果里记录 `auto: { provider, model, tier, reason }`，渲染文本带 `[auto]` 行与理由 —— 随时可以问「为什么选它」。
+5. **失败升级**（`autoEscalate`，仅前台调用）：运行失败后用下一档重试一次（`trivial → standard → complex`），重试结果记录 `escalatedFrom`。后台/continuable 调用不升级（调用点看不到失败结果）；目录里没有可区分的高一档模型时不升级。
+
+策略刻意保守：任务看起来有实质内容就默认上强模型，只有明显琐碎的任务才用廉价模型，并且从不隐藏自己的决策理由。
 
 ## 安装
 
@@ -36,6 +48,8 @@ bundle 只插入一行组合（`subagent-model-picker`）。它消费 host 的 `
 | `enableRunInBackground` | `true` | 是否暴露 `run_in_background` 参数。 |
 | `backgroundMode` | `one-shot` | `one-shot` 默认前台等待；`continuable` 默认后台执行、返回持久子代理 id，并要求 provider 具备 `prepareContinuable` 能力。 |
 | `enableModelList` | `true` | 是否注册 `subagent_models` 目录工具。 |
+| `enableAuto` | `true` | 是否接受委派工具上的 `model: "auto"`。 |
+| `autoEscalate` | `true` | 前台运行失败后是否用高一档自动重试一次。 |
 | `maxDepth` | `3` | 子代理深度上限；`'provider-managed'` 表示不设上限（数值上限要求 provider 具备 `depthLimit` 能力）。 |
 
 示例行：
@@ -53,13 +67,14 @@ bundle 只插入一行组合（`subagent-model-picker`）。它消费 host 的 `
 
 1. `subagent_models` → 列出 `deepseek-official`（含其目录）与所有 pi-ai 路由。
 2. `subagent_model` 传 `{ description: "对比定价", prompt: "...", provider: "deepseek-official", model: "deepseek-r1", max_tokens: 4000 }` → 子代理在该路由上运行并返回结果。
-3. 省略 `provider`/`model` 即让子代理沿用你自己的路由。
+3. `subagent_model` 传 `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → 自动策略为琐碎任务挑选目录中最便宜的模型，并记录 `[auto] ...` 及其理由。
+4. 省略 `provider`/`model` 即让子代理沿用你自己的路由。
 
 ## 开发
 
 ```bash
 pnpm install
-pnpm test       # vitest：schema 形态、路由校验、agentOptions 透传、目录工具
+pnpm test       # vitest：schema 形态、路由校验、agentOptions 透传、目录工具、auto 策略与升级
 pnpm run build  # tsc -> lib/
 ```
 

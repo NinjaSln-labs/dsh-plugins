@@ -13,6 +13,11 @@
  *                   adapter accepts arbitrary ids, pi-ai validates configured
  *                   ones — so the provider itself owns model rejection).
  *   - `max_tokens`— per-child output cap (positive integer).
+ *   - `model: "auto"`— built-in auto selection: the tool classifies the task
+ *                   (trivial / standard / complex), picks a model from the
+ *                   provider's catalog, records the decision with its reason
+ *                   on the result, and retries once on the next tier after a
+ *                   failed foreground run (`enableAuto` / `autoEscalate`).
  *
  * The child still runs through the ordinary `ctx.subagents` seam
  * (`resolveChildAgentOptions` merges per-child overrides over the parent's
@@ -48,6 +53,10 @@ export interface ModelPickerConfig {
   backgroundMode?: 'one-shot' | 'continuable'
   /** Register the `subagent_models` catalog tool (default true). */
   enableModelList?: boolean
+  /** Accept `model: "auto"` on the delegation tool (default true). */
+  enableAuto?: boolean
+  /** After a failed foreground run, retry once on the next auto tier (default true). */
+  autoEscalate?: boolean
   /** Child depth cap (default 3; `'provider-managed'` sends no cap). */
   maxDepth?: number | 'provider-managed'
 }
@@ -62,6 +71,8 @@ export const defaultConfig = {
   enableRunInBackground: true,
   backgroundMode: 'one-shot',
   enableModelList: true,
+  enableAuto: true,
+  autoEscalate: true,
   maxDepth: 3,
 } satisfies Required<ModelPickerConfig>
 
@@ -73,6 +84,8 @@ export function resolveConfig(config: ModelPickerConfig): Required<ModelPickerCo
     enableRunInBackground: config.enableRunInBackground ?? defaultConfig.enableRunInBackground,
     backgroundMode: config.backgroundMode ?? defaultConfig.backgroundMode,
     enableModelList: config.enableModelList ?? defaultConfig.enableModelList,
+    enableAuto: config.enableAuto ?? defaultConfig.enableAuto,
+    autoEscalate: config.autoEscalate ?? defaultConfig.autoEscalate,
     maxDepth: config.maxDepth ?? defaultConfig.maxDepth,
   }
 }
