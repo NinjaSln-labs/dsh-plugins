@@ -18,10 +18,12 @@
 # 3. environment `npm-publish` 已存在（session-health 建过），Required reviewers 已配置，
 #    无需重复创建
 #
-# 发布流程（日常）：
+# 发布流程（日常）——注意：工作树有未提交改动时 npm version 的自动 commit/tag 会被跳过，
+# 所以用 --no-git-tag-version（只改版本号）再手动提交+打 tag，确定性更强：
 #   cd dsh-plugins/dsh-subagent-router
-#   npm version patch -m "chore: release v%s"
-#   V=$(node -p "require('./package.json').version") && git tag -d "v$V" && git tag "subagent-router-v$V"
+#   npm version patch --no-git-tag-version -m "chore: release v%s"
+#   git add package.json && git commit -m "chore: release v$(node -p "require('./package.json').version")"
+#   git tag subagent-router-v$(node -p "require('./package.json').version")
 #   git push && git push --tags     # CI 接手：验证链 → 等你在 GitHub 批准 → publish
 name: publish-subagent-router
 
