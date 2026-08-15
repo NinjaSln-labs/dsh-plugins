@@ -43,5 +43,16 @@ dsh plugin add dsh-session-health
 
 - **价格变更**：更新 `pricing/deepseek.json`（同步自 https://api-docs.deepseek.com/quick_start/pricing/，中英双页），同时更新 `updatedAt`
 - **客户端 bundle**：改 `src/client.tsx` 后必须 `npm run build`（tsc + esbuild `__ModuleLoader__` 工厂格式）；host 与 client 变更都需要重启 dsh + 刷新浏览器
-- **发布流程**：`npm run build && npm run smoke && npm run mount && node scripts/client-mount.mjs` → 提交推送 → `npm publish --access public`（需 bypass-2fa token 或 2FA）
-- **安全**：token 用完即吊销
+- **发布流程（CI 自动发布 + 人工审批门）**：
+  ```sh
+  cd dsh-session-health
+  npm version patch -m "chore: release v%s"   # 自动提交 + 打 tag session-health-vX.Y.Z
+  git push && git push --tags                  # CI（.github/workflows/publish.yml）接手：
+                                               #   验证链（build/typecheck/smoke/mount/client-mount）
+                                               #   → tag 版本一致性守卫 → 等你在 GitHub 批准
+                                               #   （environment npm-publish, required reviewers）
+                                               #   → npm publish
+  ```
+  应急手动发布（CI 不可用时）：`npm run build && npm run smoke && npm run mount && node scripts/client-mount.mjs && npm publish --access public`（本机 npm 登录态）
+- **一次性配置（CI 首次使用前）**：npm granular access token（仅授权 `dsh-session-health` 包）→ GitHub secrets `NPM_TOKEN`；GitHub Environments 建 `npm-publish` 并设 Required reviewers（自己）——**token 绝不进聊天/对话**
+- **安全**：token 存 GitHub secrets；怀疑泄露时 secrets 一键轮换；workflow 权限最小化（contents: read，token 仅注入 publish 步骤）

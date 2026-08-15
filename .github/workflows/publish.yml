@@ -1,0 +1,73 @@
+# dsh-session-health 发布工作流（人工审批门）
+#
+# 安全模型：
+# - 触发 = 本机人工创建的 tag（session-health-vX.Y.Z），发布决策永远是人的决定
+# - 权限最小化：workflow 仅 contents: read；NPM_TOKEN 只注入 publish 步骤的 env
+# - token = npm granular access token（仅授权 dsh-session-health 包），存 GitHub secrets
+# - 审批门：environment `npm-publish` + required reviewers——CI 全自动跑完验证后，
+#   需仓库管理员在 GitHub 页面批准才真正执行 npm publish
+# - 版本一致性守卫：tag 版本必须与 package.json version 完全一致，防误发/伪造 tag
+# - actions 按 SHA 固定，防 action 供应链投毒
+#
+# 一次性配置（发布前必须完成）：
+# 1. npm（https://www.npmjs.com/settings/<user>/tokens）→ Generate New Token →
+#    Granular Access Token → Packages 勾选 dsh-session-health（Read and write）→ Automation
+# 2. GitHub 仓库 Settings → Secrets and variables → Actions →
+#    New repository secret → 名称 NPM_TOKEN，粘贴上述 token（不要发到聊天里）
+# 3. GitHub 仓库 Settings → Environments → New environment → 名称 npm-publish →
+#    Protection rules → Required reviewers → 选择你自己
+#
+# 发布流程（日常）：
+#   cd dsh-plugins/dsh-session-health
+#   npm version patch -m "chore: release v%s"     # 自动提交 + 打 tag
+#   git push && git push --tags                    # CI 接手：验证链 → 等你在 GitHub 批准 → publish
+name: publish
+
+on:
+  push:
+    tags:
+      - 'session-health-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    defaults:
+      run:
+        working-directory: dsh-session-health
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Guard: tag version matches package.json
+        run: |
+          EXPECTED="refs/tags/session-health-v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF" != "$EXPECTED" ]; then
+            echo "::error::tag/version mismatch: $GITHUB_REF vs $EXPECTED"
+            exit 1
+          fi
+      - name: Install
+        run: npm ci
+      - name: Verify (build + typecheck + smoke + mount + client-mount)
+        run: |
+          npm run build
+          npm run typecheck
+          npm run smoke
+          npm run mount
+          node scripts/client-mount.mjs
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
