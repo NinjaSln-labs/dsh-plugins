@@ -22,11 +22,11 @@
 
 1. **确定 provider**：显式 `provider` 参数优先，否则取调用方代理自己的路由（`parent.options.provider`）。需要 `llm` 服务。
 2. **任务分档**：`trivial`（短任务，≤160 字符且无重标记）、`complex`（≥1200 字符，或含代码块 / 结构化输出诉求 / 推理动词如 analyze、design、debug、refactor、evaluate），其余为 `standard`。
-3. **从目录选模型**：按命名打分 —— 强信号（`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`）+1，廉价信号（`flash` / `mini` / `lite` / `fast` / `small` / `quick` / `nano` / `light`）−1。`trivial` 取最低分，`complex` 取最高分，`standard` 取第一个 0 分 id（同分保持目录顺序）。
-4. **可审计**：每次 auto 调用都会在工具结果里记录 `auto: { provider, model, tier, reason }`，渲染文本带 `[auto]` 行与理由 —— 随时可以问「为什么选它」。
-5. **失败升级**（`autoEscalate`，仅前台调用）：运行失败后用下一档重试一次（`trivial → standard → complex`），重试结果记录 `escalatedFrom`。后台/continuable 调用不升级（调用点看不到失败结果）；目录里没有可区分的高一档模型时不升级。
+3. **默认锚定父模型**：调用方代理的 options 在解析出的 provider 上命名了模型时，就用它 —— `trivial`/`standard` 任务无条件使用，`complex` 任务在父模型已算强模型（`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`）时也保留。只有两种情况回退到目录打分选型（强信号 +1、廉价信号 `flash`/`mini`/`lite`/`fast`/`small`/`quick`/`nano`/`light` −1；`trivial` 取最低分、`complex` 取最高分、`standard` 取第一个 0 分）：父没有命名模型，或任务是 `complex` 且父模型不够强（此时取目录最强模型）。显式 `provider` 与父路由不同时同样丢弃锚点（父模型不再属于该分组）。
+4. **可审计**：每次 auto 调用都会在工具结果里记录 `auto: { provider, model, tier, reason, anchored? }`，渲染文本带 `[auto]` 行（保留父模型时带 `anchored` 标记）与理由 —— 随时可以问「为什么选它」。
+5. **失败升级**（`autoEscalate`，仅前台调用）：运行失败后用下一档重试一次（`trivial → standard → complex`），但仅当该选择**严格更强**于当前模型时才升级 —— 锚定的强父模型永远不会被降级。重试结果记录 `escalatedFrom`。后台/continuable 调用不升级（调用点看不到失败结果）；目录里没有严格更强的高一档模型时不升级。
 
-策略刻意保守：任务看起来有实质内容就默认上强模型，只有明显琐碎的任务才用廉价模型，并且从不隐藏自己的决策理由。
+策略刻意保守：默认沿用调用方自己的模型，只有任务明显超出弱父模型能力时才升级，并且从不隐藏自己的决策理由。
 
 ## 安装
 
@@ -67,7 +67,7 @@ bundle 只插入一行组合（`subagent-model-picker`）。它消费 host 的 `
 
 1. `subagent_models` → 列出 `deepseek-official`（含其目录）与所有 pi-ai 路由。
 2. `subagent_model` 传 `{ description: "对比定价", prompt: "...", provider: "deepseek-official", model: "deepseek-r1", max_tokens: 4000 }` → 子代理在该路由上运行并返回结果。
-3. `subagent_model` 传 `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → 自动策略为琐碎任务挑选目录中最便宜的模型，并记录 `[auto] ...` 及其理由。
+3. `subagent_model` 传 `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → 若调用方自己的模型属于该 provider，则沿用父模型（`[auto]` 行带 `anchored` 标记）；否则回退到目录选型并记录 `[auto] ...` 及其理由。
 4. 省略 `provider`/`model` 即让子代理沿用你自己的路由。
 
 ## 开发

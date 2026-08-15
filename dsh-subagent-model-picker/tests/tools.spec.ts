@@ -100,6 +100,13 @@ const fakeAgentWithRoute = {
   options: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
 } as never
 
+/** A parent running a strong model on its own route. */
+const fakeAgentOnPro = {
+  id: 'parent-2',
+  ctx: undefined,
+  options: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+} as never
+
 async function setup(config: ModelPickerConfig = {}, options: {
   routes?: Array<{ id: string; name: string; models: Array<{ id: string; name: string }>; error?: string }>
   withLlm?: boolean
@@ -472,5 +479,70 @@ describe('dsh-subagent-model-picker auto selection (model "auto")', () => {
     expect(result.isError).toBe(true)
     expect(provider.starts).toHaveLength(1)
     expect(text(result)).toContain('subagent run failed')
+  })
+
+  it('anchors to the parent model for trivial tasks on the parent route', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentOnPro)
+    expect(result.isError).toBe(false)
+    expect(provider.starts[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    expect(text(result)).toContain('[auto] provider=deepseek-official model=deepseek-v4-pro tier=trivial anchored')
+    expect(text(result)).toContain("defaulted to the parent's own model")
+  })
+
+  it('upgrades from a weak parent model when the task is heavy', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'deep code review',
+      prompt: '```ts\nfunction f() { return 1 }\n```\nAnalyze this code, design a refactor, and evaluate the complexity tradeoffs in depth.',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(provider.starts[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    expect(text(result)).toContain('upgraded from the parent')
+  })
+
+  it('keeps a strong parent model even for heavy tasks', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'deep code review',
+      prompt: '```ts\nfunction f() { return 1 }\n```\nAnalyze this code, design a refactor, and evaluate the complexity tradeoffs in depth.',
+      model: 'auto',
+    }, fakeAgentOnPro)
+    expect(result.isError).toBe(false)
+    expect(provider.starts[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    expect(text(result)).toContain('anchored')
+  })
+
+  it('does not downgrade when escalating from an anchored strong parent model', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    provider.failFirstCount = 1
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentOnPro)
+    expect(result.isError).toBe(true)
+    expect(provider.starts).toHaveLength(1)
+    expect(text(result)).toContain('subagent run failed')
+  })
+
+  it('escalates from an anchored weak parent model to the next tier', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    provider.failFirstCount = 1
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(provider.starts).toHaveLength(2)
+    expect(provider.starts[0]!.agentOptions.model).toBe('deepseek-v4-flash')
+    expect(provider.starts[1]!.agentOptions.model).toBe('deepseek-v4-std')
+    expect(text(result)).toContain('escalated from deepseek-v4-flash')
   })
 })

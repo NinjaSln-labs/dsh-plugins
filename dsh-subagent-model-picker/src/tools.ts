@@ -3,10 +3,11 @@
  *
  * `subagent_model`: delegation with per-call provider / model / max_tokens.
  * Passing `model: "auto"` delegates model choice to the built-in auto policy:
- * the task is classified into a tier (trivial / standard / complex), a model
- * is picked from the resolved provider's catalog, and the decision with its
- * reason is recorded on the tool result. Foreground calls retry once on the
- * next tier up after a failed run (`autoEscalate`).
+ * it anchors to the calling agent's own model by default, upgrades to a
+ * stronger catalog model only when the task is heavy and the parent model is
+ * not a strong one, and records the decision with its reason on the result.
+ * Foreground calls retry once on the next tier up after a failed run
+ * (`autoEscalate`), never downgrading.
  * `subagent_models`: read-only catalog of live LLM provider routes and their
  * model listings (advisory; catalog membership never gates requests — it only
  * informs the delegating model).
@@ -92,6 +93,8 @@ type AutoDecision = {
   readonly reason: string
   /** Set when the foreground run failed and the retry escalated tiers. */
   readonly escalatedFrom?: string
+  /** Set when the choice stayed on the calling agent's own model. */
+  readonly anchored?: boolean
 }
 
 /** A resolved auto selection plus its optional one-step escalation target. */
@@ -170,8 +173,9 @@ const NEXT_TIER: Record<AutoTier, AutoTier | undefined> = {
 /** Append the audit line for an auto decision to a tool render. */
 function autoRender(auto: AutoDecision | undefined): string {
   if (auto === undefined) return ''
+  const anchor = auto.anchored === true ? ' anchored' : ''
   const escalation = auto.escalatedFrom === undefined ? '' : ` (escalated from ${auto.escalatedFrom})`
-  return `\n[auto] provider=${auto.provider} model=${auto.model} tier=${auto.tier}${escalation}\nreason: ${auto.reason}`
+  return `\n[auto] provider=${auto.provider} model=${auto.model} tier=${auto.tier}${anchor}${escalation}\nreason: ${auto.reason}`
 }
 
 /** Output-schema fragment for the auditable auto decision. */
@@ -184,12 +188,22 @@ const AUTO_SCHEMA = {
     tier: { type: 'string', required: true },
     reason: { type: 'string', required: true },
     escalatedFrom: { type: 'string' },
+    anchored: { type: 'boolean' },
   },
 } as const
 
 /**
  * Resolve `model: "auto"` against the provider catalog. The provider is the
  * explicit argument, else the calling agent's own route (`parent.options`).
+ *
+ * The choice is ANCHORED to the calling agent by default: when the parent's
+ * options name a model on the resolved provider, that model is used as-is
+ * unless the task classifies `complex` and the parent's model is not a strong
+ * one (then the strongest catalog model is picked). Only when no parent model
+ * is available does the policy fall back to catalog tier picks. Escalation
+ * never downgrades: the next tier is used only when it scores strictly
+ * stronger than the current choice.
+ *
  * Catalog membership is advisory, so the resolved id is only a pick: the
  * provider still owns rejection, exactly as with an explicit model.
  */
@@ -197,6 +211,7 @@ async function resolveAutoSelection(
   ctx: Context,
   args: { readonly provider?: string; readonly description: string; readonly prompt: string },
   parentProvider: string | undefined,
+  parentModel: string | undefined,
   toolName: string,
 ): Promise<AutoSelection> {
   const llm = ctx.get('llm')
@@ -224,21 +239,43 @@ async function resolveAutoSelection(
     throw new Error(`${toolName}: model "auto" could not list models for provider "${provider}": ${String(cause)}`)
   }
   const tier = classifyTier(args.description, args.prompt)
-  const picked = pickModel(models, tier)
-  if (picked === undefined) {
+  // The anchor is the parent's own model, valid only on the parent's own
+  // provider — an explicit `provider` argument switches groups, so the
+  // parent's model no longer belongs there.
+  const anchor = parentModel !== undefined && parentModel.length > 0 && parentProvider === provider
+    ? parentModel
+    : undefined
+  const anchorScore = anchor === undefined ? undefined : modelScore(anchor)
+  let pick: { id: string; score: number } | undefined
+  let anchored = false
+  if (anchor !== undefined && (tier !== 'complex' || anchorScore! >= 1)) {
+    // Default: stay on the calling agent's own model.
+    pick = { id: anchor, score: anchorScore! }
+    anchored = true
+  } else {
+    pick = pickModel(models, tier)
+  }
+  if (pick === undefined) {
     throw new Error(`${toolName}: model "auto": provider "${provider}" advertises no models`)
   }
+  const reason = anchored
+    ? `auto policy: task classified "${tier}" (${tierNote(tier)}); defaulted to the parent's own model "${pick.id}" on provider "${provider}"`
+    : anchor !== undefined
+      ? `auto policy: task classified "${tier}" (${tierNote(tier)}); upgraded from the parent's model "${anchor}" to "${pick.id}" on provider "${provider}"`
+      : `auto policy: task classified "${tier}" (${tierNote(tier)}), picked "${pick.id}" from provider "${provider}"`
   const decision: AutoDecision = {
     provider,
-    model: picked.id,
+    model: pick.id,
     tier,
-    reason: `auto policy: task classified "${tier}" (${tierNote(tier)}), picked "${picked.id}" from provider "${provider}"`,
+    reason,
+    ...anchored ? { anchored: true } : {},
   }
   const nextTier = NEXT_TIER[tier]
   let escalation: { id: string; tier: AutoTier; reason: string } | undefined
   if (nextTier !== undefined) {
     const escalationPick = pickModel(models, nextTier)
-    if (escalationPick !== undefined && escalationPick.id !== picked.id) {
+    // Never downgrade: escalate only to a strictly stronger model.
+    if (escalationPick !== undefined && escalationPick.id !== pick.id && escalationPick.score > pick.score) {
       escalation = {
         id: escalationPick.id,
         tier: nextTier,
@@ -314,9 +351,10 @@ export function registerModelPickerTools(ctx: Context, config: Required<ModelPic
       + 'does not have to inherit this agent\'s model: pass `provider` (an LLM provider route) and `model` '
       + '(a model id that provider accepts) to run the child on any registered model; omitted fields '
       + 'inherit this agent\'s route. Pass `model: "auto"` to delegate model choice to the built-in auto '
-      + 'policy: it classifies the task (trivial / standard / complex), picks a matching model from the '
-      + 'provider\'s catalog, records the decision with its reason on the result, and retries once on the '
-      + 'next tier after a failed foreground run. Query `' + config.modelsToolName + '` for the live provider '
+      + 'policy: it defaults to this agent\'s own model when one is named (anchored), upgrades to the '
+      + 'strongest catalog model only when the task is heavy and the parent model is not a strong one, '
+      + 'records the decision with its reason on the result, and retries once on the next tier after a '
+      + 'failed foreground run. Query `' + config.modelsToolName + '` for the live provider '
       + 'routes and their model catalogs before choosing. The child returns its result, not its '
       + 'intermediate steps. Give it a complete, standalone prompt: it does not see this conversation.'
       + (backgroundEnabled
@@ -341,7 +379,7 @@ export function registerModelPickerTools(ctx: Context, config: Required<ModelPic
       },
       model: {
         type: 'string',
-        description: 'Model id the child runs on (e.g. deepseek-v4-flash), or `"auto"` to let the built-in auto policy pick from the provider\'s catalog (requires the llm service; chooses by task tier and records its reason on the result). Defaults to this agent\'s model. Must be a model the chosen provider accepts; query ' + config.modelsToolName + ' for the provider\'s catalog.',
+        description: 'Model id the child runs on (e.g. deepseek-v4-flash), or `"auto"` to let the built-in auto policy choose (requires the llm service): it defaults to this agent\'s own model, upgrading to a stronger catalog model only for heavy tasks on a weak parent model, and records its reason on the result. Defaults to this agent\'s model. Must be a model the chosen provider accepts; query ' + config.modelsToolName + ' for the provider\'s catalog.',
       },
       max_tokens: {
         type: 'integer',
@@ -422,7 +460,13 @@ export function registerModelPickerTools(ctx: Context, config: Required<ModelPic
         if (!enableAuto) {
           throw new Error(`${config.toolName}: model "auto" is disabled on this instance (enableAuto: false)`)
         }
-        autoSelection = await resolveAutoSelection(ctx, args, parent.options?.provider, config.toolName)
+        autoSelection = await resolveAutoSelection(
+          ctx,
+          args,
+          parent.options?.provider,
+          parent.options?.model,
+          config.toolName,
+        )
         agentOptions.provider = autoSelection.decision.provider
         agentOptions.model = autoSelection.decision.model
       } else {

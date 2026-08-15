@@ -22,11 +22,11 @@ Delegating model choice to a deterministic, auditable policy — no extra LLM ca
 
 1. **Resolve the provider**: the explicit `provider` argument, else the calling agent's own route (`parent.options.provider`). Requires the `llm` service.
 2. **Classify the task** into a tier: `trivial` (short task, ≤160 chars, no heavy markers), `complex` (≥1200 chars, or code fences / structured-output asks / reasoning verbs like analyze, design, debug, refactor, evaluate), else `standard`.
-3. **Pick a model** from the provider's advertised catalog by naming score: +1 for strong signals (`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`), −1 for cheap signals (`flash` / `mini` / `lite` / `fast` / `small` / `quick` / `nano` / `light`). `trivial` takes the lowest score, `complex` the highest, `standard` the first neutral-scoring id (ties keep catalog order).
-4. **Audit**: every auto call records `auto: { provider, model, tier, reason }` on the tool result, and the rendered text carries a `[auto]` line with the reason — you can always ask why that model.
-5. **Escalate on failure** (`autoEscalate`, foreground calls only): if the run fails, retry once with the next tier up (`trivial → standard → complex`); the retry result reports `escalatedFrom`. Background/continuable calls skip escalation (the failure is not visible to the call site), and a provider whose catalog has no distinct next-tier model escalates to nothing.
+3. **Anchor to the parent by default**: when the calling agent's options name a model on the resolved provider, that model is the choice — for `trivial`/`standard` tasks always, and for `complex` tasks when it already scores as a strong model (`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`). Only two situations fall back to catalog picks (naming score: strong signals +1, cheap signals `flash`/`mini`/`lite`/`fast`/`small`/`quick`/`nano`/`light` −1; `trivial` takes the lowest, `complex` the highest, `standard` the first neutral): the parent names no model, or the task is `complex` and the parent's model is not a strong one (then the strongest catalog model is picked). An explicit `provider` that differs from the parent's route also drops the anchor (the parent's model no longer belongs to that group).
+4. **Audit**: every auto call records `auto: { provider, model, tier, reason, anchored? }` on the tool result, and the rendered text carries a `[auto]` line (with an `anchored` mark when the parent's own model was kept) — you can always ask why that model.
+5. **Escalate on failure** (`autoEscalate`, foreground calls only): if the run fails, retry once with the next tier up (`trivial → standard → complex`) — but only when that pick scores **strictly stronger** than the current choice, so escalation never downgrades an anchored strong parent model. The retry result reports `escalatedFrom`. Background/continuable calls skip escalation (the failure is not visible to the call site), and a provider whose catalog has no strictly stronger next-tier model escalates to nothing.
 
-The policy is deliberately conservative: it defaults to a strong model whenever the task looks substantive, saves the cheap model for obviously trivial work, and never hides its reasoning.
+The policy is deliberately conservative: it stays on the calling agent's own model by default, upgrades only when the task clearly demands more than a weak parent model can offer, and never hides its reasoning.
 
 ## Install
 
@@ -67,7 +67,7 @@ Example row:
 
 1. `subagent_models` → lists `deepseek-official` (with its catalog) and any pi-ai routes.
 2. `subagent_model` with `{ description: "compare pricing", prompt: "...", provider: "deepseek-official", model: "deepseek-r1", max_tokens: 4000 }` → runs the child on that exact route and returns its output.
-3. `subagent_model` with `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → the auto policy picks the cheapest catalog model for the trivial task and records `[auto] ...` with its reason.
+3. `subagent_model` with `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → stays on the calling agent's own model when it belongs to that provider (anchored, marked `anchored` in the `[auto]` line); otherwise the auto policy falls back to catalog picks and records `[auto] ...` with its reason.
 4. Omit `provider`/`model` to keep the child on your own route.
 
 ## Development
