@@ -1,6 +1,6 @@
-# dsh-subagent-model-picker
+# dsh-subagent-router
 
-让 subagent 自由选用模型的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件。自带的 `subagent` 工具只会继承父级模型路由；本插件新增一个姊妹工具，让委派模型在每次调用时自行挑选子代理的 LLM **provider**、**model** 与 **输出上限** —— 而委派的其他一切（深度核算、委派策略、continuable 后台子代理、结果收集）仍然完全走标准的 `ctx.subagents` 通道。
+为 subagent 委派做模型路由的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件。自带的 `subagent` 工具只会继承父级模型路由；本插件新增一个姊妹工具，让委派模型在每次调用时自行挑选子代理的 LLM **provider**、**model** 与 **输出上限**（或把选择交给内置的 `model: "auto"` 路由策略）—— 而委派的其他一切（深度核算、委派策略、continuable 后台子代理、结果收集）仍然完全走标准的 `ctx.subagents` 通道。
 
 ## 工具
 
@@ -31,10 +31,10 @@
 ## 安装
 
 ```bash
-dsh plugin add dsh-subagent-model-picker
+dsh plugin add dsh-subagent-router
 ```
 
-bundle 只插入一行组合（`subagent-model-picker`）。它消费 host 的 `tools` / `subagents` / `llm` 注册表且不发布任何服务，所以属于 host 平面（或 preset 的自由行），不需要 isolate realm。
+bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools` / `subagents` / `llm` 注册表且不发布任何服务，所以属于 host 平面（或 preset 的自由行），不需要 isolate realm。
 
 ## 配置
 
@@ -55,8 +55,8 @@ bundle 只插入一行组合（`subagent-model-picker`）。它消费 host 的 `
 示例行：
 
 ```yaml
-- id: subagent-model-picker
-  name: 'dsh-subagent-model-picker'
+- id: subagent-router
+  name: 'dsh-subagent-router'
   config:
     subagentProvider: spawn
     toolName: subagent_model

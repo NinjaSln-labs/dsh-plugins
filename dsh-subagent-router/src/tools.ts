@@ -1,5 +1,5 @@
 /**
- * dsh-subagent-model-picker — model-facing tools.
+ * dsh-subagent-router — model-facing tools.
  *
  * `subagent_model`: delegation with per-call provider / model / max_tokens.
  * Passing `model: "auto"` delegates model choice to the built-in auto policy:

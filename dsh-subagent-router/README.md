@@ -1,6 +1,6 @@
-# dsh-subagent-model-picker
+# dsh-subagent-router
 
-Model-chosen subagent delegation for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). The shipped `subagent` tool inherits the parent's model route; this plugin adds a sibling tool that lets the delegating model pick the child's LLM **provider**, **model**, and **output cap** per call — while everything else about the delegation (depth accounting, delegation policy, continuable background children, results) stays exactly on the standard `ctx.subagents` seam.
+Model-routed subagent delegation for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). The shipped `subagent` tool inherits the parent's model route; this plugin adds a sibling tool that lets the delegating model pick the child's LLM **provider**, **model**, and **output cap** per call (or hand the choice to the built-in `model: "auto"` routing policy) — while everything else about the delegation (depth accounting, delegation policy, continuable background children, results) stays exactly on the standard `ctx.subagents` seam.
 
 ## Tools
 
@@ -31,10 +31,10 @@ The policy is deliberately conservative: it stays on the calling agent's own mod
 ## Install
 
 ```bash
-dsh plugin add dsh-subagent-model-picker
+dsh plugin add dsh-subagent-router
 ```
 
-The bundle inserts one composition row (`subagent-model-picker`). It consumes the host `tools` / `subagents` / `llm` registries and publishes nothing, so it belongs on the host plane (or in a preset's loose rows) and needs no isolate realm.
+The bundle inserts one composition row (`subagent-router`). It consumes the host `tools` / `subagents` / `llm` registries and publishes nothing, so it belongs on the host plane (or in a preset's loose rows) and needs no isolate realm.
 
 ## Configuration
 
@@ -55,8 +55,8 @@ All fields optional, via the composition row's `config`:
 Example row:
 
 ```yaml
-- id: subagent-model-picker
-  name: 'dsh-subagent-model-picker'
+- id: subagent-router
+  name: 'dsh-subagent-router'
   config:
     subagentProvider: spawn
     toolName: subagent_model
