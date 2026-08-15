@@ -13,11 +13,13 @@
  *                   adapter accepts arbitrary ids, pi-ai validates configured
  *                   ones — so the provider itself owns model rejection).
  *   - `max_tokens`— per-child output cap (positive integer).
- *   - `model: "auto"`— built-in auto selection: the tool classifies the task
- *                   (trivial / standard / complex), picks a model from the
- *                   provider's catalog, records the decision with its reason
- *                   on the result, and retries once on the next tier after a
- *                   failed foreground run (`enableAuto` / `autoEscalate`).
+ *   - `model: "auto"`— built-in auto selection: anchored to the calling
+ *                   agent's own model by default (upgrades to the strongest
+ *                   catalog model only when the task is heavy and the parent
+ *                   model is not a strong one), records the decision with its
+ *                   reason on the result, and retries once on the next tier
+ *                   after a failed foreground run (`enableAuto` /
+ *                   `autoEscalate`; escalation never downgrades).
  *
  * The child still runs through the ordinary `ctx.subagents` seam
  * (`resolveChildAgentOptions` merges per-child overrides over the parent's

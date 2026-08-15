@@ -19,3 +19,10 @@ Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-a
 - Discover: [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic on this repo
 - Keep repos sanitized: no local paths, no secrets, noreply git email
 - READMEs are bilingual: `README.md` (English) + `README.zh.md` (中文)
+
+## Development Process (mandatory)
+
+**All plugin development must follow the agile iteration process**: [DEVELOPMENT.md](./DEVELOPMENT.md)
+
+- User stories first (experience-driven) → one feature per iteration → Definition of Done all green before shipping → ship & try immediately → retrospective
+- Dynamic-plugin pitfall cheatsheet in the appendix (client-half completeness, sandbox-banned globals, contract preflight, event formats, etc.)
