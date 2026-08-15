@@ -30,18 +30,25 @@ class ScriptedProvider implements SubagentProvider {
   readonly capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
   starts: Array<Record<string, unknown>> = []
   reply = 'child says hi'
+  /** The first N starts fail with stopReason 'error' (before the reply). */
+  failFirstCount = 0
+  private startsMade = 0
 
   constructor(readonly name: string) {}
 
   start(request: never) {
     this.starts.push(request as unknown as Record<string, unknown>)
+    const index = this.startsMade++
+    const result: Promise<SubagentResult> = index < this.failFirstCount
+      ? Promise.resolve({ output: [], stopReason: 'error' } satisfies SubagentResult)
+      : Promise.resolve({
+          output: [{ type: 'text', text: this.reply }],
+          stopReason: 'completed',
+        } satisfies SubagentResult)
     const run: SubagentRun = {
       id: `scripted-${this.name}` as never,
       localAgent: undefined as never,
-      result: Promise.resolve({
-        output: [{ type: 'text', text: this.reply }],
-        stopReason: 'completed',
-      } satisfies SubagentResult),
+      result,
       dispose: async () => {},
     }
     return run
@@ -49,7 +56,12 @@ class ScriptedProvider implements SubagentProvider {
 }
 
 /** Minimal fake `llm` route registry (no network, no adapters). */
-function fakeLlm(routes: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>) {
+function fakeLlm(routes: Array<{
+  id: string
+  name: string
+  models: Array<{ id: string; name: string }>
+  error?: string
+}>) {
   return {
     listProviders() {
       return routes.map(({ id, name }) => ({ id, name }))
@@ -57,6 +69,7 @@ function fakeLlm(routes: Array<{ id: string; name: string; models: Array<{ id: s
     async listModels(provider: string) {
       const route = routes.find(candidate => candidate.id === provider)
       if (route === undefined) throw new Error(`no route "${provider}"`)
+      if (route.error !== undefined) throw new Error(route.error)
       return route.models.map(model => ({ provider, id: model.id, name: model.name }))
     },
   } as never
@@ -67,8 +80,28 @@ const DEFAULT_ROUTES = [
   { id: 'pi-ai-cn', name: 'PI AI CN', models: [{ id: 'pi-3-mini', name: 'PI 3 Mini' }] },
 ]
 
+/** Three strength tiers so auto escalation has a distinct target. */
+const AUTO_ROUTES = [
+  {
+    id: 'deepseek-official',
+    name: 'DeepSeek',
+    models: [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
+      { id: 'deepseek-v4-std', name: 'DeepSeek V4 Std' },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
+    ],
+  },
+]
+
+/** A parent whose options name its own provider route. */
+const fakeAgentWithRoute = {
+  id: 'parent-1',
+  ctx: undefined,
+  options: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+} as never
+
 async function setup(config: ModelPickerConfig = {}, options: {
-  routes?: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>
+  routes?: Array<{ id: string; name: string; models: Array<{ id: string; name: string }>; error?: string }>
   withLlm?: boolean
   providerName?: string
 } = {}) {
@@ -302,5 +335,142 @@ describe('dsh-subagent-model-picker catalog tool', () => {
       providers: [],
       note: 'llm service unavailable on this harness',
     })
+  })
+})
+
+describe('dsh-subagent-model-picker auto selection (model "auto")', () => {
+  it('picks the cheapest model for a trivial task and records the audit line', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'deepseek-official',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(false)
+    expect(provider.starts[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    expect(text(result)).toContain('child says hi')
+    expect(text(result)).toContain('[auto] provider=deepseek-official model=deepseek-v4-flash tier=trivial')
+    expect(text(result)).toContain('auto policy:')
+  })
+
+  it('picks the strongest model for a code-heavy task', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'deep code review',
+      prompt: '```ts\nfunction f() { return 1 }\n```\nAnalyze this code, design a refactor, and evaluate the complexity tradeoffs in depth.',
+      provider: 'deepseek-official',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(false)
+    expect(provider.starts[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    expect(text(result)).toContain('tier=complex')
+  })
+
+  it('resolves the provider from the calling agent options when provider is omitted', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(provider.starts[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+  })
+
+  it('fails when no provider route is resolvable', async () => {
+    const { ctx } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('needs a provider route')
+  })
+
+  it('fails when the provider catalog cannot be listed', async () => {
+    const { ctx } = await setup({
+    }, { routes: [{ id: 'broken', name: 'Broken', models: [], error: 'catalog boom' }] })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'broken',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('could not list models')
+    expect(text(result)).toContain('catalog boom')
+  })
+
+  it('fails when the provider advertises no models', async () => {
+    const { ctx } = await setup({}, { routes: [{ id: 'empty', name: 'Empty', models: [] }] })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'empty',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('advertises no models')
+  })
+
+  it('rejects model "auto" when auto selection is disabled', async () => {
+    const { ctx } = await setup({ enableAuto: false }, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'deepseek-official',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('enableAuto: false')
+  })
+
+  it('escalates once to the next tier after a failed foreground run', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    provider.failFirstCount = 1
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'deepseek-official',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(false)
+    expect(provider.starts).toHaveLength(2)
+    expect(provider.starts[0]!.agentOptions.model).toBe('deepseek-v4-flash')
+    expect(provider.starts[1]!.agentOptions.model).toBe('deepseek-v4-std')
+    expect(text(result)).toContain('child says hi')
+    expect(text(result)).toContain('escalated from deepseek-v4-flash')
+  })
+
+  it('reports when the escalated retry also fails', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    provider.failFirstCount = 2
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'deepseek-official',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(true)
+    expect(provider.starts).toHaveLength(2)
+    expect(text(result)).toContain(
+      'auto-chosen "deepseek-v4-flash" failed and the escalated retry on "deepseek-v4-std" also failed',
+    )
+  })
+
+  it('does not escalate when autoEscalate is disabled', async () => {
+    const { ctx, provider } = await setup({ autoEscalate: false }, { routes: AUTO_ROUTES })
+    provider.failFirstCount = 1
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      provider: 'deepseek-official',
+      model: 'auto',
+    }, fakeAgent)
+    expect(result.isError).toBe(true)
+    expect(provider.starts).toHaveLength(1)
+    expect(text(result)).toContain('subagent run failed')
   })
 })
