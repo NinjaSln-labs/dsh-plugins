@@ -53,8 +53,10 @@ ctx.provide('webServer', {
 ctx.provide('sessionQuery', {
   listEvents: async () => [],
   listSessions: async () => [
-    { header: { id: 's1', createdAt: 100 }, live: true, persisted: true },
-    { header: { id: 's2', createdAt: 200 }, live: false, persisted: true },
+    { header: { id: 's1', createdAt: 100, cwd: '/tmp/ws' }, live: true, persisted: true },
+    { header: { id: 's2', createdAt: 200, cwd: '/tmp/ws' }, live: false, persisted: true },
+    { header: { id: 'other-ws', createdAt: 300, cwd: '/elsewhere' }, live: false, persisted: true },
+    { header: { id: 'sub', createdAt: 400, cwd: '/tmp/ws', origin: 'subagent' }, live: false, persisted: true },
   ],
   readTitleSnapshots: async ids => ids.map(id => ({ sessionId: id, status: 'fulfilled', value: { title: { title: `标题-${id}` } } })),
 })
@@ -139,11 +141,12 @@ try {
   assert.equal(res.status, 200)
   const payload = JSON.parse(res.body)
   assert.equal(payload.ok, true)
-  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s2', 's1']) // same tier → newest first
+  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s2', 's1']) // workspace-filtered, same tier → newest first
+  assert.equal(payload.result.sessions.length, 2, 'other-workspace + subagent sessions are filtered out')
   assert.equal(payload.result.sessions[0].health.severity, 'yellow')     // cold session read the projection cache
   assert.equal(payload.result.sessions[0].title, '标题-s2')              // batch title path
   assert.equal(payload.result.sessions[1].health.severity, 'yellow')     // live session cut the registry snapshot
-  console.log('  ok  /session-health-rpc route registered + overview handler runs')
+  console.log('  ok  /session-health-rpc route registered + overview handler runs (workspace-filtered)')
 
   console.log('\nmount smoke passed')
   process.exit(0)

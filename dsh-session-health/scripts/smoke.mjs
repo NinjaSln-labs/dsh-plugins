@@ -614,6 +614,39 @@ await check('overview: absent sessionQuery degrades to empty list', async () => 
   assert.deepEqual(await buildOverview({ get: () => undefined }, signal), [])
 })
 
+await check('overview: workspace + top-level filtering matches the sidebar', async () => {
+  // Workspace root configured: only top-level sessions under it survive.
+  const wsServices = {
+    ...overviewServices,
+    sandboxPolicy: { workspaceRoot: '/ws' },
+    sessionQuery: {
+      listSessions: async () => [
+        { header: { id: 'in-ws', createdAt: 1, cwd: '/ws' }, live: false, persisted: true },
+        { header: { id: 'in-ws-sub', createdAt: 2, cwd: '/ws/sub', origin: 'subagent' }, live: false, persisted: true },
+        { header: { id: 'out', createdAt: 3, cwd: '/other' }, live: false, persisted: true },
+        { header: { id: 'no-cwd', createdAt: 4 }, live: false, persisted: true },
+      ],
+      readTitleSnapshots: async () => [],
+    },
+  }
+  const rows = await buildOverview({ get: name => wsServices[name] }, signal)
+  assert.deepEqual(rows.map(r => r.id), ['in-ws'])
+  // No workspace root anywhere: the cwd cut degrades, top-level cut stays.
+  const noRoot = await buildOverview({ get: name => ({
+    ...overviewServices,
+    sandboxPolicy: undefined,
+    sessions: { get: () => undefined },
+    sessionQuery: {
+      listSessions: async () => [
+        { header: { id: 'a', createdAt: 1, cwd: '/x' }, live: false, persisted: true },
+        { header: { id: 'b', createdAt: 2, cwd: '/x', origin: 'subagent' }, live: false, persisted: true },
+      ],
+      readTitleSnapshots: async () => [],
+    },
+  })[name] }, signal)
+  assert.deepEqual(noRoot.map(r => r.id), ['a'])
+})
+
 await check('overview: one broken record degrades that row only', async () => {
   const brokenCtx = {
     get: name => ({
