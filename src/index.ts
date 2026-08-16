@@ -285,7 +285,7 @@ export class KnowledgeService extends Service {
     let expansion: KnowledgeSearchResult['expansion']
     let degraded: 'lexical' | null = null
     if (variants === null && expand && this.config.queryExpansion.enabled) {
-      const e = await this.expander.expand(query, opts.signal)
+      const e = await this.expander.expand(query, opts.signal, caller.stamps.workspaceId)
       variants = e.variants
       if (e.degraded) degraded = 'lexical'
       expansion = { used: true, source: e.source, degraded: e.degraded, latencyMs: e.latencyMs, variantsCount: variants.length }
@@ -364,7 +364,7 @@ const knowledgeSqlitePlugin = {
           enabled: config.queryExpansion?.enabled ?? true,
           model: config.queryExpansion?.model,
           maxOutputTokens: config.queryExpansion?.maxOutputTokens ?? 300,
-          timeoutMs: config.queryExpansion?.timeoutMs ?? 2500,
+          timeoutMs: config.queryExpansion?.timeoutMs ?? 3000,
           cache: config.queryExpansion?.cache ?? true,
         },
         retrieval: {
@@ -384,6 +384,10 @@ const knowledgeSqlitePlugin = {
         maxOutputTokens: resolved.queryExpansion.maxOutputTokens,
         timeoutMs: resolved.queryExpansion.timeoutMs,
         cache: resolved.queryExpansion.cache,
+      }, {
+        get: (wsId, norm) => store.getExpansion(wsId, norm),
+        set: (wsId, norm, variants) => store.setExpansion(wsId, norm, variants),
+        clear: () => store.clearExpansionCache(),
       })
       const service = new KnowledgeService(ctx, store, expander, resolved)
       // 注：cordis Service 构造器已通过 ctx.reflect.provide 注册 'knowledge'，勿再 ctx.provide

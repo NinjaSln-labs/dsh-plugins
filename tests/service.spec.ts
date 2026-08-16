@@ -20,6 +20,7 @@ interface BootOptions {
   llmTimeoutMs?: number
   llmFail?: boolean
   corpusPath?: string
+  dbPath?: string
 }
 
 async function boot(opts: BootOptions = {}) {
@@ -72,7 +73,7 @@ async function boot(opts: BootOptions = {}) {
   ctx.on('knowledge/updated', (p) => emitted.push({ event: 'knowledge/updated', payload: p }))
   ctx.on('knowledge/deleted', (p) => emitted.push({ event: 'knowledge/deleted', payload: p }))
 
-  const config: Record<string, unknown> = { databasePath: join(mkdtempSync(join(tmpdir(), 'knl-svc-')), 'k.sqlite') }
+  const config: Record<string, unknown> = { databasePath: opts.dbPath ?? join(mkdtempSync(join(tmpdir(), 'knl-svc-')), 'k.sqlite') }
   if (opts.corpusPath !== undefined) config.corpusPath = opts.corpusPath
   const fiber = ctx.plugin(knowledgeSqlite, config as never)
   await fiber.await()
@@ -259,6 +260,30 @@ describe('ask 门控', () => {
     // 通过 ctx.emit 触发 waterfall 验证监听器行为较复杂——直接验证工具注册 + 服务契约已覆盖；
     // 门控的运行时拒绝在 harness 挂载验证（approval=never 实测拒绝）。
     expect(app.service).toBeDefined()
+  })
+})
+
+describe('L1 扩展缓存持久化（0.1.5）', () => {
+  it('首次 live 扩展落库；新服务实例（同 DB 文件）同查询命中持久缓存，0 延迟', { timeout: 30000 }, async () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), 'knl-persist-')), 'k.sqlite')
+    app = await boot({ agent, dbPath })
+    await app.service._seedWrite({ content: '跨会话记忆 部署服务 检索演示', dedupeKey: 'persist-1' },
+      { workspaceId: '/ws/one', ownerId: 'sess-1', authorTier: 'explicit' })
+    const s1 = await app.service.search('部署服务怎么启动', {})
+    expect(s1.expansion?.used).toBe(true)
+    expect(s1.expansion?.source).toBe('live')
+    await app.dispose()
+    // 新服务实例（模拟进程重启）：内存缓存为空 → 持久层命中
+    app = await boot({ agent, dbPath })
+    const s2 = await app.service.search('部署服务怎么启动', {})
+    expect(s2.expansion?.used).toBe(true)
+    expect(s2.expansion?.source).toBe('cache')
+    expect(s2.expansion?.latencyMs).toBe(0)
+    // clear 语义：fresh 清空内存 + 持久层 → 同查询再次 live 扩展
+    const fresh = await app.service.probe('contract', { fresh: true })
+    expect(fresh.ok).toBe(true)
+    const s3 = await app.service.search('部署服务怎么启动', {})
+    expect(s3.expansion?.source).toBe('live')
   })
 })
 

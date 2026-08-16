@@ -68,6 +68,14 @@ const SCHEMA = `
   CREATE UNIQUE INDEX IF NOT EXISTS idx_items_dedupe ON items(workspace_id, scope, dedupe_key);
   CREATE VIRTUAL TABLE IF NOT EXISTS items_fts_base USING fts5(content, tokenize='trigram');
   CREATE VIRTUAL TABLE IF NOT EXISTS items_fts_rich USING fts5(content, tokenize='trigram');
+  -- L1 扩展缓存持久化（0.1.5）：按 workspace 隔离；跨进程/重启复用，命中 0 延迟零降级
+  CREATE TABLE IF NOT EXISTS expansion_cache (
+    ws_id      TEXT NOT NULL,
+    query      TEXT NOT NULL,
+    variants   TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (ws_id, query)
+  );
 `
 
 export class SqliteKnowledgeStore {
@@ -160,6 +168,38 @@ export class SqliteKnowledgeStore {
     const rows = this.db.prepare('SELECT dedupe_key, id FROM items WHERE dedupe_key IS NOT NULL').all() as Array<{ dedupe_key: string; id: string }>
     for (const r of rows) map.set(r.dedupe_key, r.id)
     return map
+  }
+
+  // ---------- L1 扩展缓存持久化（0.1.5） ----------
+  /** 读扩展缓存（按 workspace 隔离；不存在/坏数据 → null）。 */
+  getExpansion(wsId: string, normQuery: string): string[] | null {
+    if (this.closed) return null
+    const row = this.db.prepare('SELECT variants FROM expansion_cache WHERE ws_id = ? AND query = ?')
+      .get(wsId, normQuery) as { variants: string } | undefined
+    if (row === undefined) return null
+    try {
+      const v = JSON.parse(row.variants) as unknown
+      if (!Array.isArray(v)) return null
+      const valid = v.filter((x): x is string => typeof x === 'string' && x.length > 0)
+      return valid.length > 0 ? valid : null // 空/全非字符串 = 坏数据，按未命中
+    } catch {
+      return null // 坏数据按未命中处理，下次扩展覆盖
+    }
+  }
+
+  /** 写扩展缓存（upsert）。 */
+  setExpansion(wsId: string, normQuery: string, variants: string[]): void {
+    if (this.closed) return
+    this.db.prepare(`
+      INSERT INTO expansion_cache (ws_id, query, variants, updated_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(ws_id, query) DO UPDATE SET variants = excluded.variants, updated_at = excluded.updated_at
+    `).run(wsId, normQuery, JSON.stringify(variants), Date.now())
+  }
+
+  /** 清空扩展缓存（variance/fresh 语义：强制独立扩展）。 */
+  clearExpansionCache(): void {
+    if (this.closed) return
+    this.db.prepare('DELETE FROM expansion_cache').run()
   }
 
   // ---------- 授权（V1.11 读取面：workspace 本区 + session 属主 + global；写面由调用方打标） ----------
