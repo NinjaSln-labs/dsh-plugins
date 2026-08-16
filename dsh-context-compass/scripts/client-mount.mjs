@@ -48,7 +48,33 @@ assert.ok(!plugin.inject.includes('remote.sessionHealth'), 'a plugin Remote can 
 assert.ok(plugin.inject.includes('locale'), 'locale must be injected for the currency-by-region display')
 console.log('  ok  bundle registered via __ModuleLoader__ with apply/inject/name')
 
-// 2b) The compaction-aware merge helper is exported and correct.
+// 2b) The /compass report parser is exported and correct.
+const FULL_REPORT = [
+  '**建议在任务边界收尾**（健康度：**黄**）',
+  '上下文已占窗口 51%，早期内容开始被压缩；若剩余工作还多，开新会话更划算。',
+  '',
+  '详情：',
+  '- 会话规模：17 轮 / 28 条消息 / 303 条回复',
+  '- 每轮输入约 512K token（窗口 51%）；窗口 1M',
+  '- 缓存命中率 100%（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）',
+  '- 计费预期：约 ¥0.05/轮（≈$0.01；输入价 ¥1.5/M / $0.22 闲时价，缓存命中 ¥0.05/M / $0.007，不含输出）',
+  '',
+  '切换前检查：',
+  '- [x] 未提交变更：0 个',
+  '- [ ] 已 push：## main...origin/main [ahead 2]',
+].join('\n')
+const parsed = plugin.parseCompassReport(FULL_REPORT)
+assert.equal(parsed.severity, 'yellow')
+assert.equal(parsed.summary, '建议在任务边界收尾（健康度：黄）')
+assert.ok(parsed.reason.includes('上下文已占窗口 51%'))
+assert.equal(parsed.metrics.length, 4)
+assert.equal(parsed.checklist.length, 2)
+const junk = plugin.parseCompassReport('随便一段文本\n没有结构')
+assert.equal(junk.severity, null)
+assert.equal(junk.summary, '随便一段文本')
+console.log('  ok  parseCompassReport: severity/summary/metrics/checklist extraction')
+
+// 2c) The compaction-aware merge helper is exported and correct.
 const proj = {
   severity: 'yellow', advice: 'a', ratio: 0.6, total: 600_000, window: 1_000_000,
   turns: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
@@ -106,12 +132,13 @@ try {
   throw error
 }
 
-// 4) apply ran: the badge seat + the two overview seats were registered.
-assert.equal(seats.length, 3, 'apply must register exactly three slot seats')
+// 4) apply ran: the badge + two overview seats + the /compass card seat.
+assert.equal(seats.length, 4, 'apply must register exactly four slot seats')
 const byName = Object.fromEntries(seats.map(s => [s.name, s]))
 assert.ok(byName['conversation.session.header.utilities'], 'badge seat registered')
 assert.ok(byName['sidebar.footer.action'], 'overview opener seat registered')
 assert.ok(byName['shell.overlay'], 'overview panel seat registered')
+assert.ok(byName['conversation.chat.commandview'], 'commandview seat registered')
 // Each seat factory must produce a working slots.register call.
 const badgeReg = byName['conversation.session.header.utilities'].fn()
 assert.equal(badgeReg[0].id, 'session-health-dot')
@@ -121,7 +148,10 @@ assert.equal(footerReg[0].name, 'sidebar.footer.action')
 const overlayReg = byName['shell.overlay'].fn()
 assert.equal(overlayReg[0].id, 'session-health-overview-panel')
 assert.equal(overlayReg[0].name, 'shell.overlay')
-console.log('  ok  apply ran: badge + overview opener + overview panel seats registered')
+const cardReg = byName['conversation.chat.commandview'].fn()
+assert.equal(cardReg[0].name, 'conversation.chat.commandview')
+assert.equal(cardReg[0].key, 'compass')
+console.log('  ok  apply ran: badge + overview opener + overview panel + /compass card seats')
 
 // 5) The stylesheet was injected the client-modules way.
 assert.equal(styleTags.length, 1, 'apply must create exactly one style tag')

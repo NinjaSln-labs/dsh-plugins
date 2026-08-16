@@ -437,6 +437,7 @@ await check('projection: official pricing drives cny/usd money fields', () => {
   assert.equal(v.pricePeriod, 'offpeak')
 })
 
+
 /* ---------- /compass command handler ---------- */
 const cmdDef = healthCommandDefinition(ctx, config)
 await check('command: full report text', async () => {
