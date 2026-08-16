@@ -208,8 +208,6 @@ function HealthBadge(props: {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
   }
   locale: { snapshot: { active: string } }
-  /** Overview store: the badge feeds the current session id (workspace scope). */
-  store: OverviewStore
 }): JSX.Element {
   const [proj, setProj] = React.useState<SessionHealthProjection | undefined>(undefined)
   const [pressure, setPressure] = React.useState<ContextPressureLike | undefined>(undefined)
@@ -220,12 +218,6 @@ function HealthBadge(props: {
   const [costAsTokens, setCostAsTokens] = React.useState<boolean>(() => {
     try { return window.localStorage.getItem('dsh-session-health/costDisplay') === 'tokens' } catch { return false }
   })
-  // Feed the current session id into the shared overview store so the panel
-  // can scope its workspace query (the header slot is the one place the
-  // client knows the current session without a global getter).
-  React.useEffect(() => {
-    props.store.setCurrentSessionId(props.sessionId)
-  }, [props.sessionId, props.store])
   // 浮层消失延迟：徽章↔浮层的空隙由 .sh-tip::before 桥接，延迟兜底快速抖动；
   // 键盘聚焦（Tab 进徽章）也打开浮层，blur 移出子树才关闭。
   const hoverTimer = React.useRef<number | null>(null)
@@ -460,8 +452,6 @@ interface OverviewRowLike {
 /** External open-state store shared by the footer action and the overlay. */
 class OverviewStore {
   private open = false
-  /** The session the user currently has open (fed by the header badge). */
-  private currentSessionId: string | null = null
   private readonly listeners = new Set<() => void>()
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -473,12 +463,6 @@ class OverviewStore {
     this.open = open
     for (const listener of [...this.listeners]) listener()
   }
-  setCurrentSessionId(id: string): void {
-    if (this.currentSessionId === id) return
-    this.currentSessionId = id
-    for (const listener of [...this.listeners]) listener()
-  }
-  getCurrentSessionId = (): string | null => this.currentSessionId
 }
 
 const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
@@ -553,7 +537,6 @@ function OverviewBody(props: {
   locale: { snapshot: { active: string } }
 }): JSX.Element {
   const [rows, setRows] = React.useState<OverviewRowLike[] | null>(null)
-  const [workspacePath, setWorkspacePath] = React.useState<string | null>(null)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const closeRef = React.useRef<HTMLButtonElement | null>(null)
 
@@ -565,21 +548,15 @@ function OverviewBody(props: {
     let timer: number | null = null
     const load = async () => {
       try {
-        const currentSessionId = props.store.getCurrentSessionId()
         const res = await fetch('/session-health-rpc', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ method: 'overview', currentSessionId: currentSessionId ?? undefined }),
+          body: JSON.stringify({ method: 'overview' }),
         })
-        const json = (await res.json()) as {
-          ok?: boolean
-          error?: string
-          result?: { sessions?: OverviewRowLike[]; workspace?: { id?: string | null; path?: string | null } }
-        }
+        const json = (await res.json()) as { ok?: boolean; error?: string; result?: { sessions?: OverviewRowLike[] } }
         if (!alive) return
         if (json.ok === true && Array.isArray(json.result?.sessions)) {
           setRows(sortRows(json.result.sessions))
-          setWorkspacePath(json.result.workspace?.path ?? null)
           setLoadError(null)
         } else {
           setLoadError(json.error ?? '未知错误')
@@ -615,12 +592,9 @@ function OverviewBody(props: {
   const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
   const redCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'red').length
   const yellowCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'yellow').length
-  const wsName = workspacePath !== null
-    ? workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? workspacePath
-    : null
   const sub = rows === null
     ? '加载中…'
-    : `${wsName !== null ? `${wsName} · ` : ''}${rows.length} 个会话${redCount > 0 ? ` · 红 ${redCount}` : ''}${yellowCount > 0 ? ` · 黄 ${yellowCount}` : ''}`
+    : `${rows.length} 个会话${redCount > 0 ? ` · 红 ${redCount}` : ''}${yellowCount > 0 ? ` · 黄 ${yellowCount}` : ''}`
 
   return (
     <div className="sh-scrim" onClick={close}>
@@ -751,7 +725,6 @@ export function apply(ctx: ClientContext): void {
   // Multi-session overview: the sidebar-foot opener and the frame overlay
   // share one open-state store created per apply (disposed with the fiber —
   // a re-apply starts fresh, an unload takes the registrations with it).
-  // The badge feeds the store the current session id (the workspace anchor).
   const overviewStore = new OverviewStore()
 
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
@@ -762,7 +735,6 @@ export function apply(ctx: ClientContext): void {
         sessions={sessions}
         commands={commands}
         locale={locale}
-        store={overviewStore}
       />
     ),
   ) as never)

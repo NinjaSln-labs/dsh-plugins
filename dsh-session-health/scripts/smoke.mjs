@@ -15,7 +15,7 @@ import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
 import { resolveConfig } from '../lib/config.js'
 import { PriceCache, periodAt, staticPricing } from '../lib/pricing.js'
-import { buildOverview, sortOverviewRows, rankOf, handleOverviewRpc } from '../lib/overview.js'
+import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc } from '../lib/overview.js'
 
 let failures = 0
 async function check(name, fn) {
@@ -590,8 +590,10 @@ await check('overview: live snapshot / cache / cold fallback + titles + severity
   assert.equal(rows[3].health, null) // cold + no cache row → null, never a crash
   assert.equal(rows[0].live, true)
   assert.equal(rows[1].live, false)
-  assert.equal(rows[0].title, 'T-live-red') // batch title path filled every row
-  assert.equal(rows[3].title, 'T-cold-unknown')
+  // Titles are background-filled (never awaited on first paint): first frame
+  // returns null; the dedicated title-cache check covers the fill+hit cycle.
+  assert.equal(rows[0].title, null)
+  assert.equal(rows[3].title, null)
   assert.equal(rows[0].createdAt, 100)
 })
 
@@ -614,11 +616,12 @@ await check('overview: absent sessionQuery degrades to empty list', async () => 
   assert.deepEqual(await buildOverview({ get: () => undefined }, signal), [])
 })
 
-await check('overview: workspace + top-level filtering matches the sidebar', async () => {
-  // Workspace root configured: only top-level sessions under it survive.
+await check('overview: top-level + archive filtering matches the sidebar', async () => {
+  // Subagent children and archived sessions are excluded everywhere; the
+  // cwd / workspace membership plays no role (sidebar shows all of them).
   const wsServices = {
     ...overviewServices,
-    sandboxPolicy: { workspaceRoot: '/ws' },
+    workspaceRegistry: { archivedSessionIds: ['out'] },
     sessionQuery: {
       listSessions: async () => [
         { header: { id: 'in-ws', createdAt: 1, cwd: '/ws' }, live: false, persisted: true },
@@ -630,46 +633,7 @@ await check('overview: workspace + top-level filtering matches the sidebar', asy
     },
   }
   const rows = await buildOverview({ get: name => wsServices[name] }, signal)
-  assert.deepEqual(rows.map(r => r.id), ['in-ws'])
-  // No workspace root anywhere: the cwd cut degrades, top-level cut stays.
-  const noRoot = await buildOverview({ get: name => ({
-    ...overviewServices,
-    sandboxPolicy: undefined,
-    sessions: { get: () => undefined },
-    sessionQuery: {
-      listSessions: async () => [
-        { header: { id: 'a', createdAt: 1, cwd: '/x' }, live: false, persisted: true },
-        { header: { id: 'b', createdAt: 2, cwd: '/x', origin: 'subagent' }, live: false, persisted: true },
-      ],
-      readTitleSnapshots: async () => [],
-    },
-  })[name] }, signal)
-  assert.deepEqual(noRoot.map(r => r.id), ['a'])
-})
-
-await check('overview: workspace membership (sessionIds) is the sidebar scope', async () => {
-  // A registered workspace wins over the cwd cut: members stay even with a
-  // foreign cwd; a session inside the cwd but not a member is excluded.
-  const wsCtx = {
-    get: name => ({
-      ...overviewServices,
-      sandboxPolicy: { workspaceRoot: '/ws' },
-      workspaceRegistry: {
-        resolveByPath: path => (path === '/ws' ? { id: 'w1' } : undefined),
-        list: () => [{ id: 'w1', path: '/ws', sessionIds: ['in-ws', 'member2'] }],
-      },
-      sessionQuery: {
-        listSessions: async () => [
-          { header: { id: 'in-ws', createdAt: 1, cwd: '/ws' }, live: false, persisted: true },
-          { header: { id: 'cwd-but-not-member', createdAt: 2, cwd: '/ws' }, live: false, persisted: true },
-          { header: { id: 'member2', createdAt: 3, cwd: '/elsewhere' }, live: false, persisted: true },
-        ],
-        readTitleSnapshots: async () => [],
-      },
-    })[name],
-  }
-  const rows = await buildOverview(wsCtx, signal)
-  assert.deepEqual(rows.map(r => r.id), ['member2', 'in-ws']) // membership wins over cwd; newest first in tier
+  assert.deepEqual(rows.map(r => r.id), ['no-cwd', 'in-ws']) // archived + subagent out, newest first
 })
 
 await check('overview: parallel cold loads backfill health', async () => {
@@ -694,37 +658,11 @@ await check('overview: parallel cold loads backfill health', async () => {
   assert.equal(rows[0].health.severity, 'blue') // async cold load backfilled
 })
 
-await check('overview: currentSessionId anchors the workspace scope', async () => {
-  const anchorCtx = {
-    get: name => ({
-      ...overviewServices,
-      workspaceRegistry: {
-        list: () => [
-          { id: 'w-a', path: '/a', sessionIds: ['anchor-session'] },
-          { id: 'w-b', path: '/b', sessionIds: ['other'] },
-        ],
-      },
-      sessionQuery: {
-        listSessions: async () => [
-          { header: { id: 'anchor-session', createdAt: 1, cwd: '/a' }, live: false, persisted: true },
-          { header: { id: 'other', createdAt: 2, cwd: '/b' }, live: false, persisted: true },
-        ],
-        readTitleSnapshots: async () => [],
-      },
-    })[name],
-  }
-  const rows = await buildOverview(anchorCtx, signal, { currentSessionId: 'anchor-session' })
-  assert.deepEqual(rows.map(r => r.id), ['anchor-session'])
-})
-
 await check('overview: archived sessions are hidden everywhere', async () => {
   const archivedCtx = {
     get: name => ({
       ...overviewServices,
-      workspaceRegistry: {
-        list: () => [{ id: 'w1', path: '/ws', sessionIds: ['a1', 'a2'] }],
-        archivedSessionIds: ['a2'],
-      },
+      workspaceRegistry: { archivedSessionIds: ['a2'] },
       sessionQuery: {
         listSessions: async () => [
           { header: { id: 'a1', createdAt: 1, cwd: '/ws' }, live: false, persisted: true },
@@ -734,8 +672,28 @@ await check('overview: archived sessions are hidden everywhere', async () => {
       },
     })[name],
   }
-  const rows = await buildOverview(archivedCtx, signal, { currentSessionId: 'a1' })
+  const rows = await buildOverview(archivedCtx, signal)
   assert.deepEqual(rows.map(r => r.id), ['a1'])
+})
+
+await check('overview: title cache — first frame null, background fill, next hit', async () => {
+  clearTitleCache()
+  const titleCtx = {
+    get: name => ({
+      ...overviewServices,
+      sessionQuery: {
+        listSessions: async () => [{ header: { id: 't1', createdAt: 1 }, live: false, persisted: true }],
+        readTitleSnapshots: async ids => ids.map(id => ({ sessionId: id, status: 'fulfilled', value: { title: { title: `T-${id}` } } })),
+      },
+    })[name],
+  }
+  const first = await buildOverview(titleCtx, signal)
+  assert.equal(first.length, 1)
+  assert.equal(first[0].title, null) // cache miss: no log read on first paint
+  await new Promise(resolve => setTimeout(resolve, 50)) // background fill settles
+  const second = await buildOverview(titleCtx, signal)
+  assert.equal(second[0].title, 'T-t1') // cache hit on the next frame
+  clearTitleCache()
 })
 
 await check('overview: one broken record degrades that row only', async () => {
