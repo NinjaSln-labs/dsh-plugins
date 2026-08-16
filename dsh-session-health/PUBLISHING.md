@@ -1,15 +1,19 @@
 # 发布记录：dsh-session-health
 
-**已发布**（GitHub + npm）：`dsh-session-health@0.4.8`（latest），`dsh-knowledge-sqlite@0.1.2`。
+**已发布**（GitHub + npm）：`dsh-session-health@0.6.0`（latest），`dsh-knowledge-sqlite@0.1.2`。
 
-## 发布状态（2026-08-14）
+## 发布状态（2026-08-16 更新）
 
 | 项 | 状态 |
 |---|---|
-| npm | ✅ `dsh-session-health@0.4.8`（latest）· `dsh-knowledge-sqlite@0.1.2`（latest） |
-| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main，工作树干净 |
-| 本地验证 | ✅ profile 从 npm 加载（`^0.4.8` / `^0.1.2`，registry tarball），`dsh web` 运行中，manifest + badge bundle 正常 |
-| 双语文档 | ✅ README.md / README.zh.md（集合 + 两个插件） |
+| npm | ✅ `dsh-session-health@0.6.0`（latest，CI 自动发布，run 31924069699）· `dsh-knowledge-sqlite@0.1.2`（latest） |
+| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main（`523c94e`），tag `session-health-v0.6.0` |
+| 本地验证 | ⏳ 重启 `dsh web` + 硬刷新后验证一览面板（profile 当前为 file: 开发模式，重建自动同步） |
+| 双语文档 | ✅ README.md / README.zh.md（含面板节） |
+
+**0.6.0 发布过程修复的两个 CI 坑**（`publish.yml` 首次成功跑通）：
+1. `npm ci` 需要 lockfile，但 `package-lock.json` 曾被 `.gitignore` 排除 → 入库（`123168c`）
+2. setup-node `cache: npm` 在仓库根探测锁文件，`working-directory` 管不到 action → 显式 `cache-dependency-path: dsh-session-health/package-lock.json`（`523c94e`）
 
 ## 版本历史
 
