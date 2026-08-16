@@ -6,6 +6,8 @@
   测试 `CORPUS`、`test-smoke.mjs` 三处仍指向不存在的 `research/memory-experiment`，
   导致宿主 `knowledge_probe` 套件 ENOENT、`npm test` probe 用例失败。全部改指
   `research/memory-knowledge-seam/experiments/memory-experiment`。
+- **test**: 实验语料以 fixture 形式入库（`tests/fixtures/corpus/`，逐字拷贝 + 同步说明），
+  单测与冒烟脱离仓库外 `research/` 目录、CI 可跑。
 - **feat**: human 套件上报 precision@1（V1.11 信息性门禁 ≥80%，单目标套件口径 ≡ recall@1，
   两臂并列如实报告）与 none 查询无误报检查（top1 必须为空或非记忆条目）。
 - 回顾：发版物与工作区布局脱节是"仓库路径已修、测试/发布物未同步"的同类坑
