@@ -65,6 +65,10 @@ jobs:
           fi
       - name: Install
         run: npm ci
+        # 视觉回归只在本地跑（需运行中 harness），CI 不装浏览器：
+        # playwright 的 postinstall 默认下载 chromium（~170MB）。
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       - name: Verify (build + typecheck + smoke + mount + client-mount)
         run: |
           npm run build
