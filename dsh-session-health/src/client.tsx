@@ -21,6 +21,27 @@ import * as React from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the header.utilities seat).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: the two seats below live in OTHER ui packages (ui-sidebar
+// declares sidebar.footer.action, ui-layout declares shell.overlay) that are
+// not on this plugin's type resolution path. The runtime slot tree was
+// verified via the harness Inspect provider; this local augmentation mirrors
+// the owner-prop contracts from those packages' d.ts files (compile-time only
+// — erased from the bundle; slots.inject on a runtime-missing key is inert).
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /** Owner share of one action beside Settings at the sidebar foot. */
+    'sidebar.footer.action': {
+      kind: 'list'
+      scope: 'root'
+      owner: { wide: boolean }
+    }
+    /** Frame-wide floating layer (list slot, no owner props). */
+    'shell.overlay': {
+      kind: 'list'
+      scope: 'root'
+    }
+  }
+}
 import type { SessionHealthProjection, HealthSeverity } from './types.ts'
 import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
 
@@ -63,6 +84,40 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-tip{animation:sh-tip-in .15s ease-out}
 @keyframes sh-tip-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.sh-tip{animation:none}}
+/* Sidebar footer action (multi-session overview opener): mirrors the
+   settings trigger row — wide shows dot + label, the 56px rail shows the dot
+   only. Theme tokens throughout; severity palette classes reused below. */
+.sh-fa{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);border-radius:8px;font-size:13px;line-height:20px;box-sizing:border-box;cursor:pointer;user-select:none;white-space:nowrap}
+.sh-fa:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-fa:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:2px}
+.sh-fa .sh-fa-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dsw-alias-label-tertiary)}
+/* Overview panel: frame-wide scrim + centered card. The shell.overlay layer
+   is click-through by default — the panel opts back into pointer events. */
+.sh-scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 55%,transparent);display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto;z-index:60;animation:sh-fade-in .15s ease-out}
+@keyframes sh-fade-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){.sh-scrim{animation:none}}
+.sh-panel{width:min(760px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.sh-panel-head{display:flex;align-items:baseline;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.sh-panel-title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.sh-panel-sub{font-size:12px;color:var(--dsw-alias-label-tertiary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh-panel-close{flex:none;width:28px;height:28px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:1;cursor:pointer}
+.sh-panel-close:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-panel-close:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-panel-legend{display:flex;flex-wrap:wrap;gap:4px 14px;padding:8px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.sh-panel-legend .sh-legend-item{display:inline-flex;align-items:center;gap:5px}
+.sh-panel-legend .sh-legend-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
+.sh-panel-list{overflow-y:auto;padding:8px;flex:1}
+.sh-panel-row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box}
+.sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-panel-row .sh-row-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
+.sh-panel-row .sh-row-main{flex:1;min-width:0}
+.sh-panel-row .sh-row-title{font-size:13px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sh-panel-row .sh-row-meta{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:1px;font-variant-numeric:tabular-nums}
+.sh-panel-row .sh-row-sev{flex:none;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600}
+.sh-panel-row .sh-row-right{flex:none;text-align:right;font-size:12px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
+.sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
+.sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
 `
 
 function compact(n: number | null | undefined): string {
@@ -364,6 +419,245 @@ function HealthBadge(props: {
   )
 }
 
+/**
+ * Multi-session overview panel — the 多会话健康一览 roadmap item.
+ *
+ * Two seats share one tiny open-state store (created per apply, disposed with
+ * the fiber): `sidebar.footer.action` opens the panel, `shell.overlay`
+ * renders it while open and null otherwise (the overlay pattern: "each reads
+ * its own store and renders null while closed"). Data rides the same-origin
+ * host RPC route `/session-health-rpc` (bundle clients cannot mount a plugin
+ * Remote — the imgdraw seam), fetched on open and refreshed while open.
+ * Rows are host-sorted red → yellow → blue → green → unknown; clicking a row
+ * opens that session and runs /health for it.
+ */
+
+/** Refresh cadence of the open panel (ms). */
+const PANEL_REFRESH_MS = 5000
+
+/** Minimal row shape from the host overview RPC. */
+interface OverviewRowLike {
+  id: string
+  title: string | null
+  live: boolean
+  createdAt: number
+  health: SessionHealthProjection | null
+}
+
+/** External open-state store shared by the footer action and the overlay. */
+class OverviewStore {
+  private open = false
+  private readonly listeners = new Set<() => void>()
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+  getOpen = (): boolean => this.open
+  setOpen(open: boolean): void {
+    if (this.open === open) return
+    this.open = open
+    for (const listener of [...this.listeners]) listener()
+  }
+}
+
+const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
+
+/** Rows arrive host-sorted; defensive client re-sort keeps the panel honest. */
+function sortRows(rows: OverviewRowLike[]): OverviewRowLike[] {
+  return [...rows].sort((a, b) => {
+    const ra = a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
+    const rb = b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
+    if (ra !== rb) return ra - rb
+    return (b.createdAt ?? 0) - (a.createdAt ?? 0)
+  })
+}
+
+/** Per-round money figure, same currency rule as the badge tooltip. */
+function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | null {
+  if (proj === null) return null
+  const cny = proj.effectivePerRoundCny
+  const usd = proj.effectivePerRoundUsd
+  if (isZh && cny !== null && cny !== undefined) return `¥${cny.toFixed(2)}/轮`
+  if (usd !== null && usd !== undefined) return `${formatUsd(usd)}/轮`
+  return null
+}
+
+/** Sidebar-foot action: opens the overview panel (wide row vs 56px rail). */
+function OverviewAction(props: {
+  wide: boolean
+  store: OverviewStore
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="sh-fa"
+      onClick={() => props.store.setOpen(true)}
+      aria-label="会话健康一览（打开所有会话的健康面板）"
+      title="会话健康一览"
+    >
+      <span className="sh-fa-dot" />
+      {props.wide ? <span>健康一览</span> : null}
+    </button>
+  )
+}
+
+/** Full-screen overview panel; renders null while closed. */
+function OverviewPanel(props: {
+  store: OverviewStore
+  sessions: { open(id: string): void }
+  commands: CommandsRemote
+  locale: { snapshot: { active: string } }
+}): JSX.Element | null {
+  const open = React.useSyncExternalStore(props.store.subscribe, props.store.getOpen)
+  if (!open) return null
+  return <OverviewBody {...props} />
+}
+
+function OverviewBody(props: {
+  store: OverviewStore
+  sessions: { open(id: string): void }
+  commands: CommandsRemote
+  locale: { snapshot: { active: string } }
+}): JSX.Element {
+  const [rows, setRows] = React.useState<OverviewRowLike[] | null>(null)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
+  const closeRef = React.useRef<HTMLButtonElement | null>(null)
+
+  // Fetch on mount + refresh while open; component unmounts when closed, so
+  // the effect cleans up with it (no leak across panel sessions).
+  React.useEffect(() => {
+    let alive = true
+    let timer: number | null = null
+    const load = async () => {
+      try {
+        const res = await fetch('/session-health-rpc', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ method: 'overview' }),
+        })
+        const json = (await res.json()) as { ok?: boolean; error?: string; result?: { sessions?: OverviewRowLike[] } }
+        if (!alive) return
+        if (json.ok === true && Array.isArray(json.result?.sessions)) {
+          setRows(sortRows(json.result.sessions))
+          setLoadError(null)
+        } else {
+          setLoadError(json.error ?? '未知错误')
+        }
+      } catch {
+        if (alive) setLoadError('无法连接 /session-health-rpc')
+      }
+    }
+    void load()
+    timer = window.setInterval(() => { void load() }, PANEL_REFRESH_MS)
+    return () => {
+      alive = false
+      if (timer !== null) window.clearInterval(timer)
+    }
+  }, [])
+
+  // Esc closes; focus moves into the panel on open.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') props.store.setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    closeRef.current?.focus()
+    return () => window.removeEventListener('keydown', onKey)
+  }, [props.store])
+
+  const close = () => props.store.setOpen(false)
+  const openSession = (id: string) => {
+    try { props.sessions.open(id) } catch { /* 静默 */ }
+    try { void props.commands.execute(id, '/health') } catch { /* 静默 */ }
+    close()
+  }
+  const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
+  const redCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'red').length
+  const yellowCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'yellow').length
+  const sub = rows === null
+    ? '加载中…'
+    : `${rows.length} 个会话${redCount > 0 ? ` · 红 ${redCount}` : ''}${yellowCount > 0 ? ` · 黄 ${yellowCount}` : ''}`
+
+  return (
+    <div className="sh-scrim" onClick={close}>
+      <div
+        className="sh-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="会话健康一览"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="sh-panel-head">
+          <span className="sh-panel-title">会话健康一览</span>
+          <span className="sh-panel-sub">{sub}</span>
+          <button
+            type="button"
+            ref={closeRef}
+            className="sh-panel-close"
+            aria-label="关闭会话健康一览"
+            onClick={close}
+          >
+            ×
+          </button>
+        </div>
+        <div className="sh-panel-legend">
+          <span className="sh-legend-item sh-sev-red"><span className="sh-legend-dot" />建议收尾</span>
+          <span className="sh-legend-item sh-sev-yellow"><span className="sh-legend-dot" />建议留意</span>
+          <span className="sh-legend-item sh-sev-blue"><span className="sh-legend-dot" />继续，留意</span>
+          <span className="sh-legend-item sh-sev-green"><span className="sh-legend-dot" />放心继续</span>
+          <span className="sh-legend-item"><span className="sh-legend-dot" />无数据</span>
+        </div>
+        <div className="sh-panel-list">
+          {rows === null && loadError === null ? (
+            <div className="sh-panel-empty">正在读取各会话健康数据…</div>
+          ) : rows === null ? (
+            <div className="sh-panel-empty">加载失败：{loadError}</div>
+          ) : rows.length === 0 ? (
+            <div className="sh-panel-empty">没有可显示的会话</div>
+          ) : (
+            rows.map(row => {
+              const health = row.health
+              const severity: HealthSeverity | 'unknown' = health?.severity ?? 'unknown'
+              const pct = health?.ratio !== null && health?.ratio !== undefined
+                ? Math.min(Math.round(health.ratio * 100), 100)
+                : null
+              const money = moneyOf(health, isZh)
+              const metaBits = [
+                pct !== null ? `占用 ${pct}%` : '占用未知',
+                health?.effectivePerRound !== null && health?.effectivePerRound !== undefined
+                  ? `约 ${compact(health.effectivePerRound)} token/轮`
+                  : null,
+                health !== null ? `${health.turns} 轮 / ${health.userMessages + health.assistantMessages} 条` : null,
+                health !== null && health.compactions > 0 ? `已压缩 ${health.compactions} 次` : null,
+                row.live ? '在线' : '冷会话',
+              ].filter((v): v is string => v !== null)
+              const ariaSev = severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]
+              return (
+                <button
+                  type="button"
+                  key={row.id}
+                  className={`sh-panel-row${severity !== 'unknown' ? ` sh-sev-${severity}` : ''}`}
+                  onClick={() => openSession(row.id)}
+                  aria-label={`会话健康：${ariaSev}。${row.title ?? '未命名会话'}。${metaBits.join('，')}。点击打开并运行 /health`}
+                >
+                  <span className="sh-row-dot" />
+                  <span className="sh-row-main">
+                    <span className="sh-row-title">{row.title ?? `未命名会话（${row.id.slice(0, 8)}…）`}</span>
+                    <span className="sh-row-meta">{metaBits.join(' · ')}</span>
+                  </span>
+                  <span className="sh-row-sev">{severity === 'unknown' ? '无数据' : SEVERITY_LABEL[severity]}</span>
+                  <span className="sh-row-right">{money ?? ''}</span>
+                </button>
+              )
+            })
+          )}
+        </div>
+        <div className="sh-panel-foot">每 5 秒刷新 · 点击行打开该会话并运行 /health · Esc 关闭</div>
+      </div>
+    </div>
+  )
+}
+
 /** Package id — must match package.json `name` and the ModuleLoader handoff. */
 export const name = 'dsh-session-health'
 
@@ -398,12 +692,13 @@ function injectStyles(): void {
   document.head.appendChild(tag)
 }
 
-/** Client entry: register the badge in the session header utilities seat. */
+/** Client entry: register the badge + the multi-session overview panel seats. */
 export function apply(ctx: ClientContext): void {
   injectStyles()
 
   const sessions = ctx.sessions as unknown as {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
+    open(id: string): void
   }
   const commands = (ctx.remote as unknown as { commands: CommandsRemote }).commands
   const locale = (ctx as unknown as { locale: { snapshot: { active: string } } }).locale
@@ -413,6 +708,28 @@ export function apply(ctx: ClientContext): void {
     (props: { sessionId: string }) => (
       <HealthBadge
         sessionId={props.sessionId}
+        sessions={sessions}
+        commands={commands}
+        locale={locale}
+      />
+    ),
+  ) as never)
+
+  // Multi-session overview: the sidebar-foot opener and the frame overlay
+  // share one open-state store created per apply (disposed with the fiber —
+  // a re-apply starts fresh, an unload takes the registrations with it).
+  const overviewStore = new OverviewStore()
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
+    { name: 'sidebar.footer.action', id: 'session-health-overview', order: 10 } as never,
+    (props: { wide: boolean }) => (
+      <OverviewAction wide={props.wide} store={overviewStore} />
+    ),
+  ) as never)
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register(
+    { name: 'shell.overlay', id: 'session-health-overview-panel', order: 10 } as never,
+    () => (
+      <OverviewPanel
+        store={overviewStore}
         sessions={sessions}
         commands={commands}
         locale={locale}

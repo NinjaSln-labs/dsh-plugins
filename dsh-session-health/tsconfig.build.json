@@ -7,6 +7,9 @@
       "ES2024",
       "DOM"
     ],
+    "types": [
+      "node"
+    ],
     "jsx": "react-jsx",
     "outDir": "lib",
     "rootDir": "src",

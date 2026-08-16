@@ -106,13 +106,22 @@ try {
   throw error
 }
 
-// 4) apply ran: the badge seat was registered.
-assert.equal(seats.length, 1, 'apply must register exactly one slot seat')
-assert.equal(seats[0].name, 'conversation.session.header.utilities')
-// The seat factory must produce a working slots.register call.
-const registration = seats[0].fn()
-assert.equal(registration[0].id, 'session-health-dot')
-console.log('  ok  apply ran: badge seat registered in conversation.session.header.utilities')
+// 4) apply ran: the badge seat + the two overview seats were registered.
+assert.equal(seats.length, 3, 'apply must register exactly three slot seats')
+const byName = Object.fromEntries(seats.map(s => [s.name, s]))
+assert.ok(byName['conversation.session.header.utilities'], 'badge seat registered')
+assert.ok(byName['sidebar.footer.action'], 'overview opener seat registered')
+assert.ok(byName['shell.overlay'], 'overview panel seat registered')
+// Each seat factory must produce a working slots.register call.
+const badgeReg = byName['conversation.session.header.utilities'].fn()
+assert.equal(badgeReg[0].id, 'session-health-dot')
+const footerReg = byName['sidebar.footer.action'].fn()
+assert.equal(footerReg[0].id, 'session-health-overview')
+assert.equal(footerReg[0].name, 'sidebar.footer.action')
+const overlayReg = byName['shell.overlay'].fn()
+assert.equal(overlayReg[0].id, 'session-health-overview-panel')
+assert.equal(overlayReg[0].name, 'shell.overlay')
+console.log('  ok  apply ran: badge + overview opener + overview panel seats registered')
 
 // 5) The stylesheet was injected the client-modules way.
 assert.equal(styleTags.length, 1, 'apply must create exactly one style tag')

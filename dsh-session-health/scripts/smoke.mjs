@@ -15,6 +15,7 @@ import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
 import { resolveConfig } from '../lib/config.js'
 import { PriceCache, periodAt, staticPricing } from '../lib/pricing.js'
+import { buildOverview, sortOverviewRows, rankOf, handleOverviewRpc } from '../lib/overview.js'
 
 let failures = 0
 async function check(name, fn) {
@@ -378,7 +379,13 @@ await check('pricing: failure keeps the last good price', async () => {
   await cache.refresh('https://x', ok)
   const fail = async () => { throw new Error('offline') }
   assert.equal(await cache.refresh('https://x', fail), false)
-  assert.equal(cache.get().missPerMCny, 1.5) // last good document survives
+  // Pin to Beijing off-peak: the get() period is wall-clock dependent, so an
+  // assertion on a concrete price must not run during 9-12 / 14-18 CST.
+  const origNow = Date.now
+  Date.now = () => Date.parse('2026-08-14T10:00:00Z')
+  try {
+    assert.equal(cache.get().missPerMCny, 1.5) // last good document survives
+  } finally { Date.now = origNow }
 })
 
 await check('pricing: refreshAny falls back to the second URL', async () => {
@@ -391,7 +398,12 @@ await check('pricing: refreshAny falls back to the second URL', async () => {
     await cache.refreshAny(['https://primary', 'https://fallback'], url => (url.includes('fallback') ? ok() : fail())),
     true,
   )
-  assert.equal(cache.get('deepseek-v4-flash').missPerMCny, 1.5) // fallback doc won
+  // Same off-peak pin as above (peak hours would bill 3.0, not 1.5).
+  const origNow = Date.now
+  Date.now = () => Date.parse('2026-08-14T10:00:00Z')
+  try {
+    assert.equal(cache.get('deepseek-v4-flash').missPerMCny, 1.5) // fallback doc won
+  } finally { Date.now = origNow }
 })
 
 await check('pricing: invalid documents are rejected', async () => {
@@ -516,6 +528,148 @@ await check('buildCommandText: blue tier wording', () => {
   assert.ok(text.includes('健康度：**蓝**'))
   assert.ok(text.includes('已压缩 1 次'))
   assert.ok(!text.includes('切换前检查')) // blue: no switch checklist
+})
+
+/* ---------- multi-session overview (panel data + RPC) ---------- */
+const healthOf = (severity, extra = {}) => ({
+  severity,
+  advice: 'a',
+  ratio: null,
+  total: null,
+  window: null,
+  turns: 0,
+  userMessages: 0,
+  assistantMessages: 0,
+  compactions: 0,
+  uncachedInputTokens: null,
+  cacheReadTokens: null,
+  effectivePerRound: null,
+  effectivePerRoundUsd: null,
+  effectivePerRoundCny: null,
+  pricePeriod: null,
+  ...extra,
+})
+const overviewServices = {
+  sessionQuery: {
+    listSessions: async () => [
+      { header: { id: 'live-red', createdAt: 100 }, live: true, persisted: true },
+      { header: { id: 'cold-yellow', createdAt: 300 }, live: false, persisted: true },
+      { header: { id: 'cold-unknown', createdAt: 200 }, live: false, persisted: true },
+      { header: { id: 'live-green', createdAt: 400 }, live: true, persisted: true },
+    ],
+    readTitleSnapshots: async ids => ids.map(id => ({ sessionId: id, status: 'fulfilled', value: { title: { title: `T-${id}` } } })),
+  },
+  sessions: { get: id => (id === 'live-red' || id === 'live-green' ? { header: { id } } : undefined) },
+  sessionProjections: {
+    snapshot: session => ({
+      values: {
+        sessionHealth: session.header.id === 'live-red'
+          ? healthOf('red', { ratio: 0.9, total: 900_000 })
+          : healthOf('green', { ratio: 0.05 }),
+      },
+    }),
+  },
+  sessionProjectionCache: {
+    cachedSnapshot: meta => meta.id === 'cold-yellow'
+      ? { values: { sessionHealth: healthOf('yellow', { ratio: 0.6 }) } }
+      : undefined,
+    coldSnapshot: async () => undefined, // cold-unknown stays null
+  },
+  sessionTitle: { get: () => undefined }, // force the batch title path
+}
+const overviewCtx = { get: name => overviewServices[name] }
+
+await check('overview: live snapshot / cache / cold fallback + titles + severity sort', async () => {
+  const rows = await buildOverview(overviewCtx, signal)
+  assert.equal(rows.length, 4)
+  // Red first, yellow second, green third, unknown last (host sort).
+  assert.deepEqual(rows.map(r => r.id), ['live-red', 'cold-yellow', 'live-green', 'cold-unknown'])
+  assert.equal(rows[0].health.severity, 'red')
+  assert.equal(rows[1].health.severity, 'yellow')
+  assert.equal(rows[2].health.severity, 'green')
+  assert.equal(rows[3].health, null) // cold + no cache row → null, never a crash
+  assert.equal(rows[0].live, true)
+  assert.equal(rows[1].live, false)
+  assert.equal(rows[0].title, 'T-live-red') // batch title path filled every row
+  assert.equal(rows[3].title, 'T-cold-unknown')
+  assert.equal(rows[0].createdAt, 100)
+})
+
+await check('overview: same-tier rows sort newest-first', () => {
+  const rows = sortOverviewRows([
+    { id: 'a', title: null, live: false, createdAt: 100, health: healthOf('green') },
+    { id: 'b', title: null, live: false, createdAt: 400, health: healthOf('green') },
+    { id: 'c', title: null, live: false, createdAt: 200, health: healthOf('red') },
+  ])
+  assert.deepEqual(rows.map(r => r.id), ['c', 'b', 'a'])
+  assert.equal(rankOf(healthOf('red')), 0)
+  assert.equal(rankOf(healthOf('yellow')), 1)
+  assert.equal(rankOf(healthOf('blue')), 2)
+  assert.equal(rankOf(healthOf('green')), 3)
+  assert.equal(rankOf(null), 4)
+  assert.equal(rankOf(undefined), 4)
+})
+
+await check('overview: absent sessionQuery degrades to empty list', async () => {
+  assert.deepEqual(await buildOverview({ get: () => undefined }, signal), [])
+})
+
+await check('overview: one broken record degrades that row only', async () => {
+  const brokenCtx = {
+    get: name => ({
+      ...overviewServices,
+      sessionProjections: { snapshot: () => { throw new Error('boom') } },
+      sessionProjectionCache: { cachedSnapshot: () => { throw new Error('boom') }, coldSnapshot: async () => { throw new Error('boom') } },
+    })[name],
+  }
+  const rows = await buildOverview(brokenCtx, signal)
+  assert.equal(rows.length, 4)
+  assert.ok(rows.every(r => r.health === null)) // per-record failures degrade, never throw
+})
+
+/* ---------- overview RPC handler ---------- */
+function fakeRes() {
+  const out = { status: null, headers: null, body: null }
+  return {
+    out,
+    writeHead: (status, headers) => { out.status = status; out.headers = headers },
+    end: body => { out.body = body },
+  }
+}
+function fakeReq(method, body, remoteAddress) {
+  const req = { method, socket: { remoteAddress } }
+  req[Symbol.asyncIterator] = async function* () { if (body !== undefined) yield body }
+  return req
+}
+
+await check('overview rpc: POST overview → 200 + sorted sessions', async () => {
+  const res = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'overview' }), '127.0.0.1'), res, overviewCtx)
+  assert.equal(res.out.status, 200)
+  const json = JSON.parse(res.out.body)
+  assert.equal(json.ok, true)
+  assert.deepEqual(json.result.sessions.map(r => r.id), ['live-red', 'cold-yellow', 'live-green', 'cold-unknown'])
+})
+
+await check('overview rpc: non-POST → 405', async () => {
+  const res = fakeRes()
+  await handleOverviewRpc(fakeReq('GET', undefined, '127.0.0.1'), res, overviewCtx)
+  assert.equal(res.out.status, 405)
+})
+
+await check('overview rpc: non-loopback peer → 403', async () => {
+  const res = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', '{}', '10.0.0.5'), res, overviewCtx)
+  assert.equal(res.out.status, 403)
+})
+
+await check('overview rpc: malformed json → 400, unknown method → 400', async () => {
+  const bad = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', '{nope', '127.0.0.1'), bad, overviewCtx)
+  assert.equal(bad.out.status, 400)
+  const unknown = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'nope' }), '127.0.0.1'), unknown, overviewCtx)
+  assert.equal(unknown.out.status, 400)
 })
 
 if (failures > 0) {

@@ -18,14 +18,13 @@ import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
 
 const session = { header: { cwd: '/tmp/ws' } }
-const registrations = { commands: null, tools: null, projections: null }
+const registrations = { commands: null, tools: null, projections: null, routes: [] }
 
 const ctx = new Context()
 ctx.provide('tokenMeter', { measure: () => ({ totalTokens: 300_000 }) })
 ctx.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) })
 ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
 ctx.provide('sessions', { get: id => (id === 's1' ? session : undefined) })
-ctx.provide('sessionQuery', { listEvents: async () => [] })
 ctx.provide('sandboxPolicy', { workspaceRoot: '/tmp/ws' })
 ctx.provide('fs', {
   resolve: async p => p,
@@ -45,6 +44,25 @@ ctx.provide('subprocess', {
 })
 ctx.provide('commands', { register: def => { registrations.commands = def } })
 ctx.provide('tools', { register: tool => { registrations.tools = tool } })
+ctx.provide('webServer', {
+  register: route => {
+    registrations.routes.push(route)
+    return () => { /* dispose no-op */ }
+  },
+})
+ctx.provide('sessionQuery', {
+  listEvents: async () => [],
+  listSessions: async () => [
+    { header: { id: 's1', createdAt: 100 }, live: true, persisted: true },
+    { header: { id: 's2', createdAt: 200 }, live: false, persisted: true },
+  ],
+  readTitleSnapshots: async ids => ids.map(id => ({ sessionId: id, status: 'fulfilled', value: { title: { title: `标题-${id}` } } })),
+})
+ctx.provide('sessionProjectionCache', {
+  cachedSnapshot: () => ({ values: { sessionHealth: { severity: 'yellow', advice: 'a', ratio: 0.6, total: 600_000, window: 1_000_000, turns: 1, userMessages: 1, assistantMessages: 0, compactions: 0, uncachedInputTokens: 600_000, cacheReadTokens: 0, effectivePerRound: 600_000, effectivePerRoundUsd: 0.168, effectivePerRoundCny: null, pricePeriod: null } } }),
+  coldSnapshot: async () => undefined,
+})
+ctx.provide('sessionTitle', { get: () => undefined })
 ctx.provide('sessionProjections', {
   register: def => { registrations.projections = def },
   // assess() reads usage buckets from the pushed snapshot — uncached 300K/round
@@ -109,6 +127,23 @@ try {
   const after = registrations.projections.apply(state, { type: 'step/end', data: { turn: 1 } })
   assert.equal(after.turns, 1)
   console.log('  ok  sessionHealth projection unit registered + fold works')
+
+  // 4) Multi-session overview RPC route registered and serves sorted rows.
+  const route = registrations.routes.find(r => r.path === '/session-health-rpc')
+  assert.ok(route, '/session-health-rpc route registered via webServer')
+  assert.equal(route.kind, 'exact')
+  const res = { status: null, body: null, writeHead: (s) => { res.status = s }, end: (b) => { res.body = b } }
+  const req = { method: 'POST', socket: { remoteAddress: '127.0.0.1' } }
+  req[Symbol.asyncIterator] = async function* () { yield JSON.stringify({ method: 'overview' }) }
+  await route.handler(req, res)
+  assert.equal(res.status, 200)
+  const payload = JSON.parse(res.body)
+  assert.equal(payload.ok, true)
+  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s2', 's1']) // same tier → newest first
+  assert.equal(payload.result.sessions[0].health.severity, 'yellow')     // cold session read the projection cache
+  assert.equal(payload.result.sessions[0].title, '标题-s2')              // batch title path
+  assert.equal(payload.result.sessions[1].health.severity, 'yellow')     // live session cut the registry snapshot
+  console.log('  ok  /session-health-rpc route registered + overview handler runs')
 
   console.log('\nmount smoke passed')
   process.exit(0)

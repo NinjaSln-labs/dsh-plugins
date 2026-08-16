@@ -16,17 +16,20 @@
  * - ctx.subprocess — optional read-only process probe
  */
 import { Context } from '@deepseek-ai/cordis'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config, resolveConfig, type Config as ConfigType } from './config.ts'
 import { sessionHealthProjectionDefinition } from './projection.ts'
 import { healthCommandDefinition } from './command.ts'
 import { sessionHealthTool } from './tool.ts'
 import { PriceCache, startPricingRefresh, staticPricing } from './pricing.ts'
+import { handleOverviewRpc } from './overview.ts'
 
 export { Config } from './config.ts'
 export { sessionHealthProjectionDefinition, applyHealthEvent, healthView } from './projection.ts'
 export { assess, type HealthReport, type AssessOptions } from './assess.ts'
 export { healthCommandDefinition, buildCommandText } from './command.ts'
 export { sessionHealthTool } from './tool.ts'
+export { buildOverview, sortOverviewRows, rankOf, handleOverviewRpc, type OverviewRow } from './overview.ts'
 export type * from './types.ts'
 
 export const name = 'dsh-session-health'
@@ -79,6 +82,23 @@ export default {
     // User-initiated report (optional child).
     ctx.inject(['commands'], (commandCtx) => {
       commandCtx.commands.register(healthCommandDefinition(commandCtx, resolved))
+    })
+
+    // Multi-session overview panel data (optional child): same-origin RPC
+    // route for the browser panel — bundle clients cannot mount a plugin
+    // Remote, so browser↔host calls ride the webServer seam (imgdraw pattern).
+    // ctx.inject waits for the service: bundles apply before webServer
+    // activates at boot and ctx.get would silently return undefined.
+    ctx.inject(['webServer'], (wsCtx) => {
+      const webServer = (wsCtx as unknown as {
+        webServer: { register(route: unknown): () => void }
+      }).webServer
+      const dispose = webServer.register({
+        kind: 'exact',
+        path: '/session-health-rpc',
+        handler: (req: IncomingMessage, res: ServerResponse) => handleOverviewRpc(req, res, wsCtx),
+      })
+      ctx.effect(() => () => { try { dispose() } catch { /* ignore */ } })
     })
   },
 } satisfies {
