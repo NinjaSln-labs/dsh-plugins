@@ -6,7 +6,7 @@ All plugins are **developed in-house from scratch** — not an aggregation or re
 
 [简体中文](README.md) | English
 
-A collection of personally developed plugins for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): session health, cross-session knowledge, subagent model routing, and AI image generation. All plugins are installable via `dsh plugin add <name>`.
+A collection of personally developed plugins for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): context compass, cross-session knowledge, subagent model routing, and AI image generation. All plugins are installable via `dsh plugin add <name>`.
 
 ## Plugins
 
