@@ -12,10 +12,10 @@
 
 | 插件 | 说明 | 状态 |
 |---|---|---|
-| [dsh&#8209;session&#8209;health](./dsh-session-health) | 会话健康 v0.6.0：响应式徽章（投影驱动）、`/health` 命令、`session_health` 工具、多会话健康总览面板（"健康一览"，侧栏入口查看全部会话判定）、官方峰谷双币定价（CNY/USD，jsdelivr 主源 + GitHub raw 回退）、主题自适应四档配色、缓存感知的窗口缩放经济档位、计费金额/token 切换、交接清单自动化 | 已发布（GitHub + npm） |
-| [dsh&#8209;knowledge&#8209;sqlite](./dsh-knowledge-sqlite) | 跨会话知识：`ctx.knowledge` 服务 + `knowledge_*` 工具，SQLite FTS5 trigram 索引 + L1 查询扩展（V1.11 契约，零 LLM 写入、即时可检索） | 已发布（GitHub + npm） |
-| [dsh&#8209;subagent&#8209;router](./dsh-subagent-router) | 子代理模型路由：`subagent_model` 工具（每次调用可指定 provider/model/max_tokens，内置 `model: "auto"` 路由策略——锚定父模型、任务分档升级、失败升档、全程可审计）+ `subagent_models` 目录工具 | 已发布（GitHub + npm） |
-| [dsh&#8209;imgdraw](./dsh-imgdraw) | AI 生图 v0.1.0：`draw_image` 工具、输入框"生图"按钮 + 弹窗（异步生成、四格网格、下载/保留/删除）、`/imgdraw` 图片路由、历史持久化；后端默认免费百炼 wan2.7-image，可选 SiliconFlow Qwen-Image | 开发中（bundle 完成 · 未发布） |
+| [dsh&#8209;session&#8209;health](./dsh-session-health) | **会话健康 v0.6.0**：<br>· 响应式徽章（投影驱动）+ `/health` 命令 + `session_health` 工具<br>· 多会话健康总览面板（"健康一览"）<br>· 官方峰谷双币定价（CNY/USD，jsdelivr 主源 + GitHub raw 回退）<br>· 主题自适应四档配色 · 缓存感知窗口经济档位<br>· 计费金额/token 切换 · 交接清单自动化 | ✅ 已发布（GitHub + npm） |
+| [dsh&#8209;knowledge&#8209;sqlite](./dsh-knowledge-sqlite) | **跨会话知识库 v0.1.2**：<br>· `ctx.knowledge` 服务 + `knowledge_*` 工具<br>· SQLite FTS5 trigram 索引 + L1 查询扩展（V1.11 契约）<br>· 零 LLM 写入 · 即时可检索 | ✅ 已发布（GitHub + npm） |
+| [dsh&#8209;subagent&#8209;router](./dsh-subagent-router) | **子代理模型路由 v0.1.1**：<br>· `subagent_model`：每次调用可指定 provider/model/max_tokens<br>· 内置 `model: "auto"` 路由策略（锚定父模型 · 任务分档升级 · 失败升档 · 全程可审计）<br>· `subagent_models` 目录工具 | ✅ 已发布（GitHub + npm） |
+| [dsh&#8209;imgdraw](./dsh-imgdraw) | **AI 生图 v0.1.0**：<br>· `draw_image` 工具 + 输入框"生图"按钮/弹窗（异步生成 · 四格网格 · 下载/保留/删除）<br>· `/imgdraw` 图片路由 · 历史持久化<br>· 后端：默认免费百炼 wan2.7-image · 可选 SiliconFlow Qwen-Image | 🚧 开发中（bundle 完成 · 未发布） |
 
 ## 约定
 
