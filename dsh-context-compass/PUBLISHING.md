@@ -1,6 +1,6 @@
 # 发布记录：dsh-context-compass
 
-**已发布**（GitHub + npm）：`dsh-context-compass@0.6.0`（latest），`dsh-knowledge-sqlite@0.1.2`。
+**已发布**（GitHub + npm）：`dsh-context-compass@0.6.0`（latest，**新包名首发** CI run 31942773437；旧名 `dsh-session-health` 已发布 deprecate 指令待网页操作）· `dsh-knowledge-sqlite@0.1.2`（latest）。
 
 ## 发布状态（2026-08-16 更新）
 
