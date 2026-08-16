@@ -107,7 +107,9 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-panel-close{flex:none;width:28px;height:28px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:1;cursor:pointer}
 .sh-panel-close:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-close:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
-.sh-panel-list{overflow-y:auto;padding:8px;flex:1;overscroll-behavior:contain}
+/* The list keeps the height of exactly 5 rows whether or not there are 5 —
+   the panel never resizes (no visual jump when sessions come and go). */
+.sh-panel-list{overflow-y:auto;padding:8px;flex:1;overscroll-behavior:contain;height:calc(41px * 5 + 16px);box-sizing:border-box}
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
@@ -117,7 +119,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
 .sh-col-head:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-col-head.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
-.sh-panel-row{display:grid;gap:10px;align-items:center;width:100%;padding:12px 16px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
+.sh-panel-row{display:grid;gap:10px;align-items:center;width:100%;height:41px;padding:0 16px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
 .sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 /* Severity as a tinted chip (theme-adaptive tint/ink from the palette). */
@@ -129,7 +131,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
 .sh-rowtip{position:fixed;transform:translate(-50%,-100%);z-index:80;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
 .sh-rowtip-below{transform:translate(-50%,0)}
-.sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
+.sh-panel-empty{display:flex;align-items:center;justify-content:center;height:100%;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
 .sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
 .sh-pager-btn{width:22px;height:22px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1;cursor:pointer;padding:0}
