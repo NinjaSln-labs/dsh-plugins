@@ -1,12 +1,12 @@
 # DSH 插件集
 
-[English](README.en.md) | 简体中文
-
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 社区插件合集。所有插件均为公开 npm 包，可通过 `dsh plugin add <name>` 安装。
-
 ## ⭐ 原创声明
 
 本项目所有插件均为**自研原创开发**，非第三方插件的聚合或转载。
+
+[English](README.en.md) | 简体中文
+
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 社区插件合集。所有插件均为公开 npm 包，可通过 `dsh plugin add <name>` 安装。
 
 ## 插件
 
