@@ -213,3 +213,35 @@ describe('update 路径', () => {
     expect(rich.some((x) => x.item.id === r.id)).toBe(true) // rich 表含富化
   })
 })
+
+describe('L1 扩展缓存持久化（expansion_cache）', () => {
+  it('roundtrip：set → get；upsert 覆盖；跨 workspace 隔离；坏数据 → null', () => {
+    store.setExpansion('/ws/a', '如何 启动 服务', ['怎么把服务跑起来', '服务如何启动'])
+    expect(store.getExpansion('/ws/a', '如何 启动 服务')).toEqual(['怎么把服务跑起来', '服务如何启动'])
+    // 其它 workspace 不可见
+    expect(store.getExpansion('/ws/b', '如何 启动 服务')).toBe(null)
+    // upsert 覆盖
+    store.setExpansion('/ws/a', '如何 启动 服务', ['更新后的变体'])
+    expect(store.getExpansion('/ws/a', '如何 启动 服务')).toEqual(['更新后的变体'])
+    // 未命中
+    expect(store.getExpansion('/ws/a', '不存在的查询')).toBe(null)
+  })
+
+  it('clear 清空全部 workspace 的缓存', () => {
+    store.setExpansion('/ws/a', 'q1', ['v1'])
+    store.setExpansion('/ws/b', 'q2', ['v2'])
+    store.clearExpansionCache()
+    expect(store.getExpansion('/ws/a', 'q1')).toBe(null)
+    expect(store.getExpansion('/ws/b', 'q2')).toBe(null)
+  })
+
+  it('坏数据（非 JSON/非字符串数组）按未命中处理', () => {
+    store.setExpansion('/ws/a', 'q1', ['ok'])
+    // 直接写入坏数据模拟损坏
+    const db = (store as unknown as { db: { prepare(s: string): { run(...a: unknown[]): void } } }).db
+    db.prepare('UPDATE expansion_cache SET variants = ? WHERE ws_id = ? AND query = ?').run('{bad json', '/ws/a', 'q1')
+    expect(store.getExpansion('/ws/a', 'q1')).toBe(null)
+    db.prepare('UPDATE expansion_cache SET variants = ? WHERE ws_id = ? AND query = ?').run('[1,2,3]', '/ws/a', 'q1')
+    expect(store.getExpansion('/ws/a', 'q1')).toBe(null)
+  })
+})
