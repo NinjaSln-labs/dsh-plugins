@@ -84,13 +84,17 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-tip{animation:sh-tip-in .15s ease-out}
 @keyframes sh-tip-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.sh-tip{animation:none}}
-/* Sidebar footer action (multi-session overview opener): mirrors the
-   settings trigger row — wide shows dot + label, the 56px rail shows the dot
-   only. Theme tokens throughout; severity palette classes reused below. */
-.sh-fa{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);border-radius:8px;font-size:13px;line-height:20px;box-sizing:border-box;cursor:pointer;user-select:none;white-space:nowrap}
-.sh-fa:hover{background:var(--dsw-alias-interactive-bg-hover)}
+/* Sidebar footer action (multi-session overview opener): styled and sized
+   like the New Session button (38px, radius 12, elevated fill + border),
+   entirely on theme tokens so it follows light/dark themes with the shell.
+   Rail state mirrors the New Session rail icon (36px, borderless, hover
+   tint). The severity palette classes above are reused for the dot. */
+.sh-fa{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:8px 16px;margin:0 2px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:22px;flex:none;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden}
+.sh-fa:hover{background:var(--dsw-alias-button-floating-hover)}
 .sh-fa:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:2px}
 .sh-fa .sh-fa-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dsw-alias-label-tertiary)}
+.sh-fa-rail{width:36px;height:36px;padding:0;margin:0 0 12px;align-self:flex-start;border-color:transparent;background:transparent}
+.sh-fa-rail:hover{background:var(--dsw-alias-interactive-bg-hover)}
 /* Overview panel: frame-wide scrim + centered card. The shell.overlay layer
    is click-through by default — the panel opts back into pointer events. */
 .sh-scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 55%,transparent);display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto;z-index:60;animation:sh-fade-in .15s ease-out}
@@ -490,7 +494,7 @@ function OverviewAction(props: {
   return (
     <button
       type="button"
-      className="sh-fa"
+      className={`sh-fa${props.wide ? '' : ' sh-fa-rail'}`}
       onClick={() => props.store.setOpen(true)}
       aria-label="会话健康一览（打开所有会话的健康面板）"
       title="会话健康一览"
