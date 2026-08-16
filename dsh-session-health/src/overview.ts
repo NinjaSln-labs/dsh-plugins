@@ -32,6 +32,10 @@ export interface OverviewRow {
   createdAt: number
   /** The health verdict; null when no projection value exists (cold + no cache row). */
   health: SessionHealthProjection | null
+  /** Session working directory (diagnostics / workspace display). */
+  cwd: string | null
+  /** Subagent-child marker from the session header (diagnostics). */
+  origin: string | null
 }
 
 const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
@@ -55,7 +59,7 @@ export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
 /** Loose face of the sessionQuery service (only the parts overview needs). */
 interface SessionQueryLike {
   listSessions(signal?: AbortSignal): Promise<Array<{
-    header: { id: string; createdAt?: number }
+    header: { id: string; createdAt?: number; cwd?: string; origin?: string }
     live?: boolean
     persisted?: boolean
   }>>
@@ -69,17 +73,51 @@ interface SessionQueryLike {
   }>>
 }
 
+/** Loose face of the in-memory session store (live sessions). */
+interface SessionsStoreLike {
+  get(id: string): { header?: { id?: string; cwd?: string } } | undefined
+}
+
 /**
- * Build the overview rows for every known session. Never throws on a single
- * bad session — per-record failures degrade to `health: null` / `title: null`
- * so one broken record cannot blank the whole panel. Returns [] when the
- * sessionQuery service is absent (headless assemblies keep working).
+ * Current workspace root for the panel's session scope. The sidebar shows one
+ * workspace's sessions at a time, so the overview must match: sandboxPolicy's
+ * workspaceRoot when configured, else the cwd of the newest live session.
+ * Returns null when neither is available — the caller then skips the cwd
+ * filter rather than showing an empty panel.
+ */
+function resolveWorkspaceRoot(ctx: Context, sessionsStore: SessionsStoreLike | undefined): string | null {
+  try {
+    const sp = ctx.get('sandboxPolicy') as { workspaceRoot?: string } | undefined
+    if (sp?.workspaceRoot !== undefined && sp.workspaceRoot !== null && sp.workspaceRoot !== '') {
+      return sp.workspaceRoot
+    }
+  } catch { /* fall through */ }
+  if (sessionsStore === undefined) return null
+  try {
+    // Newest live session's cwd as a fallback workspace anchor.
+    const live = (ctx.get('sessions') as { list?(): Array<{ header?: { cwd?: string; id?: string } }> } | undefined)?.list?.()
+    let newest: { header?: { cwd?: string; id?: string } } | undefined
+    for (const s of live ?? []) {
+      if (s.header?.cwd && (newest === undefined || (s.header.id ?? '') > (newest.header?.id ?? ''))) newest = s
+    }
+    return newest?.header?.cwd ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Build the overview rows for the current workspace's top-level sessions.
+ * Never throws on a single bad session — per-record failures degrade to
+ * `health: null` / `title: null` so one broken record cannot blank the whole
+ * panel. Returns [] when the sessionQuery service is absent (headless
+ * assemblies keep working).
  */
 export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<OverviewRow[]> {
   const sessionQuery = ctx.get('sessionQuery') as SessionQueryLike | undefined
   if (sessionQuery === undefined) return []
 
-  let records: Array<{ header: { id: string; createdAt?: number }; live?: boolean; persisted?: boolean }>
+  let records: Array<{ header: { id: string; createdAt?: number; cwd?: string; origin?: string }; live?: boolean; persisted?: boolean }>
   try {
     records = await sessionQuery.listSessions(signal)
   } catch {
@@ -87,9 +125,8 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   }
   if (!Array.isArray(records) || records.length === 0) return []
 
-  const sessionsStore = ctx.get('sessions') as
-    | { get(id: string): { header?: { id?: string; cwd?: string } } | undefined }
-    | undefined
+  const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
+  const workspaceRoot = resolveWorkspaceRoot(ctx, sessionsStore)
   const projections = ctx.get('sessionProjections') as
     | { snapshot(session: unknown): { values?: Record<string, unknown> } }
     | undefined
@@ -109,6 +146,15 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   for (const rec of records) {
     const id = rec.header?.id
     if (typeof id !== 'string' || id === '') continue
+    // The sidebar lists top-level sessions of the current workspace only:
+    // subagent children and sessions from other workspaces stay out.
+    if (rec.header.origin === 'subagent') continue
+    if (workspaceRoot !== null) {
+      const cwd = rec.header.cwd
+      const inWorkspace = typeof cwd === 'string' && cwd.length > 0
+        && (cwd === workspaceRoot || cwd.startsWith(`${workspaceRoot}/`))
+      if (!inWorkspace) continue
+    }
     const createdAt = typeof rec.header.createdAt === 'number' ? rec.header.createdAt : 0
 
     // Health value: live projection snapshot first, then the persisted cache
@@ -144,7 +190,15 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
     }
     if (title === null) pendingTitles.push(id)
 
-    rows.push({ id, title, live: rec.live === true, createdAt, health })
+    rows.push({
+      id,
+      title,
+      live: rec.live === true,
+      createdAt,
+      health,
+      cwd: typeof rec.header.cwd === 'string' ? rec.header.cwd : null,
+      origin: typeof rec.header.origin === 'string' ? rec.header.origin : null,
+    })
   }
 
   // Batch title observation for sessions without a live fold (cold sessions).
