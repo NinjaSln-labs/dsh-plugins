@@ -502,16 +502,18 @@ function ageOf(ts: number): string {
   return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Compact age for the created column (刚刚 / 5m / 3h / 2d / 08-14). */
+/** Compact creation DATE for the created column: MM-DD (the year lives in
+    the hover title — a bare relative "7h" was less scannable). */
 function ageShort(ts: number): string {
   if (ts <= 0) return '—'
-  const diff = Date.now() - ts
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`
   const d = new Date(ts)
-  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Full date for hover titles: YYYY-MM-DD. */
+function dateFull(ts: number): string {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /** Sort modes: 'severity' = 方案 A (tier → live → newest), 'time' = newest first. */
@@ -768,7 +770,7 @@ function OverviewBody(props: {
                   <span className="sh-row-num" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
                   <span className="sh-row-num" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
                   <span className="sh-row-num">{scale}</span>
-                  <span className="sh-row-num" title={row.createdAt > 0 ? `创建于 ${ageOf(row.createdAt)}` : undefined}>{ageShort(row.createdAt)}</span>
+                  <span className="sh-row-num" title={row.createdAt > 0 ? `创建于 ${dateFull(row.createdAt)}（${ageOf(row.createdAt)}）` : undefined}>{ageShort(row.createdAt)}</span>
                 </button>
               )
             })
