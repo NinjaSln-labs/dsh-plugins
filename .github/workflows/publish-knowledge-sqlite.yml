@@ -1,0 +1,71 @@
+# dsh-knowledge-sqlite 发布工作流（人工审批门）——与 dsh-context-compass 同款
+#
+# 安全模型：
+# - 触发 = 本机人工创建的 tag（knowledge-sqlite-vX.Y.Z），发布决策永远是人的决定
+# - 权限最小化：workflow 仅 contents: read；NPM_TOKEN 只注入 publish 步骤的 env
+# - token = npm granular access token（需授权 dsh-knowledge-sqlite 包，Read and write），
+#   存 GitHub secrets（与其它发布工作流共用 NPM_TOKEN；若 token 未授权本包，
+#   publish 步骤会 403 —— 到 npmjs.com 的 token 设置里补勾选本包即可）
+# - 审批门：environment `npm-publish` + required reviewers——CI 全自动跑完验证后，
+#   需仓库管理员在 GitHub 页面批准才真正执行 npm publish
+# - 版本一致性守卫：tag 版本必须与 package.json version 完全一致，防误发/伪造 tag
+# - actions 按 SHA 固定，防 action 供应链投毒
+#
+# 发布流程（日常）：
+#   cd dsh-plugins/dsh-knowledge-sqlite
+#   npm version patch --no-git-tag-version -m "chore: release v%s"
+#   git add package.json package-lock.json && git commit -m "chore: release v$(node -p "require('./package.json').version")"
+#   git tag knowledge-sqlite-v$(node -p "require('./package.json').version")
+#   git push && git push --tags       # CI 接手：验证链 → 等你在 GitHub 批准 → publish
+#
+# 注意：测试依赖入库的语料 fixture（tests/fixtures/corpus/），CI 无需仓库外文件；
+# 若同步语料后断言值变化，需同步更新 tests/service.spec.ts 与 test-smoke.mjs。
+name: publish-knowledge-sqlite
+
+on:
+  push:
+    tags:
+      - 'knowledge-sqlite-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    defaults:
+      run:
+        working-directory: dsh-knowledge-sqlite
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: dsh-knowledge-sqlite/package-lock.json
+      - name: 'Guard: tag version matches package.json'
+        run: |
+          EXPECTED="refs/tags/knowledge-sqlite-v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF" != "$EXPECTED" ]; then
+            echo "::error::tag/version mismatch: $GITHUB_REF vs $EXPECTED"
+            exit 1
+          fi
+      - name: Install
+        run: npm ci
+      - name: Verify (strict typecheck + unit tests + build)
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          npm test
+          npm run build
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
