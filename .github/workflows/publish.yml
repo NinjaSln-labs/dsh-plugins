@@ -51,6 +51,11 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
+          # lockfile 位于包子目录 dsh-session-health/package-lock.json（defaults
+          # working-directory 不作用于 action 的 cache 探测）——必须显式给
+          # cache-dependency-path，否则 setup-node 在仓库根找不到锁文件直接报错
+          # （2026-08-16 实测：Setup Node 失败 "Dependencies lock file is not found"）
+          cache-dependency-path: dsh-session-health/package-lock.json
       - name: 'Guard: tag version matches package.json'
         run: |
           EXPECTED="refs/tags/session-health-v$(node -p "require('./package.json').version")"
