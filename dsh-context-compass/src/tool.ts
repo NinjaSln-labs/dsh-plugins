@@ -64,6 +64,7 @@ const OUTPUT_SCHEMA = {
         turns: { type: 'number', description: '会话轮次' },
         messageCount: { type: 'number', description: '消息总数（用户 + 助手）' },
         compactions: { type: 'number', description: '已压缩次数' },
+        compactionRatio: { type: 'number', description: '上次压缩比例 0..1（按压缩前后压力快照差值推断——快照口径，非精确统计；未知时省略）' },
       },
     },
     handoffReady: {
@@ -107,7 +108,7 @@ const OUTPUT_SCHEMA = {
 function renderToolText(value: {
   summary?: string
   report?: string
-  signals?: { windowPercent?: number; tokensPerRound?: number; turns?: number; messageCount?: number; compactions?: number }
+  signals?: { windowPercent?: number; tokensPerRound?: number; turns?: number; messageCount?: number; compactions?: number; compactionRatio?: number }
 }): string {
   if (value.report !== undefined && value.report.length > 0) return value.report
   const s = value.signals
@@ -117,7 +118,12 @@ function renderToolText(value: {
   if (s.tokensPerRound !== undefined) parts.push(`每轮输入 ${s.tokensPerRound} token`)
   if (s.turns !== undefined) parts.push(`${s.turns} 轮`)
   if (s.messageCount !== undefined) parts.push(`${s.messageCount} 条消息`)
-  if ((s.compactions ?? 0) > 0) parts.push(`已压缩 ${s.compactions} 次`)
+  if ((s.compactions ?? 0) > 0) {
+    const ratioNote = typeof s.compactionRatio === 'number'
+      ? `（上次压缩比例约 ${Math.round(s.compactionRatio * 100)}%，快照口径）`
+      : ''
+    parts.push(`已压缩 ${s.compactions} 次${ratioNote}`)
+  }
   return parts.filter(Boolean).join('；') + '。如需完整报告可让用户运行 /compass。'
 }
 
@@ -152,6 +158,7 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
         signals.messageCount = (report.signals.userMessages ?? 0) + (report.signals.assistantMessages ?? 0)
       }
       signals.compactions = report.signals.compactions
+      if (report.signals.compactionRatio !== null) signals.compactionRatio = report.signals.compactionRatio
 
       const handoffReady: Record<string, unknown> = { runningProcesses: report.handoff.runningProcesses }
       if (report.handoff.isGitRepo !== null) handoffReady.isGitRepo = report.handoff.isGitRepo

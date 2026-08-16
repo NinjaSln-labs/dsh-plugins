@@ -26,6 +26,12 @@ export interface HealthSignals {
   userMessages: number | null
   assistantMessages: number | null
   compactions: number
+  /**
+   * Last inferred compression ratio 1 − post/pre (0..1); null when no fold
+   * was observed or the last one was inconclusive. Caliber: pressure-snapshot
+   * delta estimate around a compaction, not exact compaction statistics.
+   */
+  compactionRatio: number | null
   /** Cache-hit ratio of the last request; null when unknown. */
   cacheHitRate: number | null
   /** Billable-equivalent per round (uncached + cacheRead × discount); null when unknown. */
@@ -462,6 +468,11 @@ export async function assess(
   // sessionHealth projection snapshot read above (the exact tokenMeter
   // measurement stays the primary pressure source).
   const cacheHitRate = cacheHitRateOf(tokenUsage)
+  // Compression ratio: rides the projection unit's fold inference (1 − post/pre
+  // from pressure snapshots around a compaction; snapshot-delta caliber, not
+  // exact compaction statistics). Null headless (no projection registry) or
+  // before the first observed fold.
+  const compactionRatio = snapshot?.compressionRatio ?? null
   let effectivePerRound: number | null = null
   let effectivePerRoundUsd: number | null = null
   let effectivePerRoundCny: number | null = null
@@ -476,6 +487,9 @@ export async function assess(
   }
   if (cacheHitRate !== null) {
     probes.push(`缓存命中率 ${formatHitRate(cacheHitRate)}（会话累计，与输入栏统计同口径；命中高说明上下文稳定）`)
+  }
+  if (compactionRatio !== null) {
+    probes.push(`上次压缩比例 ≈ ${Math.round(compactionRatio * 100)}%（按压缩前后压力快照差值推断——快照口径，非精确统计）`)
   }
   const expectedTotalTokens = effectivePerRound !== null
     && opts.remainingRounds !== null && opts.remainingRounds !== undefined
@@ -556,6 +570,7 @@ export async function assess(
       userMessages: counts.user,
       assistantMessages: counts.assistant,
       compactions,
+      compactionRatio,
       cacheHitRate,
       effectivePerRound,
       effectivePerRoundUsd,

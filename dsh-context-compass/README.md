@@ -4,7 +4,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的上下文罗盘插件：基于真实数据的「继续 vs 新开会话」指示器。
 
-- **头部徽章** — 会话日志按钮旁的有色圆点 + 边框（绿/蓝/黄/红），使用 DSH 主题令牌。**响应式**：完全由宿主计算的 `sessionHealth` 投影驱动（推送帧——这是社区插件唯一可用的线上数据通道；客户端 Remote 是构建期固定清单，因此本插件无 Remote、无轮询）。悬停显示建议、窗口占用条、每轮 token 成本与**缓存命中率**（命中率是上下文稳定度的表现；压缩会重置命中）、压缩感知的**预计下次输入（剔除缓存命中）**、**计费预期（金额）**（zh 界面显示 CNY，否则 USD——官方峰谷定价，标注 `忙时价/闲时价`）、模型窗口、会话规模与压缩次数。**点击运行 `/compass`** 查看完整报告。支持键盘操作。
+- **头部徽章** — 会话日志按钮旁的有色圆点 + 边框（绿/蓝/黄/红），使用 DSH 主题令牌。**响应式**：完全由宿主计算的 `sessionHealth` 投影驱动（推送帧——这是社区插件唯一可用的线上数据通道；客户端 Remote 是构建期固定清单，因此本插件无 Remote、无轮询）。悬停显示建议、窗口占用条、每轮 token 成本与**缓存命中率**（命中率是上下文稳定度的表现；压缩会重置命中）、压缩感知的**预计下次输入（剔除缓存命中）**、**计费预期（金额）**（zh 界面显示 CNY，否则 USD——官方峰谷定价，标注 `忙时价/闲时价`）、模型窗口、会话规模与压缩次数（含**上次压缩比例**——按压缩前后压力快照差值推断，标「快照口径」）。压缩后判定滞后（severity 判定基于压缩前压力、占用条已按下次请求重估）时提示「**下次请求后更新**」。**点击运行 `/compass`** 查看完整报告。支持键盘操作。
 - **`/compass` 命令** — 完整文本报告，可选探测：
   - `/compass` — 全部（git / 交接文档 / 进程探测，可配置）
   - `/compass minimal` — 仅核心指标（token / 窗口 / 规模）
@@ -13,7 +13,7 @@
   - `/compass remaining=<轮数>` — 费用预期（金额）：`每轮成本 × 剩余轮数 ≈ 预计输入花费`（含缓存折扣）
   - `/compass processes` — 强制进程探测
 - **`context_compass` 工具** — 模型可调用的只读评估（长任务自查）：结构化结论（`severity` / `recommendation` / `signals` / `cost` / `handoffReady`），黄/红档附带完整 markdown 报告。工作性质问题由模型自查（`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`），其余全部由宿主精确测量。
-- **`sessionHealth` 投影** — 宿主计算的持久折叠（轮次、消息数、压缩次数、last-wins 压力/窗口、上次请求缓存桶、severity + 建议）推送到所有客户端；重放与页面刷新后依然存活。
+- **`sessionHealth` 投影** — 宿主计算的持久折叠（轮次、消息数、压缩次数、last-wins 压力/窗口、上次请求缓存桶、**上次压缩比例**、severity + 建议）推送到所有客户端；重放与页面刷新后依然存活。
 - **多会话罗盘一览面板**（v0.6.0）— 侧栏底部「设置」旁的「罗盘一览」按钮打开全屏面板（`shell.overlay`），列出**所有会话**的健康判定。数据走同源宿主 RPC（`/session-health-rpc`，仅 loopback）：在线会话切投影注册表快照，冷会话读持久化投影缓存（异步 cold load 兜底）；标题来自日志折叠 / 批量查询。行按红 → 黄 → 蓝 → 绿 → 无数据排序（同档内新会话在前），面板打开期间每 5 秒刷新；点击行打开该会话并运行 `/compass`。Esc / 点遮罩关闭；键盘与读屏可达（severity 从不只靠颜色传达）。
 
 ## 交接清单（自动化）
@@ -89,7 +89,7 @@ harness 不携带价格数据，金额显示通过实时缓存解析，数据源
 |---|---|
 | 每轮输入 token | `ctx.tokenMeter.measure`（精确，快照口径） |
 | 上下文窗口 | `llm.resolveModelInfo`（如 deepseek-v4-pro 的 1M） |
-| 消息 / 轮次 / 压缩次数 / 缓存桶 | `sessionHealth` 投影折叠（sessionQuery 兜底） |
+| 消息 / 轮次 / 压缩次数 / 缓存桶 / 压缩比例 | `sessionHealth` 投影折叠（sessionQuery 兜底；压缩比例 = 折叠内 1 − 压缩后/压缩前压力快照，快照口径） |
 | 下次请求占用 | token-meter `contextPressure.projectedTokens`（压缩感知） |
 | git 仓库 + 工作树状态 | `fs` 探测 + 只读 git 子命令 |
 | 交接文档 | 探测**你提供**的文件名 |
@@ -119,6 +119,8 @@ npm run typecheck  # 严格类型检查
 npm run smoke      # 逻辑冒烟测试（stub 服务）
 npm run mount      # 真实 cordis 挂载测试（命令 + 工具 + 投影）
 npm run build:client && node scripts/client-mount.mjs  # 浏览器启动路径测试
+npm run visual     # Playwright 视觉回归（需运行中 harness：明/暗 × 四档 × 卡片展开矩阵 + hover 桥接层 e2e）
+npm run visual:update  # 有意变更视觉后重写基线（visual/baselines/）
 ```
 
 ## 设计

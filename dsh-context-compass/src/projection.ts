@@ -30,6 +30,18 @@ export interface SessionHealthState {
   compactions: number
   pressureTokens?: number
   contextWindow?: number
+  /**
+   * Pressure snapshot captured when `compaction/end` arrived — the "pre"
+   * side of the compression-ratio inference. Consumed by the first usage
+   * sample after the fold (the "post" side); never set while no pressure is
+   * known. The inference rides pressure snapshots only, never event payloads.
+   */
+  preCompactionPressure?: number
+  /**
+   * Last inferred compression ratio 1 − post/pre (0..1); null when the last
+   * fold was inconclusive (pressure did not drop after compaction).
+   */
+  compressionRatio?: number | null
   /** Buckets of the most recent usage report (per-round money math). */
   lastUsage?: { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
 }
@@ -52,13 +64,36 @@ function bucketsOf(usage: { inputTokens: number; cacheReadTokens?: number; cache
   }
 }
 
+/**
+ * Fold the compression-ratio inference: the FIRST usage sample after a
+ * `compaction/end` is the post-compaction pressure; the pre side was
+ * captured when the fold event arrived. Caliber: 1 − post/pre from pressure
+ * snapshots — an estimate, not exact compaction statistics (the event
+ * carries no payload). A fold that did not lower pressure is inconclusive
+ * (new content overwhelmed the gain) and reads as null, never a fake 0.
+ */
+function foldCompression(state: SessionHealthState, post: number): SessionHealthState {
+  const pre = state.preCompactionPressure
+  if (pre === undefined || pre <= 0) return state
+  const next = { ...state }
+  delete next.preCompactionPressure
+  next.compressionRatio = post < pre ? Math.min(1, 1 - post / pre) : null
+  return next
+}
+
 /** Pure transition: previous state + one committed event → next state. */
 export function applyHealthEvent(state: SessionHealthState, event: SessionEvent): SessionHealthState {
   // Compaction events are appended by the compaction plugin and are not part
   // of the dsh-session union, so they are matched by name (same approach as
   // token-meter's surface fold).
   if ((event as { type?: string }).type === 'compaction/end') {
-    return { ...state, compactions: state.compactions + 1 }
+    const next: SessionHealthState = { ...state, compactions: state.compactions + 1 }
+    // Capture the pre-compaction pressure so the next usage sample can infer
+    // the ratio — no event payload involved.
+    if (typeof state.pressureTokens === 'number' && state.pressureTokens > 0) {
+      next.preCompactionPressure = state.pressureTokens
+    }
+    return next
   }
   switch (event.type) {
     case 'step/end': {
@@ -71,19 +106,19 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
     case 'assistant/message': {
       const next = { ...state, assistantMessages: state.assistantMessages + 1 }
       if (event.data.usage === undefined) return next
-      return {
-        ...next,
-        pressureTokens: pressureOf(event.data.usage),
-        lastUsage: bucketsOf(event.data.usage),
-      }
+      const post = pressureOf(event.data.usage)
+      return foldCompression(
+        { ...next, pressureTokens: post, lastUsage: bucketsOf(event.data.usage) },
+        post,
+      )
     }
     case 'assistant/chunk': {
       if (event.data.chunk.type !== 'usage') return state
-      return {
-        ...state,
-        pressureTokens: pressureOf(event.data.chunk.usage),
-        lastUsage: bucketsOf(event.data.chunk.usage),
-      }
+      const post = pressureOf(event.data.chunk.usage)
+      return foldCompression(
+        { ...state, pressureTokens: post, lastUsage: bucketsOf(event.data.chunk.usage) },
+        post,
+      )
     }
     case 'request/context': {
       if (event.data.contextWindow === undefined) return state
@@ -162,7 +197,12 @@ export function healthView(
   if (severity === 'green' && proxyHit) severity = 'blue'
 
   const pct = ratio !== null ? Math.round(ratio * 100) : null
-  const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次）` : ''
+  // Compression ratio annotation (snapshot-delta caliber — see foldCompression).
+  const compressionRatio = state.compressionRatio ?? null
+  const ratioNote = compressionRatio !== null
+    ? `；上次压缩比例 ≈ ${Math.round(compressionRatio * 100)}%，快照口径`
+    : ''
+  const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次${ratioNote}）` : ''
 
   let advice: string
   switch (severity) {
@@ -172,15 +212,17 @@ export function healthView(
     case 'yellow':
       advice = capacityHigh
         ? `上下文已占窗口 ${pct}%${compacted}，建议在任务边界收尾；若剩余工作还多，开新会话更划算。`
-        : `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣），费用可观；若剩余工作还多，开新会话更划算。`
+        : `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣），费用可观；若剩余工作还多，开新会话更划算。${compacted}`
       break
     case 'blue':
-      advice = proxyHit && ratio !== null && ratio < t.windowMid
+      // The compaction annotation rides every tier (blue/green appended):
+      // how much the last fold compressed is useful context at any severity.
+      advice = (proxyHit && ratio !== null && ratio < t.windowMid
         ? `消息量已达 ${messages} 条（代理指标），早期内容可能被压缩——继续但留意，必要时开新会话。`
-        : `上下文占用 ${pct}%（中等），继续但留意窗口压力。`
+        : `上下文占用 ${pct}%（中等），继续但留意窗口压力。`) + compacted
       break
     default:
-      advice = ratio !== null ? `空间充足（占用 ${pct}%），放心继续。` : '各项信号正常，放心继续。'
+      advice = (ratio !== null ? `空间充足（占用 ${pct}%），放心继续。` : '各项信号正常，放心继续。') + compacted
   }
 
   return {
@@ -193,6 +235,7 @@ export function healthView(
     userMessages: state.userMessages,
     assistantMessages: state.assistantMessages,
     compactions: state.compactions,
+    compressionRatio,
     uncachedInputTokens,
     cacheReadTokens,
     effectivePerRound,
@@ -219,6 +262,8 @@ export function sessionHealthProjectionDefinition(
     // v7: cache-hit rate removed from this unit — it now reads the core
     // tokenUsage projection via src/usage.ts (single data source, single
     // algorithm location shared with the input-bar stats line).
-    stateVersion: 7,
+    // v8: compression-ratio inference added (preCompactionPressure +
+    // compressionRatio fold fields, wire field compressionRatio).
+    stateVersion: 8,
   }
 }

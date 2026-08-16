@@ -1,129 +1,124 @@
 # dsh-context-compass
 
-English | [简体中文](README.md)
+[简体中文](README.md) | English
 
 Context compass for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **头部徽章** — 会话日志按钮旁的有色圆点 + 边框（绿/蓝/黄/红），使用 DSH 主题令牌。**响应式**：完全由宿主计算的 `sessionHealth` 投影驱动（推送帧——这是社区插件唯一可用的线上数据通道；客户端 Remote 是构建期固定清单，因此本插件无 Remote、无轮询）。悬停显示建议、窗口占用条、每轮 token 成本与**缓存命中率**（命中率是上下文稳定度的表现；压缩会重置命中）、压缩感知的**预计下次输入（剔除缓存命中）**、**计费预期（金额）**（zh 界面显示 CNY，否则 USD——官方峰谷定价，标注 `忙时价/闲时价`）、模型窗口、会话规模与压缩次数。**点击运行 `/compass`** 查看完整报告。支持键盘操作。
-- **`/compass` 命令** — 完整文本报告，可选探测：
-  - `/compass` — 全部（git / 交接文档 / 进程探测，可配置）
-  - `/compass minimal` — 仅核心指标（token / 窗口 / 规模）
-  - `/compass no-git` / `/compass no-handoff` — 跳过某项探测
-  - `/compass doc=<你的文件名>` — 检查你自己的交接文档（不预设文件名；概念是你的，名字也是你的）
-  - `/compass remaining=<轮数>` — 费用预期（金额）：`每轮成本 × 剩余轮数 ≈ 预计输入花费`（含缓存折扣）
-  - `/compass processes` — 强制进程探测
-- **`context_compass` 工具** — 模型可调用的只读评估（长任务自查）：结构化结论（`severity` / `recommendation` / `signals` / `cost` / `handoffReady`），黄/红档附带完整 markdown 报告。工作性质问题由模型自查（`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`），其余全部由宿主精确测量。
-- **`sessionHealth` 投影** — 宿主计算的持久折叠（轮次、消息数、压缩次数、last-wins 压力/窗口、上次请求缓存桶、severity + 建议）推送到所有客户端；重放与页面刷新后依然存活。
-- **多会话罗盘一览面板**（v0.6.0）— 侧栏底部「设置」旁的「罗盘一览」按钮打开全屏面板（`shell.overlay`），列出**所有会话**的健康判定。数据走同源宿主 RPC（`/session-health-rpc`，仅 loopback）：在线会话切投影注册表快照，冷会话读持久化投影缓存（异步 cold load 兜底）；标题来自日志折叠 / 批量查询。行按红 → 黄 → 蓝 → 绿 → 无数据排序（同档内新会话在前），面板打开期间每 5 秒刷新；点击行打开该会话并运行 `/compass`。Esc / 点遮罩关闭；键盘与读屏可达（severity 从不只靠颜色传达）。
+- **Header badge** — a colored dot + pill (green/blue/yellow/red) next to the session-log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the only online data path community plugins own; the client Remote list is build-time fixed, so this plugin has no Remote and no polling). Hover shows the advice, a window-occupancy bar, per-round token cost and **cache-hit rate** (a sign of context stability; compaction resets it), compaction-aware **expected next input (cache reads excluded)**, **expected cost (money)** (CNY on zh interfaces, USD otherwise — official peak/valley pricing, marked `忙时价/闲时价`), model window, session scale and compaction count (with the **last compression ratio** — inferred from the pressure-snapshot delta around a fold, labeled "snapshot caliber"). When the verdict lags behind a compaction (severity rides pre-compaction pressure while the occupancy bar already reflects the next request), the tooltip notes "**下次请求后更新**". **Click to run `/compass`** for the full report. Keyboard accessible.
+- **`/compass` command** — a full textual report with optional probes:
+  - `/compass` — everything (git / handoff doc / process probes, configurable)
+  - `/compass minimal` — core metrics only (token / window / scale)
+  - `/compass no-git` / `/compass no-handoff` — skip one probe family
+  - `/compass doc=<your.file>` — check YOUR handoff document (no filename is assumed; the concept is yours, the name is yours)
+  - `/compass remaining=<rounds>` — cost expectation (money): `per-round cost × remaining rounds ≈ expected input spend` (cache-discounted)
+  - `/compass processes` — force the process probe
+- **`context_compass` tool** — a read-only model-callable assessment (long-task self-check): structured verdict (`severity` / `recommendation` / `signals` / `cost` / `handoffReady`), with a full markdown report attached on yellow/red. Work-nature questions are self-assessed by the model (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); everything else is measured exactly by the host.
+- **`sessionHealth` projection** — a host-computed persistent fold (turns, message counts, compaction count, last-wins pressure/window, last-request cache buckets, **last compression ratio**, severity + advice) pushed to every client; survives replay and page refresh.
+- **Multi-session overview panel** (v0.6.0) — the "罗盘一览" button beside Settings at the sidebar foot opens a full-screen panel (`shell.overlay`) listing **every session's** verdict. Data rides a same-origin host RPC (`/context-compass-rpc`, loopback only): live sessions read the projection-registry snapshot, cold sessions read the persisted projection cache (async cold load fallback); titles come from log folds / batch queries. Rows sort red → yellow → blue → green → no-data (newest first inside a tier); the panel refreshes every 5 s while open; clicking a row opens that session and runs `/compass`. Esc / scrim click closes. Keyboard and screen-reader accessible (severity is never conveyed by color alone).
+- **压缩比例与滞后标注**（v0.7.0）— the fold infers the last compression ratio (1 − post/pre from pressure snapshots around `compaction/end`, no event payload; inconclusive folds read null, never a fake 0) and surfaces it with the "snapshot caliber" label in the advice, report, tool signals and panel tooltips. When the severity verdict (last-wins pressure) diverges from the occupancy bar (compaction-aware next-request cost) by ≥5 pp after a compaction, the tooltip annotates the lag until the next request refreshes the verdict.
 
-## 交接清单（自动化）
+## Handoff checklist (automated)
 
-黄/红档时，`/compass` 追加**真实状态清单**而非静态文案：`git status --short` / `git log --oneline -1` / `git status -sb`（经 `ctx.subprocess` 的只读白名单 argv）驱动 commit/push 项，交接文档探测驱动文档项，进程探测驱动进程项。无法检查的项标记 `[ ]` 并说明原因——绝不静默显示「已完成」。
+On yellow/red, `/compass` appends a **real-state checklist** instead of static copy: `git status --short` / `git log --oneline -1` / `git status -sb` (read-only whitelisted argv through `ctx.subprocess`) drive the commit/push items, the handoff-doc probe drives the doc item, the process probe drives the process item. Items that cannot be checked are marked `[ ]` with the reason — never silently shown as "done".
 
-## 判定模型
+## Decision model
 
-二维「继续 vs 切换」（社区 session-health 方法论），参数在插件配置中：
+Two-dimensional "continue vs switch" (community session-health methodology), parameterized in the plugin config:
 
-| 档位 | 条件（默认） | 建议 |
+| Tier | Condition (default) | Advice |
 |---|---|---|
-| 绿 | 窗口占比 < 30%，每轮计费当量 < 50K | 放心继续 |
-| 蓝 | 占比 30–50%，或消息数 ≥ 800（代理指标） | 继续，留意窗口 |
-| 黄 | 占比 ≥ 50%，或每轮计费当量 ≥ max(50K, 30% × 窗口) | 在下一个任务边界收尾 |
-| 红 | 占比 ≥ 80% | 尽快收尾并交接 |
+| Green | window ratio < 30%, per-round billable < 50K | Keep going |
+| Blue | ratio 30–50%, or messages ≥ 800 (proxy) | Continue, watch the window |
+| Yellow | ratio ≥ 50%, or per-round billable ≥ max(50K, 30% × window) | Wrap up at the next task boundary |
+| Red | ratio ≥ 80% | Wrap up and hand off soon |
 
-按方法论，经济成本（每轮计费当量，含缓存折扣）优先于容量（窗口占比）。经济门槛随窗口缩放（`economyWindowRatio`）：50K 绝对默认按 ~128K 窗口模型校准，若在大窗口模型上仍用裸值，会在个位数占比时就误报黄色——现在计费当量不达标就不会黄。当工作依赖从未记录（git/文档）的早期内容时，工具升级为 `danger-zone`——绝不建议裸切。
+Per the methodology, the economy dimension (per-round billable, cache-discounted) outranks capacity (window ratio). The economy floor scales with the window (`economyWindowRatio`): the 50K absolute default was calibrated for ~128K-window models, and using it raw on large-window models would false-yellow at single-digit occupancy — now the billable equivalent must actually meet the floor. When the work depends on early content that was never recorded (git/docs), the tool escalates to `danger-zone` — it never suggests a naked switch.
 
-## 配置
+## Configuration
 
 ```ts
-// thresholds: 判定模型参数
+// thresholds: decision-model parameters
 thresholds: {
-  windowMid: 0.3, windowHigh: 0.5, windowCritical: 0.8,   // 窗口占比档位
-  economyTokenFloor: 50000, economyWindowRatio: 0.3,      // 经济维度（计费当量 ≥ max(50K, 30%×窗口) 才黄）
-  economyRoundFloor: 10,                                  // 剩余轮数阈值（费用预期文案）
-  messageCountProxy: 800,                                  // 上下文膨胀代理指标
+  windowMid: 0.3, windowHigh: 0.5, windowCritical: 0.8,   // window-ratio tiers
+  economyTokenFloor: 50000, economyWindowRatio: 0.3,      // economy: billable ≥ max(50K, 30%×window) → yellow
+  economyRoundFloor: 10,                                  // remaining-rounds threshold (cost-expectation copy)
+  messageCountProxy: 800,                                 // context-bloat proxy metric
 }
-// checks: 探测开关（全部只读）
+// checks: probe switches (all read-only)
 checks: {
-  git: { enabled: true, workspaceRoot?: string },          // .git 存在性探测
-  handoff: { enabled: true, paths: [] },                   // 你的交接文档文件名
-  sessionResume: { enabled: true },                        // DSH 持久化说明
-  processes: { enabled: true },                            // 经 ctx.subprocess 的 ps 探测
+  git: { enabled: true, workspaceRoot?: string },          // .git existence probe
+  handoff: { enabled: true, paths: [] },                   // YOUR handoff-doc filenames
+  sessionResume: { enabled: true },                        // DSH persistence note
+  processes: { enabled: true },                            // ps probe through ctx.subprocess
 }
-projection: { enabled: true }                              // 响应式徽章单元
+projection: { enabled: true }                              // reactive badge unit
 cost: {
-  cacheHitDiscount: 0.1,       // 缓存命中价格比例
-  inputPricePerM: 0.28,        // 静态兜底：USD / 1M 输入 token
-  priceSource: 'auto',         // 'auto'：定期拉取；'static'：从不拉取
-  priceUrl: 'https://cdn.jsdelivr.net/gh/NinjaSln-labs/dsh-plugins@main/pricing/deepseek.json',   // 主源（jsdelivr，CN 可达）
-  priceFallbackUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json', // 同轮回退（GitHub raw）
+  cacheHitDiscount: 0.1,       // cache-hit price ratio
+  inputPricePerM: 0.28,        // static fallback: USD per 1M input tokens
+  priceSource: 'auto',         // 'auto': periodic fetch; 'static': never
+  priceUrl: 'https://cdn.jsdelivr.net/gh/NinjaSln-labs/dsh-plugins@main/pricing/deepseek.json',   // primary (jsdelivr, reachable in CN)
+  priceFallbackUrl: 'https://raw.githubusercontent.com/NinjaSln-labs/dsh-plugins/main/pricing/deepseek.json', // same-cycle fallback (GitHub raw)
   priceRefreshHours: 24,
 }
 ```
 
-## 价格（金额显示）
+## Pricing (money display)
 
-harness 不携带价格数据，金额显示通过实时缓存解析，数据源为**官方 DeepSeek 定价文档**
-（默认 `priceUrl` = jsdelivr CDN 镜像，`priceFallbackUrl` = GitHub raw 同轮回退；
-文档即本仓库维护的 [`pricing/deepseek.json`](../../../pricing/deepseek.json)，
-与 [api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 同步）。
-主源不可达时（如部分网络屏蔽 GitHub raw）自动回退，避免金额显示降级为静态 USD。
+The harness carries no price data; money display resolves through a live cache fed by the **official DeepSeek pricing document** (default `priceUrl` = jsdelivr CDN mirror, `priceFallbackUrl` = GitHub raw, same-cycle fallback; the document is the repo-maintained [`pricing/deepseek.json`](../../../pricing/deepseek.json), kept in sync with [api-docs.deepseek.com](https://api-docs.deepseek.com/quick_start/pricing/)). When the primary source is unreachable (some networks block GitHub raw) it falls back automatically instead of degrading the money display to static USD.
 
-- **峰谷定价**：每次读取按**北京时间**判定时段——高峰 9:00–12:00 / 14:00–18:00
-  （英文页写作 UTC 01–04 / 06–10），其余闲时半价；badge 标注 `忙时价/闲时价`。
-- **按模型**：按当前模型名取价（`models."*"` 兜底）。**双官方币种**——CNY 来自中文页，
-  **USD 直接取自英文页官方价**（无汇率换算）：v4-flash 闲时 未命中 ¥1.5/M / $0.22/M、
-  命中 ¥0.05/M / $0.007/M；忙时 ¥3.0/M / $0.44/M、¥0.10/M / $0.014/M。
-- **按地区选币种**：应用界面为 zh 时显示 CNY，否则 USD；`/compass` 双币并列。
-- 每 `priceRefreshHours`（默认 24h）刷新；失败保留上次有效文档；首次成功前（或
-  `priceSource: 'static'` 时）用静态 `inputPricePerM` / `cacheHitDiscount`（平价 USD，无时段）。
+- **Peak/valley**: each read picks the period by **Beijing time** — peak 9:00–12:00 / 14:00–18:00 (the English page writes UTC 01–04 / 06–10), off-peak half price; the badge marks `忙时价/闲时价`.
+- **Per model**: priced by the current model name (`models."*"` fallback). **Both official currencies** — CNY from the Chinese page, **USD taken directly from the English page** (no FX conversion): v4-flash off-peak miss ¥1.5/M / $0.22/M, hit ¥0.05/M / $0.007/M; peak ¥3.0/M / $0.44/M, ¥0.10/M / $0.014/M.
+- **Currency by region**: CNY when the app UI is zh, USD otherwise; `/compass` shows both.
+- Refreshed every `priceRefreshHours` (default 24h); failures keep the last good document; before the first success (or with `priceSource: 'static'`) the static `inputPricePerM` / `cacheHitDiscount` apply (flat USD, no periods).
 
-文档格式（每个时段双币必填）：
-`{ "peakHours": [[9,12],[14,18]], "models": { "<模型名>": { "peak": { "inputMissPerMCny": 3.0, "inputHitPerMCny": 0.10, "inputMissPerMUsd": 0.44, "inputHitPerMUsd": 0.014 }, "offpeak": { ... } }, "*": { ... } } }`
+Document format (both currencies required per period):
+`{ "peakHours": [[9,12],[14,18]], "models": { "<model>": { "peak": { "inputMissPerMCny": 3.0, "inputHitPerMCny": 0.10, "inputMissPerMUsd": 0.44, "inputHitPerMUsd": 0.014 }, "offpeak": { ... } }, "*": { ... } } }`
 
-## 为什么用真实数据
+## Why real data
 
-每个信号都来自 harness 本身——无任何估算：
+Every signal comes from the harness itself — no estimation:
 
-| 信号 | 来源 |
+| Signal | Source |
 |---|---|
-| 每轮输入 token | `ctx.tokenMeter.measure`（精确，快照口径） |
-| 上下文窗口 | `llm.resolveModelInfo`（如 deepseek-v4-pro 的 1M） |
-| 消息 / 轮次 / 压缩次数 / 缓存桶 | `sessionHealth` 投影折叠（sessionQuery 兜底） |
-| 下次请求占用 | token-meter `contextPressure.projectedTokens`（压缩感知） |
-| git 仓库 + 工作树状态 | `fs` 探测 + 只读 git 子命令 |
-| 交接文档 | 探测**你提供**的文件名 |
-| 运行中进程 | `ctx.subprocess` 只读 `ps` 探测，按工作区过滤 |
+| Per-round input tokens | `ctx.tokenMeter.measure` (exact, snapshot caliber) |
+| Context window | `llm.resolveModelInfo` (e.g. deepseek-v4-pro's 1M) |
+| Messages / turns / compactions / cache buckets / compression ratio | `sessionHealth` projection fold (sessionQuery fallback; ratio = in-fold 1 − post/pre pressure snapshot, snapshot caliber) |
+| Next-request occupancy | token-meter `contextPressure.projectedTokens` (compaction-aware) |
+| Git repo + worktree state | `fs` probe + read-only git subcommands |
+| Handoff doc | probes **the filename you provide** |
+| Running processes | read-only `ps` probe through `ctx.subprocess`, filtered to the workspace |
 
-## 安装
+## Install
 
 ```sh
 dsh plugin add dsh-context-compass
-# 然后重启 / 重载挂载它的 profile
+# then restart / reload the profile that mounts it
 ```
 
-或加入 profile 补丁层：
+Or add it to a profile patch layer:
 
 ```yaml
-# 你的 profile cordis.patch.yml
+# your profile cordis.patch.yml
 - insert:
     - id: session-health
       name: 'dsh-context-compass'
 ```
 
-## 开发
+## Development
 
 ```sh
-npm run build      # tsc → lib/ + esbuild 客户端 bundle
-npm run typecheck  # 严格类型检查
-npm run smoke      # 逻辑冒烟测试（stub 服务）
-npm run mount      # 真实 cordis 挂载测试（命令 + 工具 + 投影）
-npm run build:client && node scripts/client-mount.mjs  # 浏览器启动路径测试
+npm run build      # tsc → lib/ + esbuild client bundle
+npm run typecheck  # strict type check
+npm run smoke      # logic smoke tests (stub services)
+npm run mount      # real cordis mount test (command + tool + projection)
+npm run build:client && node scripts/client-mount.mjs  # browser boot-path test
+npm run visual     # Playwright visual regression (needs a running harness: light/dark × four tiers × card matrix + hover-bridge e2e)
+npm run visual:update  # rewrite baselines after an intentional visual change (visual/baselines/)
 ```
 
-## 设计
+## Design
 
-方法论源自社区 session-health 技能（二维继续-vs-切换模型）；harness 版本把数据层从估算升级为精确测量。完整设计笔记（信号映射、判定模型、可配置检查项、phase-2 路线图）位于插件开发工作区的 `research/session-health-plugin/DESIGN.md`。
+Methodology derives from the community session-health skill (the two-dimensional continue-vs-switch model); the harness version upgrades the data layer from estimation to exact measurement. Full design notes (signal mapping, decision model, configurable checks, roadmap) live in the plugin dev workspace at `research/session-health-plugin/DESIGN.md`.
 
 ## License
 
