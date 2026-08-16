@@ -14,6 +14,7 @@ Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-ha
   - `/health processes` — force the process probe
 - **`session_health` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `cost`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
 - **`sessionHealth` projection** — durable host-computed fold (turns, messages, compactions, last-wins pressure/window, last-request cache buckets, severity + advice) pushed to every client; survives replay and page reloads.
+- **Multi-session health overview panel** (v0.6.0) — a "健康一览" action beside Settings at the sidebar foot opens a frame-wide panel (`shell.overlay`) listing **every session's** verdict. Data comes from a same-origin host RPC (`/session-health-rpc`, loopback-only): live sessions cut the projection registry snapshot, cold sessions read the persisted projection cache (async cold load fallback); titles come from the log-backed fold / batch query. Rows are sorted red → yellow → blue → green → unknown (newest first inside a tier), refreshed every 5 s while open; clicking a row opens that session and runs `/health` for it. Esc / backdrop click close; keyboard- and screen-reader-accessible (severity is never color-only).
 
 ## Handoff checklist (automated)
 
