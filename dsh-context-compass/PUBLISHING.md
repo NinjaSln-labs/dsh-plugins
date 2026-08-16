@@ -17,6 +17,8 @@
 
 ## 版本历史
 
+- **0.6.1** — **`/compass` 富卡片**（`conversation.chat.commandview` key `compass`）：severity chip + 结论/原因 + 指标行 + 真实交接清单 + 可折叠全文；`parseCompassReport` 纯解析（未知格式降级）；运行中/失败降级通用行。**client 侧改动，刷新浏览器生效**
+
 - **0.6.0** — **多会话罗盘一览面板**（0.6.x 路线图第一波第 2 项）：侧栏底部「罗盘一览」按钮（`sidebar.footer.action`，rail 态仅显色点）+ 全屏面板（`shell.overlay`）列出所有会话判定。宿主新增 `src/overview.ts`：`sessionQuery.listSessions` → 在线会话切投影注册表快照、冷会话读 `sessionProjectionCache`（cachedSnapshot → coldSnapshot 兜底）、标题走日志折叠 / `readTitleSnapshots` 批量；`/session-health-rpc`（POST，loopback-only，405/400/403/500 齐全）。客户端行按红→黄→蓝→绿→未知排序（host 排序 + 客户端防御性重排），打开期间 5s 刷新，点击行 `sessions.open` + `remote.commands.execute('/health')`，Esc/遮罩关闭，非纯颜色传达。面板无新配置（始终启用）。**dev 模式**：profile 依赖从 `^0.5.8` 切换为 `file:`（与 imgdraw 一致，重建自动同步）。**host + client 改动，需重启 dsh web + 刷新浏览器生效**
 - **0.5.8** — 缓存命中率**单数据源 + 单算法位置**：插件不再自己累计 usage（移除 usageTotals/窗口折叠），徽章客户端读核心 `tokenUsage` 投影 face、`/health`/工具读同一投影的 registry 快照——与输入栏**同一个投影对象**；算法收敛到 `src/usage.ts` 的 `cacheHitRateOf()`（client bundle 与 host lib 共用同一源文件），公式与核心 StatsLine 互相指认。**0.5.7（自带累计）未发布，被本版取代**。**host 侧改动，需重启 dsh web 生效**
 - **0.5.7** — 缓存命中率与 **dsh 核心输入栏统计（`tokenUsage`）完全同口径**：会话累计 `cacheRead/(uncachedInput+cacheRead+cacheWrite)`（分母含 cacheWrite），折叠语义与 token-meter 一致（per-(turn,step) 去重替换，绝不双计）；显示舍入统一为 `Math.round`——徽章浮层、`/health`、工具、输入栏四处数值一致（修复「浮层 3% vs 输入栏 93%」）。**未发布，被 0.5.8 取代**
