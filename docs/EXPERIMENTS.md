@@ -107,7 +107,7 @@ node test-smoke.mjs      # SQLite 冒烟（7/21/50/65 + 契约）
 |---|---|---|
 | L1 recall@1（hard） | ≥30% 均值，无单次 <20% | **PASS**：10 轮方差均值 **56%**，范围 43–71%（deepseek-v4-flash 实时扩展；基准 C 臂 35.7%±[29-43] 为 reasoner 模型） |
 | human 集 L1 | ≥50% | 宿主 65% ✓ |
-| 人类集 precision@1 | ≥80%（信息性） | 待 promotion 补测 |
+| 人类集 precision@1 | ≥80%（信息性） | 待 promotion 补测（0.1.3 已补测，见 §6） |
 | p95 L1 延迟 | ≤2.0s（4 路并发，人类查询集） | **FAIL**：真实扩展测量 2171ms / 2293ms（fresh 清缓存两次），超目标 ~10-15%；缓存命中后扩展延迟≈0（生产同查询复用缓存显著降低） |
 | 写入即检索（零 LLM） | AC | ✓ |
 | 授权/打标/错误码/事件 | AC | contract 12/12 ✓ |
@@ -119,3 +119,27 @@ node test-smoke.mjs      # SQLite 冒烟（7/21/50/65 + 契约）
 - 数据：两次 fresh 测量 p95 = 2171ms / 2293ms；非降级查询均值 ~1.7-1.8s；超时率 ~12%（2.5s timeoutMs）。
 - **根因是外部 LLM API 首包延迟**（deepseek 流式 TTFT 918-2293ms），非实现缺陷。V1.11 设计假设"p95 2.0s < timeoutMs 2.5s"在当前环境的头部关系已破坏（实测 p95 2.3s）。
 - 缓解选项（部署时配置）：① `queryExpansion.timeoutMs` 提至 3000 恢复头部余量、降低降级率；② `queryExpansion.model` 换更快路由；③ 生产同查询缓存命中后扩展延迟≈0（真实使用中 p95 接近词法检索）。promotion 重测建议：网络环境稳定后 fresh 重跑，或按真实使用（缓存）口径评估。
+
+## 6. 0.1.3 发布后重测（2026-08-16，宿主实测，bundle 0.1.3）
+
+发布 0.1.3（probe 语料路径修复 + human 套件 precision@1/none 上报）后的门禁重测，
+全部经 `knowledge_probe`（真实 SQLite + deepseek-v4-flash 实时扩展）：
+
+| 套件 | 结果 |
+|---|---|
+| hard 确定性臂 | A 7% / C 21% / D 50% ✓ 精确复现（逐查询 rank 一致） |
+| hard L1-live | **50%**（7/14，3 条降级）≥30% PASS |
+| human A | 65%（11/17）✓ 复现 |
+| human L1-live | **59%**（10/17，9 条降级）≥50% PASS |
+| 人类集 precision@1（信息性） | A 65% / L1-live 59%（单目标套件口径 ≡ recall@1，如实并列；<80% 未过，记录为 promotion 观察项） |
+| none 无误报 | h1/h4/h5 top1 全空，**无误报 PASS**（新增检查） |
+| p95 L1 延迟（fresh，4 路并发） | **2380ms**（非降级 8 条均值 2071ms，9/17 超时降级）> 2000ms **FAIL**——与 0.1.2 时代测量一致，根因不变 |
+| contract | 12/12 ✓ |
+
+观察：
+- 确定性臂跨版本精确复现，SQL 层检索无回归。
+- 降级率随网络抖动波动大：hard 21%（3/14）、human 53%（9/17）——0.1.2 时代实测为 16%（5/31）；
+  降级查询走词法回退，命中仍可用（human 59% 中降级查询的命中部分来自 trigram 词法本身）。
+- precision@1 信息性门禁（≥80%）首次宿主实测：A 65% / L1-live 59%，未达 80% 线
+  （基准 88% 为离线 reasoner 富化+扩展 D 臂）；如实记录，待 promotion 用更强扩展模型或 L2 富化复核。
+- p95 延迟门禁仍 FAIL：根因（外部 LLM TTFT 超 2.5s timeoutMs）与缓解选项见 §5 分析，未变。
