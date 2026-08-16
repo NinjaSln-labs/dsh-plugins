@@ -122,7 +122,20 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-panel-row .sh-row-sev{flex:none;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600}
 .sh-panel-row .sh-row-right{flex:none;text-align:right;font-size:12px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
 .sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
-.sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
+.sh-panel-row .sh-row-ws{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-right:6px}
+.sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
+.sh-pager-btn{width:22px;height:22px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1;cursor:pointer;padding:0}
+.sh-pager-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.sh-pager-btn:disabled{opacity:.4;cursor:default}
+.sh-pager-btn:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-pager-info{font-variant-numeric:tabular-nums;min-width:34px;text-align:center}
+.sh-foot-sort{display:inline-flex;align-items:center;gap:4px;flex:none}
+.sh-sort-btn{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:5px}
+.sh-sort-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
+.sh-sort-btn:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-foot-hint{margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `
 
 function compact(n: number | null | undefined): string {
@@ -447,6 +460,7 @@ interface OverviewRowLike {
   live: boolean
   createdAt: number
   health: SessionHealthProjection | null
+  workspace: { id: string; title: string } | null
 }
 
 /** External open-state store shared by the footer action and the overlay. */
@@ -479,15 +493,24 @@ function ageOf(ts: number): string {
   return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Rows arrive host-sorted; defensive client re-sort keeps the panel honest. */
-function sortRows(rows: OverviewRowLike[]): OverviewRowLike[] {
+/** Sort modes: 'severity' = 方案 A (tier → live → newest), 'time' = newest first. */
+type SortMode = 'severity' | 'time'
+
+/** Rows arrive host-sorted (severity mode); the client re-sorts locally for
+    the selected mode and refreshes. */
+function sortRows(rows: OverviewRowLike[], mode: SortMode): OverviewRowLike[] {
   return [...rows].sort((a, b) => {
+    if (mode === 'time') return (b.createdAt ?? 0) - (a.createdAt ?? 0)
     const ra = a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
     const rb = b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
     if (ra !== rb) return ra - rb
+    if (a.live !== b.live) return a.live ? -1 : 1
     return (b.createdAt ?? 0) - (a.createdAt ?? 0)
   })
 }
+
+/** Panel page size (agreed: 10 rows per page, warnings always on page one). */
+const PAGE_SIZE = 10
 
 /** Per-round money figure, same currency rule as the badge tooltip. */
 function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | null {
@@ -537,8 +560,16 @@ function OverviewBody(props: {
   locale: { snapshot: { active: string } }
 }): JSX.Element {
   const [rows, setRows] = React.useState<OverviewRowLike[] | null>(null)
+  const [sortMode, setSortMode] = React.useState<SortMode>(() => {
+    try { return window.localStorage.getItem('dsh-session-health/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
+  })
+  const [page, setPage] = React.useState(0)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const closeRef = React.useRef<HTMLButtonElement | null>(null)
+  const listRef = React.useRef<HTMLDivElement | null>(null)
+  // The refresh interval's load() closure must see the current sort mode.
+  const sortModeRef = React.useRef<SortMode>(sortMode)
+  sortModeRef.current = sortMode
 
   // Fetch on mount + refresh while open; component unmounts when closed, so
   // the effect cleans up with it (no leak across panel sessions). The current
@@ -556,7 +587,8 @@ function OverviewBody(props: {
         const json = (await res.json()) as { ok?: boolean; error?: string; result?: { sessions?: OverviewRowLike[] } }
         if (!alive) return
         if (json.ok === true && Array.isArray(json.result?.sessions)) {
-          setRows(sortRows(json.result.sessions))
+          setRows(sortRows(json.result.sessions, sortModeRef.current))
+          setPage(0)
           setLoadError(null)
         } else {
           setLoadError(json.error ?? '未知错误')
@@ -592,6 +624,19 @@ function OverviewBody(props: {
   const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
   const redCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'red').length
   const yellowCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'yellow').length
+  const pageCount = rows === null ? 0 : Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const pageRows = rows === null ? null : rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const changeSort = (mode: SortMode) => {
+    setSortMode(mode)
+    try { window.localStorage.setItem('dsh-session-health/overviewSort', mode) } catch { /* 静默 */ }
+    if (rows !== null) setRows(sortRows(rows, mode))
+    setPage(0)
+    listRef.current?.scrollTo({ top: 0 })
+  }
+  const gotoPage = (next: number) => {
+    setPage(next)
+    listRef.current?.scrollTo({ top: 0 })
+  }
   const sub = rows === null
     ? '加载中…'
     : `${rows.length} 个会话${redCount > 0 ? ` · 红 ${redCount}` : ''}${yellowCount > 0 ? ` · 黄 ${yellowCount}` : ''}`
@@ -625,7 +670,7 @@ function OverviewBody(props: {
           <span className="sh-legend-item sh-sev-green"><span className="sh-legend-dot" />放心继续</span>
           <span className="sh-legend-item"><span className="sh-legend-dot" />无数据</span>
         </div>
-        <div className="sh-panel-list">
+        <div className="sh-panel-list" ref={listRef}>
           {rows === null && loadError === null ? (
             <div className="sh-panel-empty">正在读取各会话健康数据…</div>
           ) : rows === null ? (
@@ -633,7 +678,7 @@ function OverviewBody(props: {
           ) : rows.length === 0 ? (
             <div className="sh-panel-empty">没有可显示的会话</div>
           ) : (
-            rows.map(row => {
+            (pageRows ?? []).map(row => {
               const health = row.health
               const severity: HealthSeverity | 'unknown' = health?.severity ?? 'unknown'
               const pct = health?.ratio !== null && health?.ratio !== undefined
@@ -651,17 +696,18 @@ function OverviewBody(props: {
                 row.live ? '在线' : '冷会话',
               ].filter((v): v is string => v !== null)
               const ariaSev = severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]
+              const wsLabel = row.workspace !== null ? row.workspace.title : '未分组'
               return (
                 <button
                   type="button"
                   key={row.id}
                   className={`sh-panel-row${severity !== 'unknown' ? ` sh-sev-${severity}` : ''}`}
                   onClick={() => openSession(row.id)}
-                  aria-label={`会话健康：${ariaSev}。${row.title ?? '未命名会话'}。${metaBits.join('，')}。点击打开并运行 /health`}
+                  aria-label={`会话健康：${ariaSev}。${row.title ?? '未命名会话'}。工作区：${wsLabel}。${metaBits.join('，')}。点击打开并运行 /health`}
                 >
                   <span className="sh-row-dot" />
                   <span className="sh-row-main">
-                    <span className="sh-row-title">{row.title ?? '未命名会话'}<span className="sh-row-id">{row.id.slice(0, 6)}</span></span>
+                    <span className="sh-row-title"><span className="sh-row-ws">{wsLabel}</span>{row.title ?? '未命名会话'}<span className="sh-row-id">{row.id.slice(0, 6)}</span></span>
                     <span className="sh-row-meta">{metaBits.join(' · ')}</span>
                   </span>
                   <span className="sh-row-sev">{severity === 'unknown' ? '无数据' : SEVERITY_LABEL[severity]}</span>
@@ -671,7 +717,21 @@ function OverviewBody(props: {
             })
           )}
         </div>
-        <div className="sh-panel-foot">每 5 秒刷新 · 点击行打开该会话并运行 /health · Esc 关闭</div>
+        <div className="sh-panel-foot">
+          {rows !== null && rows.length > PAGE_SIZE ? (
+            <span className="sh-pager">
+              <button type="button" className="sh-pager-btn" disabled={page <= 0} onClick={() => gotoPage(page - 1)} aria-label="上一页">‹</button>
+              <span className="sh-pager-info">{page + 1} / {pageCount}</span>
+              <button type="button" className="sh-pager-btn" disabled={page >= pageCount - 1} onClick={() => gotoPage(page + 1)} aria-label="下一页">›</button>
+            </span>
+          ) : null}
+          <span className="sh-foot-sort">
+            排序：
+            <button type="button" className={`sh-sort-btn${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')}>严重度</button>
+            <button type="button" className={`sh-sort-btn${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')}>创建时间</button>
+          </span>
+          <span className="sh-foot-hint">每 5 秒刷新 · 点击行打开并运行 /health · Esc 关闭</span>
+        </div>
       </div>
     </div>
   )
