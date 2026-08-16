@@ -2,3 +2,4 @@ packages:
   - 'dsh-session-health'
   - 'dsh-knowledge-sqlite'
   - 'dsh-subagent-router'
+  - 'dsh-imgdraw'

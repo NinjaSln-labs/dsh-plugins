@@ -1,0 +1,6 @@
+# dsh-imgdraw bundle layer: mounts the draw_image tool, the /imgdraw image
+# route + /imgdraw-rpc JSON RPC, and the browser 生图 button/popup. Apply as a
+# profile bundle (`dsh plugin add dsh-imgdraw`) or via a profile overlay.
+- insert:
+    - id: imgdraw
+      name: 'dsh-imgdraw'
