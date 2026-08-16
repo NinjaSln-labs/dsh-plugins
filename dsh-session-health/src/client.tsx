@@ -111,22 +111,22 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:74px minmax(0,1fr) 108px 52px 64px 92px 78px}
+.sh-grid-cols{grid-template-columns:96px 64px 76px 104px 68px}
 .sh-panel-head-row{display:grid;gap:8px;align-items:center;padding:6px 12px 6px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
 .sh-col-head:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-col-head.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
-.sh-panel-row{display:grid;gap:8px;align-items:center;width:100%;padding:8px 12px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px}
+.sh-panel-row{display:grid;gap:8px;align-items:center;position:relative;width:100%;padding:9px 12px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px}
 .sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-row-sev{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600;white-space:nowrap;overflow:hidden}
 .sh-row-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
-.sh-row-main{min-width:0}
-.sh-row-title{font-size:13px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-.sh-row-title .sh-row-id{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-left:6px;font-variant-numeric:tabular-nums}
 .sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums}
+.sh-rowtip{position:absolute;right:12px;top:calc(100% + 4px);z-index:20;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
+.sh-rowtip-title{color:var(--dsw-alias-label-primary);font-weight:600;display:block}
+.sh-rowtip-meta{color:var(--dsw-alias-label-tertiary);display:block;margin-top:2px}
 .sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
 .sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
@@ -158,10 +158,10 @@ function formatUsd(v: number): string {
   return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
 }
 
-/** Visible tooltip label — the tier's color is already shown by the chip, so no color word. */
+/** Visible severity label — uniformly 4 characters per column head / row cell. */
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   green: '放心继续',
-  blue: '继续，留意',
+  blue: '继续留意',
   yellow: '建议留意',
   red: '建议收尾',
 }
@@ -169,7 +169,7 @@ const SEVERITY_LABEL: Record<HealthSeverity, string> = {
 /** aria-label variant keeps the color word: screen readers cannot see the chip color. */
 const SEVERITY_ARIA: Record<HealthSeverity, string> = {
   green: '绿：放心继续',
-  blue: '蓝：继续，留意',
+  blue: '蓝：继续留意',
   yellow: '黄：建议留意',
   red: '红：建议收尾',
 }
@@ -566,6 +566,7 @@ function OverviewBody(props: {
     try { return window.localStorage.getItem('dsh-session-health/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
   })
   const [page, setPage] = React.useState(0)
+  const [hoverId, setHoverId] = React.useState<string | null>(null)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const closeRef = React.useRef<HTMLButtonElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -672,8 +673,6 @@ function OverviewBody(props: {
         </div>
         <div className="sh-panel-head-row sh-grid-cols" role="row">
           <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按严重度排序">严重度{sortMode === 'severity' ? ' ↓' : ''}</button>
-          <span>会话</span>
-          <span className="sh-row-cell">工作区</span>
           <span className="sh-row-num">占用</span>
           <span className="sh-row-num">每轮</span>
           <span className="sh-row-num">规模</span>
@@ -710,19 +709,24 @@ function OverviewBody(props: {
                 ? compact(health.effectivePerRound)
                 : '—'
               const occ = pct !== null ? `${pct}%` : '—'
+              const titleText = `${row.title ?? '未命名会话'}【${wsLabel}】`
               return (
                 <button
                   type="button"
                   key={row.id}
                   className={`sh-panel-row sh-grid-cols${severity !== 'unknown' ? ` sh-sev-${severity}` : ''}`}
                   onClick={() => openSession(row.id)}
-                  aria-label={`会话健康：${ariaSev}。${row.title ?? '未命名会话'}。工作区：${wsLabel}。${metaBits.join('，')}。点击打开并运行 /health`}
+                  onMouseEnter={() => setHoverId(row.id)}
+                  onMouseLeave={() => setHoverId(h => (h === row.id ? null : h))}
+                  aria-label={`会话健康：${ariaSev}。${titleText}。${metaBits.join('，')}。点击打开并运行 /health`}
                 >
-                  <span className="sh-row-sev"><span className="sh-row-dot" />{severity === 'unknown' ? '无数据' : SEVERITY_LABEL[severity]}</span>
-                  <span className="sh-row-main">
-                    <span className="sh-row-title">{row.title ?? '未命名会话'}<span className="sh-row-id">{row.id.slice(0, 6)}</span></span>
-                  </span>
-                  <span className="sh-row-cell" title={row.workspace?.id ?? undefined}>{wsLabel}</span>
+                  {hoverId === row.id ? (
+                    <span className="sh-rowtip" role="tooltip">
+                      <span className="sh-rowtip-title">{titleText}</span>
+                      <span className="sh-rowtip-meta">{metaBits.join(' · ')}</span>
+                    </span>
+                  ) : null}
+                  <span className="sh-row-sev"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
                   <span className="sh-row-num" title={pct !== null ? `上下文占用 ${pct}%` : undefined}>{occ}</span>
                   <span className="sh-row-num" title={perRound !== '—' ? `每轮计费当量约 ${perRound} token（含缓存折扣）` : undefined}>{perRound}</span>
                   <span className="sh-row-num">{scale}</span>
