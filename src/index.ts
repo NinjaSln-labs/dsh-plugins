@@ -34,7 +34,7 @@ export interface KnowledgeSqliteConfig {
   gating?: 'ask' | 'none'
   /** SQLite 数据库路径；默认 $DSH_HOME/knowledge.sqlite */
   databasePath?: string
-  /** probe 语料目录；默认 '<workspace>/research/memory-experiment'（实验套件） */
+  /** probe 语料目录；默认 '<workspace>/research/memory-knowledge-seam/experiments/memory-experiment'（实验套件） */
   corpusPath?: string
   /** seam 级写上限（V1.11 enrichment.maxContentTokens，默认 2048） */
   maxContentTokens?: number
@@ -358,7 +358,7 @@ const knowledgeSqlitePlugin = {
       const resolved: ResolvedConfig = {
         gating: config.gating ?? 'ask',
         databasePath: config.databasePath ?? defaultDbPath(),
-        corpusPath: config.corpusPath ?? 'research/memory-experiment',
+        corpusPath: config.corpusPath ?? 'research/memory-knowledge-seam/experiments/memory-experiment',
         maxContentTokens: config.maxContentTokens ?? 2048,
         queryExpansion: {
           enabled: config.queryExpansion?.enabled ?? true,

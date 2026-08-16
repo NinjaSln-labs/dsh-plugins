@@ -65,7 +65,7 @@ DSH 现有的全文检索使用 `unicode61`，无法匹配中文子串。在项�
       maxCandidates: 200
     authorization:
       allowedGlobalWriters: []                 # 允许写入 global 范围的 agent/preset id
-    corpusPath: 'research/memory-experiment'   # probe 语料根（相对工作区）
+    corpusPath: 'research/memory-knowledge-seam/experiments/memory-experiment'   # probe 语料根（相对工作区）
 ```
 
 ## 存储布局
@@ -95,4 +95,4 @@ probe 实验套件（A/C/D 确定性臂精确复现 + contract 全过）。
 - [DESIGN](docs/DESIGN.md) — V1.11 提案全文（社区设计，非官方）
 - [REVIEWS](docs/REVIEWS.md) — 11 轮评审链摘要（0C/0M/0m）
 - [EXPERIMENTS](docs/EXPERIMENTS.md) — RESULTS-v3 + 原型验证（kpro-2、在线 L1、契约 11/11、ask 门控）
-- 原型工作台：`research/prototype/`（SQLite 蓝图、JS↔FTS5 校准 0/72 无偏差、动态插件验证）
+- 原型工作台：`research/memory-knowledge-seam/experiments/prototype/`（SQLite 蓝图、JS↔FTS5 校准 0/72 无偏差、动态插件验证）

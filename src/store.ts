@@ -1,7 +1,7 @@
 /**
  * dsh-knowledge-sqlite — SQLite provider（V1.11 存储层）。
  *
- * 蓝本：research/prototype/sqlite-trigram-verify.mjs（已验证精确复现 RESULTS-v3 数字）：
+ * 蓝本：research/memory-knowledge-seam/experiments/prototype/sqlite-trigram-verify.mjs（已验证精确复现 RESULTS-v3 数字）：
  *  - items 表 + 非部分唯一索引 (workspace_id, scope, dedupe_key)（SQLite NULL 互不冲突）
  *  - upsert 用 ON CONFLICT DO UPDATE（保持 rowid 稳定 → FTS rowid 链接有效；
  *    不可用 INSERT OR REPLACE——rowid 变化会断 FTS 链接）

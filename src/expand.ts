@@ -5,7 +5,7 @@
  * `degraded: 'lexical'`（不是工具错误）。`expand: false` 或调用方 `variants` 跳过。
  *
  * 消息构造遵循 harness 约定（content blocks + source + id）——原型曾因字符串 content
- * 与 finish reason 字符串比较导致全部降级（见 research/prototype/RESULTS-PROTOTYPE.md §4.4）。
+ * 与 finish reason 字符串比较导致全部降级（见 research/memory-knowledge-seam/experiments/prototype/RESULTS-PROTOTYPE.md §4.4）。
  */
 import type { Context } from '@deepseek-ai/cordis'
 

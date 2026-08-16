@@ -2,8 +2,8 @@
 
 > dsh-knowledge-sqlite 的设计文档（`docs/DESIGN.md`）经过 **11 轮评审-裁决循环**收敛，
 > 最终状态 **0 Critical / 0 Major / 0 Minor**。本文为逐轮摘要；
-> 完整裁决文档存于 `research/adjudications/`（每版本一份）与
-> `research/{redteam,blueteam,final-adjudication}-v4pro.md`。
+> 完整裁决文档存于 `research/memory-knowledge-seam/review/adjudications/`（每版本一份）与
+> `research/memory-knowledge-seam/review/{redteam,blueteam,final-adjudication}-v4pro.md`。
 
 ## 评审链结构
 
@@ -42,10 +42,10 @@ V1.0 初始提案 → V1.1 完整规格（契约/数据流/备选/AC/测试矩�
 
 ## 附加评审（V1.4 前后）
 
-- 独立架构评审（deepseek-v4-flash）：`research/adjudication-v4pro.md` 前身阶段
-- 红队 / 蓝队（v4-flash 子代理 + deepseek-v4-pro 直连）：`research/redteam-v4pro.md` / `research/blueteam-v4pro.md`
-- v4-pro 终审：`research/final-adjudication-v4pro.md`
-- 红蓝对抗总结：`research/red-blue-summary.md`
+- 独立架构评审（deepseek-v4-flash）：`research/memory-knowledge-seam/review/adjudication-v4pro.md` 前身阶段
+- 红队 / 蓝队（v4-flash 子代理 + deepseek-v4-pro 直连）：`research/memory-knowledge-seam/review/redteam-v4pro.md` / `research/memory-knowledge-seam/review/blueteam-v4pro.md`
+- v4-pro 终审：`research/memory-knowledge-seam/review/final-adjudication-v4pro.md`
+- 红蓝对抗总结：`research/memory-knowledge-seam/review/red-blue-summary.md`
 
 ## 验收门禁（V1.11 AC，实现侧状态）
 
@@ -57,4 +57,4 @@ V1.0 初始提案 → V1.1 完整规格（契约/数据流/备选/AC/测试矩�
 | p95 L1 延迟 | ≤2.0s（4 路并发，人类查询集） | 待跑（latency suite 就绪） |
 | 写入即检索（零 LLM） | AC | 宿主验证 ✓ |
 | 授权/打标/错误码/事件 | AC | contract 12/12 ✓ |
-| 实验套件入库可复现 | AC | research/memory-experiment/ + knowledge_probe ✓ |
+| 实验套件入库可复现 | AC | research/memory-knowledge-seam/experiments/memory-experiment/ + knowledge_probe ✓ |
