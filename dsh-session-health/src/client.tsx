@@ -158,20 +158,25 @@ function formatUsd(v: number): string {
   return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
 }
 
-/** Visible severity label — uniformly 4 characters per column head / row cell. */
+/**
+ * Visible severity label — uniformly 4 characters per column head / row
+ * cell, and the wording must stay MONOTONIC (no tier may read lighter than
+ * the one below it): 放心继续 → 继续留意 → 建议收尾 → 尽快收尾. The full
+ * advice text (hover / /health) carries the nuance; this is the速记.
+ */
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   green: '放心继续',
   blue: '继续留意',
-  yellow: '建议留意',
-  red: '建议收尾',
+  yellow: '建议收尾',
+  red: '尽快收尾',
 }
 
 /** aria-label variant keeps the color word: screen readers cannot see the chip color. */
 const SEVERITY_ARIA: Record<HealthSeverity, string> = {
   green: '绿：放心继续',
   blue: '蓝：继续留意',
-  yellow: '黄：建议留意',
-  red: '红：建议收尾',
+  yellow: '黄：建议收尾',
+  red: '红：尽快收尾',
 }
 
 /** Projection face shape from the runtime client. */
