@@ -100,7 +100,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--dsw-alias-bg-base) 62%,transparent);display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto;z-index:60;animation:sh-fade-in .15s ease-out}
 @keyframes sh-fade-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){.sh-scrim{animation:none}}
-.sh-panel{width:min(760px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.sh-panel{width:min(660px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
 .sh-panel-head{display:flex;align-items:baseline;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .sh-panel-title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .sh-panel-sub{font-size:12px;color:var(--dsw-alias-label-tertiary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -111,13 +111,13 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:minmax(100px,1fr) 52px 56px 78px 78px 88px 62px}
-.sh-panel-head-row{display:grid;gap:12px;align-items:center;padding:8px 14px 7px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
+.sh-grid-cols{grid-template-columns:96px 48px 52px 72px 74px 86px 60px}
+.sh-panel-head-row{display:grid;gap:10px;align-items:center;padding:9px 16px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;font-weight:500;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
 .sh-col-head:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-col-head.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
-.sh-panel-row{display:grid;gap:12px;align-items:center;position:relative;width:100%;padding:11px 14px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
+.sh-panel-row{display:grid;gap:10px;align-items:center;width:100%;padding:12px 16px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
 .sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 /* Severity as a tinted chip (theme-adaptive tint/ink from the palette). */
@@ -127,7 +127,8 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-row-cold{color:var(--dsw-alias-label-tertiary)}
 .sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
-.sh-rowtip{position:absolute;transform:translate(-50%,calc(-100% - 8px));z-index:30;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
+.sh-rowtip{position:fixed;transform:translate(-50%,-100%);z-index:80;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
+.sh-rowtip-below{transform:translate(-50%,0)}
 .sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
 .sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
@@ -537,8 +538,8 @@ function sortRows(rows: OverviewRowLike[], mode: SortMode): OverviewRowLike[] {
   })
 }
 
-/** Panel page size (agreed: 10 rows per page, warnings always on page one). */
-const PAGE_SIZE = 10
+/** Panel page size (agreed: 5 rows per page — the usual live-session count). */
+const PAGE_SIZE = 5
 
 /** Sidebar-foot action: opens the overview panel (wide row vs 56px rail). */
 function OverviewAction(props: {
@@ -582,9 +583,10 @@ function OverviewBody(props: {
     try { return window.localStorage.getItem('dsh-session-health/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
   })
   const [page, setPage] = React.useState(0)
-  // Hover tooltip: row-relative px + the OWNING row id — without the id every
-  // row rendered its own tooltip while any row was hovered.
-  const [tip, setTip] = React.useState<{ rowId: string; x: number; y: number; w: number } | null>(null)
+  // Hover tooltip: VIEWPORT coords (fixed positioning — the tooltip never
+  // participates in the list's scroll geometry, so no clipping and no
+  // scrollbar flash) + the owning row id (every row used to render its own).
+  const [tip, setTip] = React.useState<{ rowId: string; cx: number; cy: number } | null>(null)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const closeRef = React.useRef<HTMLButtonElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -733,10 +735,13 @@ function OverviewBody(props: {
               const cost = moneyOf(health, isZh)
               const titleText = `${row.title ?? '未命名会话'}[${wsLabel}]`
               const moveTip = (e: React.MouseEvent) => {
-                const r = e.currentTarget.getBoundingClientRect()
-                setTip({ rowId: row.id, x: e.clientX - r.left, y: e.clientY - r.top, w: r.width })
+                setTip({ rowId: row.id, cx: e.clientX, cy: e.clientY })
               }
-              const tipLeft = tip !== null ? Math.min(Math.max(tip.x, 56), tip.w - 56) : 0
+              // Flip below the pointer near the viewport top (header zone);
+              // clamp horizontally so the label never leaves the screen.
+              const tipBelow = tip !== null && tip.cy < 96
+              const tipLeft = tip !== null ? Math.min(Math.max(tip.cx, 100), window.innerWidth - 100) : 0
+              const tipTop = tip !== null ? (tipBelow ? tip.cy + 14 : tip.cy - 8) : 0
               return (
                 <button
                   type="button"
@@ -749,7 +754,7 @@ function OverviewBody(props: {
                   aria-label={`会话健康：${ariaSev}。${titleText}。${metaBits.join('，')}。点击打开并运行 /health`}
                 >
                   {tip !== null && tip.rowId === row.id ? (
-                    <span className="sh-rowtip" role="tooltip" style={{ left: tipLeft, top: tip.y }}>{titleText}</span>
+                    <span className={`sh-rowtip${tipBelow ? ' sh-rowtip-below' : ''}`} role="tooltip" style={{ left: tipLeft, top: tipTop }}>{titleText}</span>
                   ) : null}
                   <span className="sh-sev-chip"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
                   <span className={`sh-row-live${row.live ? '' : ' sh-row-cold'}`} title={row.live ? '会话正在运行（激活）' : '会话已持久化（冷却）'}>{row.live ? '在线' : '冷却'}</span>
