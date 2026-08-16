@@ -37,13 +37,13 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
     '',
     '详情：',
   ]
-  if (s.turns !== null) {
+  if (typeof s.turns === 'number') {
     lines.push(`- 会话规模：${s.turns} 轮 / ${s.userMessages ?? 0} 条消息 / ${s.assistantMessages ?? 0} 条回复`)
   }
-  if (s.total !== null) {
+  if (typeof s.total === 'number') {
     lines.push(`- 每轮输入约 ${formatCompact(s.total)} token${s.ratio !== null ? `（窗口 ${Math.round(s.ratio * 100)}%）` : ''}${s.window !== null ? `；窗口 ${formatCompact(s.window)}` : ''}`)
   }
-  if (s.cacheHitRate !== null) {
+  if (typeof s.cacheHitRate === 'number') {
     lines.push(`- 缓存命中率 ${formatHitRate(s.cacheHitRate)}（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)
   }
   if (s.effectivePerRoundCny !== null && s.effectivePerRoundCny !== undefined && s.effectivePerRoundUsd !== null && s.effectivePerRoundUsd !== undefined) {
@@ -57,7 +57,10 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
     lines.push(`- 剩余轮数输入费用预期 ≈ ${formatUsd(s.expectedTotalUsd)}（约 ${formatCompact(s.expectedTotalTokens)} token 计费当量）`)
   }
   if (s.compactions > 0) {
-    lines.push(`- 已压缩 ${s.compactions} 次：早期细节概要化（git 可追溯）`)
+    const ratioNote = typeof s.compactionRatio === 'number' && s.compactionRatio !== null
+      ? `（上次压缩比例 ≈ ${Math.round(s.compactionRatio * 100)}%，按压缩前后压力快照差值推断——快照口径，非精确统计）`
+      : ''
+    lines.push(`- 已压缩 ${s.compactions} 次：早期细节概要化${ratioNote}`)
   }
   lines.push(...report.probes.map(p => '- ' + p))
   if (report.recommendation === 'danger-zone') {

@@ -78,6 +78,9 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
 .sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
+/* 压缩后判定滞后提示：severity 判定基于压缩前压力，占用条已按下次请求重估——
+   差异超过阈值时标注「下次请求后更新」（theme-adaptive warn tint）。 */
+.sh-tip-lag{margin-top:8px;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.5;color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,var(--dsw-alias-label-primary));background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent)}
 /* Invisible bridge over the badge↔tooltip gap: the mouse path into the
    tooltip never leaves the wrapper, so the popover stays clickable. */
 .sh-tip::before{content:'';position:absolute;top:-8px;left:0;right:0;height:8px}
@@ -239,6 +242,33 @@ export function mergePressure(
   return { total, window, ratio, projected }
 }
 
+/**
+ * 压缩后判定滞后检测（pure）：severity 判定走 last-wins 压力（压缩前快照），
+ * 占用条走 compaction-aware projectedTokens（下次请求成本）——两者分叉说明
+ * 判定尚未被下一次请求刷新。差异 ≥5 个百分点且确实发生过压缩才标注
+ * （roadmap「压缩后判定滞后标注」）。
+ */
+export function lagOf(
+  proj: SessionHealthProjection | undefined,
+  pressure: ContextPressureLike | undefined,
+): { lag: boolean; oldPct: number | null; newPct: number | null } {
+  const merged = mergePressure(proj, pressure)
+  const pctOf = (t: number | null): number | null =>
+    t !== null && merged.window !== null && merged.window > 0
+      ? Math.min(Math.round((t / merged.window) * 100), 100)
+      : null
+  const oldPct = pctOf(merged.total)
+  const newPct = pctOf(merged.projected)
+  const lag = (proj?.compactions ?? 0) > 0
+    && merged.projected !== null
+    && merged.total !== null
+    && merged.total > 0
+    && merged.projected < merged.total
+    && oldPct !== null && newPct !== null
+    && oldPct - newPct >= 5
+  return { lag, oldPct, newPct }
+}
+
 /** Commands Remote face (core, always mounted). */
 interface CommandsRemote {
   execute(sessionId: string, line: string): Promise<unknown>
@@ -318,10 +348,18 @@ function HealthBadge(props: {
   }, [props.sessionId])
 
   // The verdict (color/advice) is host-computed and authoritative; the
-  // displayed occupancy merges in token-meter's compaction-aware numbers.
+  // displayed occupancy merges in token-meter's compaction-aware numbers —
+  // the occupancy figure is "what the next request costs", not a stale
+  // pre-compaction sample. After a compaction the projected next-request
+  // cost drives the bar/% while the verdict still rides last-wins pressure;
+  // lagOf() annotates that divergence (roadmap: 压缩后判定滞后标注).
   const merged = mergePressure(proj, pressure)
   const severity: HealthSeverity | 'unknown' = proj?.severity ?? 'unknown'
-  const pct = merged.ratio !== null ? Math.min(Math.round(merged.ratio * 100), 100) : null
+  const displayRatio = merged.projected !== null && merged.window !== null && merged.window > 0
+    ? merged.projected / merged.window
+    : merged.ratio
+  const pct = displayRatio !== null ? Math.min(Math.round(displayRatio * 100), 100) : null
+  const lag = lagOf(proj, pressure)
 
   const runHealth = () => {
     try { void props.commands.execute(props.sessionId, '/compass') } catch { /* 静默 */ }
@@ -431,10 +469,20 @@ function HealthBadge(props: {
             {proj.compactions > 0 ? (
               <div className="sh-tip-row">
                 <span className="sh-k">已压缩</span>
-                <span className="sh-v">{proj.compactions} 次（早期细节概要化）</span>
+                <span className="sh-v">
+                  {proj.compactions} 次
+                  {proj.compressionRatio !== null && proj.compressionRatio !== undefined
+                    ? `（上次压缩比例 ≈ ${Math.round(proj.compressionRatio * 100)}%，快照口径）`
+                    : ''}
+                </span>
               </div>
             ) : null}
           </>
+        ) : null}
+        {lag.lag ? (
+          <div className="sh-tip-lag" role="note">
+            压缩后判定滞后：判定基于压缩前压力（{lag.oldPct}%），预计下次请求后更新（≈ {lag.newPct}%）
+          </div>
         ) : null}
         <div className="sh-tip-hint">点击运行 /compass 查看完整报告；点击计费预期切换金额 / token 显示</div>
       </div>
@@ -900,7 +948,9 @@ function OverviewBody(props: {
                   ? `约 ${compact(health.effectivePerRound)} token/轮`
                   : null,
                 health !== null ? `${health.turns} 轮 / ${health.userMessages + health.assistantMessages} 条` : null,
-                health !== null && health.compactions > 0 ? `已压缩 ${health.compactions} 次` : null,
+                health !== null && health.compactions > 0
+                  ? `已压缩 ${health.compactions} 次${health.compressionRatio !== null && health.compressionRatio !== undefined ? `（上次压缩比例 ≈ ${Math.round(health.compressionRatio * 100)}%，快照口径）` : ''}`
+                  : null,
                 row.live ? '在线' : '冷会话',
               ].filter((v): v is string => v !== null)
               const ariaSev = severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]

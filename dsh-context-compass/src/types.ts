@@ -35,6 +35,14 @@ export interface SessionHealthProjection {
   assistantMessages: number
   /** Number of compaction rounds (early detail summarized). */
   compactions: number
+  /**
+   * Last inferred compression ratio of a fold: 1 − post/pre, inferred from
+   * the pressure snapshots around a compaction (caliber: snapshot-delta
+   * estimate, NOT exact compaction statistics — the compaction event carries
+   * no payload). Null when no fold was observed yet or the last one was
+   * inconclusive (pressure did not drop after compaction).
+   */
+  compressionRatio: number | null
   /** Last request's uncached input tokens. Null before any usage report. */
   uncachedInputTokens: number | null
   /** Last request's tokens served from the provider cache. Null before any usage report. */

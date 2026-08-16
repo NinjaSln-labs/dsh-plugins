@@ -2,3 +2,5 @@ node_modules/
 lib/
 *.log
 PUBLISH.md
+visual/results/
+test-results/

@@ -58,6 +58,7 @@ const FULL_REPORT = [
   '- 每轮输入约 512K token（窗口 51%）；窗口 1M',
   '- 缓存命中率 100%（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）',
   '- 计费预期：约 ¥0.05/轮（≈$0.01；输入价 ¥1.5/M / $0.22 闲时价，缓存命中 ¥0.05/M / $0.007，不含输出）',
+  '- 已压缩 2 次：早期细节概要化（上次压缩比例 ≈ 42%，按压缩前后压力快照差值推断——快照口径，非精确统计）',
   '',
   '切换前检查：',
   '- [x] 未提交变更：0 个',
@@ -67,7 +68,8 @@ const parsed = plugin.parseCompassReport(FULL_REPORT)
 assert.equal(parsed.severity, 'yellow')
 assert.equal(parsed.summary, '建议在任务边界收尾（健康度：黄）')
 assert.ok(parsed.reason.includes('上下文已占窗口 51%'))
-assert.equal(parsed.metrics.length, 4)
+assert.equal(parsed.metrics.length, 5)
+assert.ok(parsed.metrics[4].startsWith('已压缩 2 次') && parsed.metrics[4].includes('上次压缩比例 ≈ 42%'))
 assert.equal(parsed.checklist.length, 2)
 const junk = plugin.parseCompassReport('随便一段文本\n没有结构')
 assert.equal(junk.severity, null)
@@ -93,6 +95,31 @@ const compacted = plugin.mergePressure(
 )
 assert.equal(compacted.total, 300_000, 'projectedTokens fills a missing host total')
 console.log('  ok  mergePressure: compaction-aware occupancy merge')
+
+// 2d) 压缩后判定滞后 (lagOf): severity rides last-wins pressure, the occupancy
+//     bar rides compaction-aware projectedTokens — divergence after a
+//     compaction is annotated until the next request refreshes the verdict.
+const lagProj = {
+  severity: 'yellow', advice: 'a', ratio: 0.6, total: 600_000, window: 1_000_000,
+  turns: 1, userMessages: 1, assistantMessages: 1, compactions: 1,
+}
+assert.deepEqual(
+  plugin.lagOf(lagProj, { pressureTokens: 600_000, projectedTokens: 300_000, contextWindow: 1_000_000 }),
+  { lag: true, oldPct: 60, newPct: 30 },
+  'post-compaction divergence ≥5pp with compactions>0 → lag annotated',
+)
+assert.deepEqual(
+  plugin.lagOf({ ...lagProj, compactions: 0 }, { pressureTokens: 600_000, projectedTokens: 300_000, contextWindow: 1_000_000 }),
+  { lag: false, oldPct: 60, newPct: 30 },
+  'divergence without a recorded compaction → no annotation',
+)
+assert.deepEqual(
+  plugin.lagOf(lagProj, { pressureTokens: 600_000, projectedTokens: 590_000, contextWindow: 1_000_000 }),
+  { lag: false, oldPct: 60, newPct: 59 },
+  'sub-5pp divergence → no annotation (noise guard)',
+)
+assert.deepEqual(plugin.lagOf(lagProj, undefined), { lag: false, oldPct: 60, newPct: null })
+console.log('  ok  lagOf: 压缩后判定滞后标注 (divergence gate + noise floor)')
 
 // 3) Mount through a real cordis Context with the injected services provided
 //    the way the web shell provides them. A minimal document stub records the

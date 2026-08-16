@@ -57,6 +57,31 @@ await check('projection: fold counts (turns/messages/compactions)', () => {
   assert.equal(state.contextWindow, 100_000)
 })
 
+await check('projection: compression ratio inferred from pressure snapshots', () => {
+  // Pre-compaction pressure was 360K (60K uncached + 300K cacheRead on the
+  // first assistant/message); the compaction/end captured it; the first
+  // usage sample after the fold (32K) yields 1 − 32/360 ≈ 0.911.
+  assert.equal(state.preCompactionPressure, undefined) // consumed by the fold
+  assert.ok(state.compressionRatio !== null && Math.abs(state.compressionRatio - (1 - 32_000 / 360_000)) < 1e-9)
+  // The view carries the ratio + the snapshot-delta caliber note.
+  const view = healthView(state, ratioConfig)
+  assert.equal(view.compressionRatio, state.compressionRatio)
+  assert.ok(view.advice.includes('上次压缩比例'))
+  assert.ok(view.advice.includes('快照口径'))
+})
+
+await check('projection: inconclusive fold (no pressure drop) reads null', () => {
+  const base = { turns: 0, lastTurn: null, userMessages: 0, assistantMessages: 0, compactions: 0 }
+  let s = applyHealthEvent({ ...base, pressureTokens: 50_000 }, { type: 'compaction/end', data: {} })
+  s = applyHealthEvent(s, { type: 'assistant/message', data: { turn: 1, step: 1, usage: { inputTokens: 60_000, cacheReadTokens: 0 } } })
+  assert.equal(s.compressionRatio, null) // post >= pre: inconclusive, never a fake 0
+  assert.equal(s.preCompactionPressure, undefined)
+  assert.equal(healthView(s, ratioConfig).compressionRatio, null)
+  // No compaction at all → no inference.
+  const plain = healthView({ ...base, pressureTokens: 10_000 }, ratioConfig)
+  assert.equal(plain.compressionRatio, null)
+})
+
 await check('projection: fold keeps last-wins buckets only (rate lives in usage.ts)', () => {
   // The fold no longer accumulates usage totals — the cache-hit rate is read
   // from the core tokenUsage projection via cacheHitRateOf (one algorithm).
@@ -192,7 +217,7 @@ const services = {
       values: {
         sessionHealth: {
           severity: 'yellow', advice: 'a', ratio: 0.3, total: 300_000, window: 1_000_000,
-          turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
+          turns: 2, userMessages: 2, assistantMessages: 1, compactions: 1, compressionRatio: 0.4,
           uncachedInputTokens: 300_000, cacheReadTokens: 0,
           effectivePerRound: 300_000, effectivePerRoundUsd: 0.084, effectivePerRoundCny: null, pricePeriod: null,
         },
@@ -216,6 +241,14 @@ await check('assess: economy yellow + probes + counts', async () => {
   assert.ok(report.probes.some(p => p.includes('git 仓库')))
   assert.ok(report.probes.some(p => p.includes('交接文档：已就位')))
   assert.ok(report.probes.some(p => p.includes('缓存命中率 0%')))
+})
+
+await check('assess: compression ratio rides the fold snapshot + caliber probe', async () => {
+  const report = await assess(ctx, session, 'agent-1', signal, config, {})
+  assert.equal(report.signals.compactionRatio, 0.4)
+  assert.ok(report.probes.some(p => p.includes('上次压缩比例 ≈ 40%') && p.includes('快照口径')))
+  const text = buildCommandText(report, { minimal: false })
+  assert.ok(text.includes('已压缩 1 次：早期细节概要化（上次压缩比例 ≈ 40%'))
 })
 
 await check('assess: danger-zone when work depends on unrecorded early content', async () => {
@@ -522,13 +555,35 @@ await check('buildCommandText: blue tier wording', () => {
     recommendation: 'continue-with-note',
     summary: 'x',
     reason: '上下文占用 42%（中等）——继续没问题，留意窗口压力。',
-    signals: { total: 420_000, window: 1_000_000, ratio: 0.42, turns: 8, userMessages: 10, assistantMessages: 9, compactions: 1 },
+    signals: { total: 420_000, window: 1_000_000, ratio: 0.42, turns: 8, userMessages: 10, assistantMessages: 9, compactions: 1, compactionRatio: null },
     probes: [],
     handoff: { isGitRepo: null, hasHandoff: null, runningProcesses: [] },
   }, { minimal: false })
   assert.ok(text.includes('健康度：**蓝**'))
   assert.ok(text.includes('已压缩 1 次'))
   assert.ok(!text.includes('切换前检查')) // blue: no switch checklist
+})
+
+await check('buildCommandText: compression ratio line with caliber note', () => {
+  const text = buildCommandText({
+    severity: 'yellow',
+    recommendation: 'suggest-switch',
+    summary: 'x',
+    reason: 'r',
+    signals: { total: 600_000, window: 1_000_000, ratio: 0.6, turns: 20, userMessages: 30, assistantMessages: 29, compactions: 2, compactionRatio: 0.42 },
+    probes: [],
+    handoff: { isGitRepo: null, hasHandoff: null, runningProcesses: [] },
+  }, { minimal: false })
+  assert.ok(text.includes('- 已压缩 2 次：早期细节概要化（上次压缩比例 ≈ 42%，按压缩前后压力快照差值推断——快照口径，非精确统计）'))
+  // Defensive: an unknown ratio must not render NaN.
+  const unknown = buildCommandText({
+    severity: 'yellow', recommendation: 'suggest-switch', summary: 'x', reason: 'r',
+    signals: { total: 1, window: 1, ratio: 1, turns: 1, userMessages: 1, assistantMessages: 1, compactions: 1 },
+    probes: [],
+    handoff: { isGitRepo: null, hasHandoff: null, runningProcesses: [] },
+  }, { minimal: false })
+  assert.ok(unknown.includes('已压缩 1 次：早期细节概要化'))
+  assert.ok(!unknown.includes('NaN'))
 })
 
 /* ---------- multi-session overview (panel data + RPC) ---------- */
