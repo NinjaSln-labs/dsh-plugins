@@ -4,14 +4,16 @@
 
 Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). All plugins are public npm packages, installable via `dsh plugin add <name>`.
 
+> All plugins are **original, developed in-house** for this project — not an aggregation or repackaging of third-party plugins.
+
 ## Plugins
 
 | Plugin | Package | Status |
 |---|---|---|
-| [dsh-session-health](./dsh-session-health) | session health v0.6.0: reactive badge (projection-driven), `/health` command, `session_health` tool, multi-session health overview panel ("健康一览" sidebar action listing every session's verdict via loopback RPC), official peak/off-peak dual-currency pricing (CNY/USD, jsdelivr + GitHub-raw fallback), theme-adaptive severity palette, cache-aware window-scaled economy tier, money/token cost toggle, automated handoff checklist | published (GitHub + npm) |
-| [dsh-knowledge-sqlite](./dsh-knowledge-sqlite) | cross-session knowledge: `ctx.knowledge` service + `knowledge_*` tools, SQLite FTS5 trigram index + L1 query expansion (V1.11 contract, zero-LLM writes, instantly searchable) | published (GitHub + npm) |
-| [dsh-subagent-router](./dsh-subagent-router) | model-routed subagent delegation: `subagent_model` tool with per-call provider/model/max_tokens overrides + built-in `model: "auto"` routing policy (anchored to the parent's own model; task-tier upgrades, failure escalation, auditable reason) + `subagent_models` catalog tool | published (GitHub + npm) |
-| [dsh-imgdraw](./dsh-imgdraw) | text-to-image v0.1.0: `draw_image` tool, input-bar 生图 button + popup (async generation, 4-grid results, download / keep / delete), `/imgdraw` image route, persisted history; DashScope wan2.7-image free by default, SiliconFlow Qwen-Image optional | in development (bundle done · unpublished) |
+| [dsh&#8209;session&#8209;health](./dsh-session-health) | session health v0.6.0: reactive badge (projection-driven), `/health` command, `session_health` tool, multi-session health overview panel ("健康一览" sidebar action listing every session's verdict via loopback RPC), official peak/off-peak dual-currency pricing (CNY/USD, jsdelivr + GitHub-raw fallback), theme-adaptive severity palette, cache-aware window-scaled economy tier, money/token cost toggle, automated handoff checklist | published (GitHub + npm) |
+| [dsh&#8209;knowledge&#8209;sqlite](./dsh-knowledge-sqlite) | cross-session knowledge: `ctx.knowledge` service + `knowledge_*` tools, SQLite FTS5 trigram index + L1 query expansion (V1.11 contract, zero-LLM writes, instantly searchable) | published (GitHub + npm) |
+| [dsh&#8209;subagent&#8209;router](./dsh-subagent-router) | model-routed subagent delegation: `subagent_model` tool with per-call provider/model/max_tokens overrides + built-in `model: "auto"` routing policy (anchored to the parent's own model; task-tier upgrades, failure escalation, auditable reason) + `subagent_models` catalog tool | published (GitHub + npm) |
+| [dsh&#8209;imgdraw](./dsh-imgdraw) | text-to-image v0.1.0: `draw_image` tool, input-bar 生图 button + popup (async generation, 4-grid results, download / keep / delete), `/imgdraw` image route, persisted history; DashScope wan2.7-image free by default, SiliconFlow Qwen-Image optional | in development (bundle done · unpublished) |
 
 ## Conventions
 
