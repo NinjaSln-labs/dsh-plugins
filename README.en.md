@@ -6,7 +6,7 @@ All plugins are **developed in-house from scratch** — not an aggregation or re
 
 [简体中文](README.md) | English
 
-Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). All plugins are public npm packages, installable via `dsh plugin add <name>`.
+A collection of personally developed plugins for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): session health, cross-session knowledge, subagent model routing, and AI image generation. All plugins are installable via `dsh plugin add <name>`.
 
 ## Plugins
 
@@ -16,14 +16,6 @@ Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-a
 | [dsh&#8209;knowledge&#8209;sqlite](./dsh-knowledge-sqlite) | **Cross-session Knowledge v0.1.2**:<br>· `ctx.knowledge` service + `knowledge_*` tools<br>· SQLite FTS5 trigram index + L1 query expansion (V1.11 contract)<br>· zero-LLM writes · instantly searchable | ✅ published (GitHub + npm) |
 | [dsh&#8209;subagent&#8209;router](./dsh-subagent-router) | **Model-routed Delegation v0.1.1**:<br>· `subagent_model`: per-call provider/model/max_tokens overrides<br>· built-in `model: "auto"` routing policy (anchored to parent · task-tier upgrade · failure escalation · auditable)<br>· `subagent_models` catalog tool | ✅ published (GitHub + npm) |
 | [dsh&#8209;imgdraw](./dsh-imgdraw) | **Text-to-Image v0.1.0**:<br>· `draw_image` tool + input-bar 生图 button/popup (async generation · 4-grid · download/keep/delete)<br>· `/imgdraw` image route · persisted history<br>· backends: DashScope wan2.7-image free default · SiliconFlow Qwen-Image optional | 🚧 in development (bundle done · unpublished) |
-
-## Conventions
-
-- One plugin per directory, each a standalone npm package (`dsh.bundle` manifest)
-- Install: `dsh plugin add <package-name>`
-- Discover: [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic on this repo
-- Keep repos sanitized: no local paths, no secrets, noreply git email
-- Root README is Chinese-first: `README.md` is the Chinese version, `README.en.md` the English one; per-plugin READMEs keep the two-file pattern (`README.md` English + `README.zh.md` Chinese)
 
 ## Development Process (mandatory)
 
