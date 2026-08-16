@@ -1,8 +1,8 @@
 # dsh-context-compass
 
-[English](README.md) | [中文](README.zh.md)
+English | [简体中文](README.md)
 
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的上下文罗盘插件：基于真实数据的「继续 vs 新开会话」指示器。
+Context compass for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
 - **头部徽章** — 会话日志按钮旁的有色圆点 + 边框（绿/蓝/黄/红），使用 DSH 主题令牌。**响应式**：完全由宿主计算的 `sessionHealth` 投影驱动（推送帧——这是社区插件唯一可用的线上数据通道；客户端 Remote 是构建期固定清单，因此本插件无 Remote、无轮询）。悬停显示建议、窗口占用条、每轮 token 成本与**缓存命中率**（命中率是上下文稳定度的表现；压缩会重置命中）、压缩感知的**预计下次输入（剔除缓存命中）**、**计费预期（金额）**（zh 界面显示 CNY，否则 USD——官方峰谷定价，标注 `忙时价/闲时价`）、模型窗口、会话规模与压缩次数。**点击运行 `/compass`** 查看完整报告。支持键盘操作。
 - **`/compass` 命令** — 完整文本报告，可选探测：
