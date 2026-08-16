@@ -98,8 +98,8 @@ afterEach(async () => {
 
 const agent = { id: 'agent-1', session: { id: 'sess-1', header: { cwd: '/ws/one' } }, ctx: {} }
 
-/** 实验语料目录（相对测试文件解析，避免仓库内出现本地绝对路径）。 */
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'research', 'memory-knowledge-seam', 'experiments', 'memory-experiment')
+/** 实验语料 fixture（hermetic：随仓库入库，CI 可跑；上游见 tests/fixtures/corpus/README.md）。 */
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'corpus')
 
 describe('apply() 装配', () => {
   it('提供 ctx.knowledge、注册 6 个工具、事件可订阅', async () => {
