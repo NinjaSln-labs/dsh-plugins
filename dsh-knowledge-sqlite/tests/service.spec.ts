@@ -286,7 +286,7 @@ describe('probe（实验套件）', () => {
     for (const ch of checks) expect(ch.pass, ch.name).toBe(true)
   })
 
-  it('eval-human 上报 precision@1（信息性门禁）与 none 查询无误报', { timeout: 60000 }, async () => {
+  it('eval-human 上报 precision@1（信息性门禁）、C 臂诊断与 none 查询无误报', { timeout: 60000 }, async () => {
     app = await boot({ agent, corpusPath: CORPUS })
     const seed = await app.service.probe('seed')
     expect(seed.ok).toBe(true)
@@ -294,14 +294,17 @@ describe('probe（实验套件）', () => {
     expect(human.ok).toBe(true)
     const part = human.parts[0] as {
       arms: Record<string, { recall1: string; precision1: string }>
-      precision1: { armA: string; armL1Live: string; gateA: boolean; gateL1Live: boolean }
+      precision1: { armA: string; armC: string; armL1Live: string; gateA: boolean; gateC: boolean; gateL1Live: boolean }
       noneQueries: { count: number; top1: string; falsePositives: string | null; pass: boolean }
     }
-    // 单目标套件 precision@1 ≡ recall@1（V1.11 信息性门禁口径）；A 臂词法确定
+    // 单目标套件 precision@1 ≡ recall@1（V1.11 信息性门禁口径）；A/C 臂词法确定（C 臂依赖 fixture variants）
     expect(part.arms.A.recall1).toMatch(/^11\/17 \(65%\)$/)
     expect(part.arms.A.precision1).toBe(part.arms.A.recall1)
+    expect(part.arms.C.recall1).toMatch(/^12\/17 \(71%\)$/)
+    expect(part.arms.C.precision1).toBe(part.arms.C.recall1)
     expect(part.arms['L1-live'].precision1).toBe(part.arms['L1-live'].recall1)
     expect(part.precision1.armA).toMatch(/^11\/17/)
+    expect(part.precision1.armC).toMatch(/^12\/17/)
     // none 查询（3 条）top1 必须为空或非记忆条目
     expect(part.noneQueries.count).toBe(3)
     expect(part.noneQueries.falsePositives).toBe(null)

@@ -67,6 +67,18 @@ for (const q of humanQueries.filter((x) => x.target !== 'none')) {
 }
 console.log(`human A: ${r1}/17 (${Math.round((100 * r1) / 17)}%) 期望 65%`)
 
+// human C（离线 reasoner variants，0.1.4 诊断臂）
+const humanExpanded = JSON.parse(readFileSync(join(exp, 'human-expanded.json'), 'utf8'))
+const humanExpById = new Map(humanExpanded.map((e) => [e.id, e]))
+let cR1 = 0
+for (const q of humanQueries.filter((x) => x.target !== 'none')) {
+  const vs = humanExpById.get(q.id)?.variants ?? []
+  const rows = await store.search('base', [q.text, ...vs], caller, { topN: 5 })
+  const target = dedupe.get(q.target) ?? q.target
+  if (rows.findIndex((r) => r.item.id === target) === 0) cR1++
+}
+console.log(`human C: ${cR1}/17 (${Math.round((100 * cR1) / 17)}%) 期望 71%`)
+
 // ---- 契约抽查 ----
 // dedupeKey upsert id 稳定
 const w1 = await store.write({ content: 'v1', dedupeKey: 'smoke-k' }, stamps, [], actorId)
