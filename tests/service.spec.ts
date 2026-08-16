@@ -99,7 +99,7 @@ afterEach(async () => {
 const agent = { id: 'agent-1', session: { id: 'sess-1', header: { cwd: '/ws/one' } }, ctx: {} }
 
 /** 实验语料目录（相对测试文件解析，避免仓库内出现本地绝对路径）。 */
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'research', 'memory-experiment')
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'research', 'memory-knowledge-seam', 'experiments', 'memory-experiment')
 
 describe('apply() 装配', () => {
   it('提供 ctx.knowledge、注册 6 个工具、事件可订阅', async () => {
@@ -284,5 +284,27 @@ describe('probe（实验套件）', () => {
     const checks = (c.parts[0] as { checks: Array<{ name: string; pass: boolean }> }).checks
     expect(checks.length).toBeGreaterThanOrEqual(11)
     for (const ch of checks) expect(ch.pass, ch.name).toBe(true)
+  })
+
+  it('eval-human 上报 precision@1（信息性门禁）与 none 查询无误报', { timeout: 60000 }, async () => {
+    app = await boot({ agent, corpusPath: CORPUS })
+    const seed = await app.service.probe('seed')
+    expect(seed.ok).toBe(true)
+    const human = await app.service.probe('human')
+    expect(human.ok).toBe(true)
+    const part = human.parts[0] as {
+      arms: Record<string, { recall1: string; precision1: string }>
+      precision1: { armA: string; armL1Live: string; gateA: boolean; gateL1Live: boolean }
+      noneQueries: { count: number; top1: string; falsePositives: string | null; pass: boolean }
+    }
+    // 单目标套件 precision@1 ≡ recall@1（V1.11 信息性门禁口径）；A 臂词法确定
+    expect(part.arms.A.recall1).toMatch(/^11\/17 \(65%\)$/)
+    expect(part.arms.A.precision1).toBe(part.arms.A.recall1)
+    expect(part.arms['L1-live'].precision1).toBe(part.arms['L1-live'].recall1)
+    expect(part.precision1.armA).toMatch(/^11\/17/)
+    // none 查询（3 条）top1 必须为空或非记忆条目
+    expect(part.noneQueries.count).toBe(3)
+    expect(part.noneQueries.falsePositives).toBe(null)
+    expect(part.noneQueries.pass).toBe(true)
   })
 })

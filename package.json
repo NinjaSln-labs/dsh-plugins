@@ -1,7 +1,7 @@
 {
   "name": "dsh-knowledge-sqlite",
   "description": "Cross-session knowledge for DeepSeek Harness: ctx.knowledge service + knowledge_* tools, SQLite FTS5 trigram retrieval (CJK substring) with L1 query expansion. V1.11 contract (write/update/search/list/delete + budget + events + error codes).",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publishConfig": {
     "access": "public"
   },
@@ -25,7 +25,8 @@
     "lib/types.js",
     "lib/*.d.ts",
     "cordis.patch.yml",
-    "README.zh.md"
+    "README.zh.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -126,7 +126,8 @@ export function registerKnowledgeTools(ctx: Context, service: KnowledgeService):
   ctx.tools.register(defineTool({
     name: 'knowledge_probe',
     description: '实验套件验证工具（阶段 3 门禁）：seed 装载 memory-experiment 语料，评估 hard/human 查询集'
-      + ' A/C/D/L1-live 臂 recall@1，跑契约检查。suite: seed|hard|human|contract|all',
+      + ' A/C/D/L1-live 臂 recall@1 与 precision@1（信息性），human 套件含 none 查询无误报检查，跑契约检查。'
+      + 'suite: seed|hard|human|contract|all',
     parameters: {
       suite: { type: 'string', required: true, enum: ['seed', 'hard', 'human', 'contract', 'latency', 'variance', 'all'], description: '验证阶段' },
       fresh: { type: 'boolean', description: '清空 L1 扩展缓存后执行（单轮独立扩展）' },

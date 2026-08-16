@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const exp = join(here, '..', '..', 'research', 'memory-experiment')
+const exp = join(here, '..', '..', 'research', 'memory-knowledge-seam', 'experiments', 'memory-experiment')
 const { memories, queries } = await import(join(exp, 'data.mjs'))
 const enriched = JSON.parse(readFileSync(join(exp, 'enriched.json'), 'utf8'))
 const allMemories = JSON.parse(readFileSync(join(exp, 'all-memories.json'), 'utf8'))
