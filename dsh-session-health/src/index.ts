@@ -29,7 +29,7 @@ export { sessionHealthProjectionDefinition, applyHealthEvent, healthView } from 
 export { assess, type HealthReport, type AssessOptions } from './assess.ts'
 export { healthCommandDefinition, buildCommandText } from './command.ts'
 export { sessionHealthTool } from './tool.ts'
-export { buildOverview, sortOverviewRows, rankOf, handleOverviewRpc, type OverviewRow } from './overview.ts'
+export { buildOverview, sortOverviewRows, rankOf, resolveOverviewScope, handleOverviewRpc, type OverviewRow, type OverviewScope } from './overview.ts'
 export type * from './types.ts'
 
 export const name = 'dsh-session-health'
