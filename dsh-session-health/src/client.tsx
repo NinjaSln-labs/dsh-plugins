@@ -85,11 +85,11 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 @keyframes sh-tip-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.sh-tip{animation:none}}
 /* Sidebar footer action (multi-session overview opener): styled and sized
-   like the New Session button (38px, radius 12, elevated fill + border),
-   entirely on theme tokens so it follows light/dark themes with the shell.
-   Rail state mirrors the New Session rail icon (36px, borderless, hover
-   tint). The severity palette classes above are reused for the dot. */
-.sh-fa{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:8px 16px;margin:0 2px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:22px;flex:none;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden}
+   like the New Session button (38px, radius 12, elevated fill + border,
+   full column width like the Settings row), entirely on theme tokens so it
+   follows light/dark themes with the shell. Rail state mirrors the New
+   Session rail icon (36px, borderless, hover tint). */
+.sh-fa{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;padding:8px 16px;margin:0 2px 8px;width:100%;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-size:14px;font-weight:500;line-height:22px;flex:none;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden}
 .sh-fa:hover{background:var(--dsw-alias-button-floating-hover)}
 .sh-fa:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:2px}
 .sh-fa .sh-fa-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dsw-alias-label-tertiary)}
@@ -117,6 +117,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-panel-row .sh-row-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
 .sh-panel-row .sh-row-main{flex:1;min-width:0}
 .sh-panel-row .sh-row-title{font-size:13px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sh-panel-row .sh-row-title .sh-row-id{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-left:6px;font-variant-numeric:tabular-nums}
 .sh-panel-row .sh-row-meta{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:1px;font-variant-numeric:tabular-nums}
 .sh-panel-row .sh-row-sev{flex:none;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600}
 .sh-panel-row .sh-row-right{flex:none;text-align:right;font-size:12px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
@@ -466,6 +467,18 @@ class OverviewStore {
 
 const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
 
+/** Relative creation time — repeated titles stay distinguishable in the list. */
+function ageOf(ts: number): string {
+  if (ts <= 0) return ''
+  const diff = Date.now() - ts
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`
+  const d = new Date(ts)
+  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Rows arrive host-sorted; defensive client re-sort keeps the panel honest. */
 function sortRows(rows: OverviewRowLike[]): OverviewRowLike[] {
   return [...rows].sort((a, b) => {
@@ -627,6 +640,7 @@ function OverviewBody(props: {
                 : null
               const money = moneyOf(health, isZh)
               const metaBits = [
+                row.createdAt > 0 ? `创建于 ${ageOf(row.createdAt)}` : null,
                 pct !== null ? `占用 ${pct}%` : '占用未知',
                 health?.effectivePerRound !== null && health?.effectivePerRound !== undefined
                   ? `约 ${compact(health.effectivePerRound)} token/轮`
@@ -646,7 +660,7 @@ function OverviewBody(props: {
                 >
                   <span className="sh-row-dot" />
                   <span className="sh-row-main">
-                    <span className="sh-row-title">{row.title ?? `未命名会话（${row.id.slice(0, 8)}…）`}</span>
+                    <span className="sh-row-title">{row.title ?? '未命名会话'}<span className="sh-row-id">{row.id.slice(0, 6)}</span></span>
                     <span className="sh-row-meta">{metaBits.join(' · ')}</span>
                   </span>
                   <span className="sh-row-sev">{severity === 'unknown' ? '无数据' : SEVERITY_LABEL[severity]}</span>

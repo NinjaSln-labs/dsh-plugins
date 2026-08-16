@@ -26,6 +26,11 @@ ctx.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 
 ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
 ctx.provide('sessions', { get: id => (id === 's1' ? session : undefined) })
 ctx.provide('sandboxPolicy', { workspaceRoot: '/tmp/ws' })
+// The sidebar's session scope is workspace membership (sessionIds), not cwd.
+ctx.provide('workspaceRegistry', {
+  resolveByPath: path => (path === '/tmp/ws' ? { id: 'ws-1' } : undefined),
+  list: () => [{ id: 'ws-1', path: '/tmp/ws', sessionIds: ['s1', 's2'] }],
+})
 ctx.provide('fs', {
   resolve: async p => p,
   stat: async p => (p === '.git' ? {} : undefined),

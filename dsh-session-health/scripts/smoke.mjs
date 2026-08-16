@@ -647,6 +647,53 @@ await check('overview: workspace + top-level filtering matches the sidebar', asy
   assert.deepEqual(noRoot.map(r => r.id), ['a'])
 })
 
+await check('overview: workspace membership (sessionIds) is the sidebar scope', async () => {
+  // A registered workspace wins over the cwd cut: members stay even with a
+  // foreign cwd; a session inside the cwd but not a member is excluded.
+  const wsCtx = {
+    get: name => ({
+      ...overviewServices,
+      sandboxPolicy: { workspaceRoot: '/ws' },
+      workspaceRegistry: {
+        resolveByPath: path => (path === '/ws' ? { id: 'w1' } : undefined),
+        list: () => [{ id: 'w1', path: '/ws', sessionIds: ['in-ws', 'member2'] }],
+      },
+      sessionQuery: {
+        listSessions: async () => [
+          { header: { id: 'in-ws', createdAt: 1, cwd: '/ws' }, live: false, persisted: true },
+          { header: { id: 'cwd-but-not-member', createdAt: 2, cwd: '/ws' }, live: false, persisted: true },
+          { header: { id: 'member2', createdAt: 3, cwd: '/elsewhere' }, live: false, persisted: true },
+        ],
+        readTitleSnapshots: async () => [],
+      },
+    })[name],
+  }
+  const rows = await buildOverview(wsCtx, signal)
+  assert.deepEqual(rows.map(r => r.id), ['member2', 'in-ws']) // membership wins over cwd; newest first in tier
+})
+
+await check('overview: parallel cold loads backfill health', async () => {
+  const slowCtx = {
+    get: name => ({
+      ...overviewServices,
+      sessionProjectionCache: {
+        cachedSnapshot: () => undefined,
+        coldSnapshot: async id => {
+          await new Promise(resolve => setTimeout(resolve, 20))
+          return { values: { sessionHealth: healthOf('blue') } }
+        },
+      },
+      sessionQuery: {
+        listSessions: async () => [{ header: { id: 'cold-a', createdAt: 1 }, live: false, persisted: true }],
+        readTitleSnapshots: async () => [],
+      },
+    })[name],
+  }
+  const rows = await buildOverview(slowCtx, signal)
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].health.severity, 'blue') // async cold load backfilled
+})
+
 await check('overview: one broken record degrades that row only', async () => {
   const brokenCtx = {
     get: name => ({

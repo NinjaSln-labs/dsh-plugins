@@ -127,6 +127,23 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
 
   const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
   const workspaceRoot = resolveWorkspaceRoot(ctx, sessionsStore)
+  // The sidebar groups sessions by Host Workspace membership (workspace
+  // sessionIds — the authoritative ownership account), NOT by cwd. Resolve
+  // the current workspace for the root and keep only its members; without a
+  // registered workspace, fall back to the cwd-prefix cut below.
+  const workspaceRegistry = ctx.get('workspaceRegistry') as
+    | { resolveByPath?(path: string): { id: string } | undefined; list?(): Array<{ id: string; path?: string; sessionIds?: readonly string[] }> }
+    | undefined
+  let workspaceSessionIds: ReadonlySet<string> | null = null
+  if (workspaceRoot !== null && workspaceRegistry?.resolveByPath !== undefined) {
+    try {
+      const ws = workspaceRegistry.resolveByPath(workspaceRoot)
+      if (ws !== undefined) {
+        const entity = (workspaceRegistry.list?.() ?? []).find(w => w.id === ws.id)
+        if (entity?.sessionIds !== undefined) workspaceSessionIds = new Set(entity.sessionIds)
+      }
+    } catch { /* fall through to cwd cut */ }
+  }
   const projections = ctx.get('sessionProjections') as
     | { snapshot(session: unknown): { values?: Record<string, unknown> } }
     | undefined
@@ -142,6 +159,10 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
 
   const rows: OverviewRow[] = []
   const pendingTitles: string[] = []
+  // Cold projection loads are the slow path (per-session disk reads): collect
+  // them and run them in PARALLEL instead of serially awaiting each one —
+  // serial cold loads are what made the panel take seconds on many sessions.
+  const coldLoads: Array<{ id: string; promise: Promise<SessionHealthProjection | null> }> = []
 
   for (const rec of records) {
     const id = rec.header?.id
@@ -149,7 +170,9 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
     // The sidebar lists top-level sessions of the current workspace only:
     // subagent children and sessions from other workspaces stay out.
     if (rec.header.origin === 'subagent') continue
-    if (workspaceRoot !== null) {
+    if (workspaceSessionIds !== null) {
+      if (!workspaceSessionIds.has(id)) continue
+    } else if (workspaceRoot !== null) {
       const cwd = rec.header.cwd
       const inWorkspace = typeof cwd === 'string' && cwd.length > 0
         && (cwd === workspaceRoot || cwd.startsWith(`${workspaceRoot}/`))
@@ -176,11 +199,15 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       } catch { /* fall through to cold load */ }
     }
     if (health === null && cache?.coldSnapshot !== undefined && rec.persisted === true) {
-      try {
-        const snap = await cache.coldSnapshot(id, signal)
-        const value = snap?.values?.sessionHealth as SessionHealthProjection | undefined
-        if (value !== undefined && value !== null) health = value
-      } catch { /* keep null */ }
+      coldLoads.push({
+        id,
+        promise: cache.coldSnapshot(id, signal)
+          .then(snap => {
+            const value = snap?.values?.sessionHealth as SessionHealthProjection | undefined
+            return value !== undefined && value !== null ? value : null
+          })
+          .catch(() => null),
+      })
     }
 
     // Title: live log-backed fold first, batch query for the rest.
@@ -199,6 +226,16 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       cwd: typeof rec.header.cwd === 'string' ? rec.header.cwd : null,
       origin: typeof rec.header.origin === 'string' ? rec.header.origin : null,
     })
+  }
+
+  // Parallel cold loads, then backfill in place.
+  if (coldLoads.length > 0) {
+    const byId = new Map(rows.map(r => [r.id, r]))
+    const settled = await Promise.all(coldLoads.map(c => c.promise))
+    for (let i = 0; i < coldLoads.length; i++) {
+      const row = byId.get(coldLoads[i].id)
+      if (row !== undefined && settled[i] !== null) row.health = settled[i]
+    }
   }
 
   // Batch title observation for sessions without a live fold (cold sessions).
