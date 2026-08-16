@@ -1,5 +1,14 @@
 # CHANGELOG — dsh-knowledge-sqlite
 
+## 0.1.4 (2026-08-16)
+
+- **feat**: human 套件新增 C 臂诊断——离线 reasoner variants（`human-expanded.json`
+  落盘入库，deepseek-chat 生成口径与基准一致），分离"扩展模型能力"与"实时降级"两个变量；
+  precision@1 与 none 无误报检查同步覆盖 C 臂。
+- 实测：本批次 C 臂 12/17 (71%)（基准历史抽样 82%——C/D 臂有 LLM 抽样方差，V1.11 条款；
+  详见 EXPERIMENTS §7）。
+- 回顾：见 DEVELOPMENT.md 速查表"语料迁移后路径未同步"行（fixture 同步流程已固化）。
+
 ## 0.1.3 (2026-08-16)
 
 - **fix**: probe 语料默认路径与工作区布局一致 —— 语料迁移后 bundle 默认 `corpusPath`、
