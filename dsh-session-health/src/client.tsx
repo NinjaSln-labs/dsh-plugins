@@ -111,7 +111,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:96px 64px 76px 104px 68px}
+.sh-grid-cols{grid-template-columns:88px 60px 84px 84px 92px 64px}
 .sh-panel-head-row{display:grid;gap:8px;align-items:center;padding:6px 12px 6px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
@@ -124,9 +124,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-row-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
 .sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums}
-.sh-rowtip{position:absolute;right:12px;top:calc(100% + 4px);z-index:20;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--dsw-alias-label-secondary);box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
-.sh-rowtip-title{color:var(--dsw-alias-label-primary);font-weight:600;display:block}
-.sh-rowtip-meta{color:var(--dsw-alias-label-tertiary);display:block;margin-top:2px}
+.sh-rowtip{position:absolute;transform:translate(-50%,calc(-100% - 8px));z-index:30;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
 .sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
 .sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
@@ -513,6 +511,16 @@ function ageShort(ts: number): string {
 /** Sort modes: 'severity' = 方案 A (tier → live → newest), 'time' = newest first. */
 type SortMode = 'severity' | 'time'
 
+/** 每轮金额（含缓存折扣），zh 显示 CNY 否则 USD；null 表示暂无计费数据。 */
+function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | null {
+  if (proj === null) return null
+  const cny = proj.effectivePerRoundCny
+  const usd = proj.effectivePerRoundUsd
+  if (isZh && cny !== null && cny !== undefined) return `¥${cny.toFixed(2)}`
+  if (usd !== null && usd !== undefined) return formatUsd(usd)
+  return null
+}
+
 /** Rows arrive host-sorted (severity mode); the client re-sorts locally for
     the selected mode and refreshes. */
 function sortRows(rows: OverviewRowLike[], mode: SortMode): OverviewRowLike[] {
@@ -571,7 +579,8 @@ function OverviewBody(props: {
     try { return window.localStorage.getItem('dsh-session-health/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
   })
   const [page, setPage] = React.useState(0)
-  const [hoverId, setHoverId] = React.useState<string | null>(null)
+  // Hover tooltip position (row-relative px); the identity is 会话名[项目名].
+  const [tip, setTip] = React.useState<{ x: number; y: number; w: number } | null>(null)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const closeRef = React.useRef<HTMLButtonElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -630,6 +639,7 @@ function OverviewBody(props: {
   }, [props.store])
 
   const close = () => props.store.setOpen(false)
+  const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
   const openSession = (id: string) => {
     try { props.sessions.open(id) } catch { /* 静默 */ }
     try { void props.commands.execute(id, '/health') } catch { /* 静默 */ }
@@ -677,11 +687,12 @@ function OverviewBody(props: {
           </button>
         </div>
         <div className="sh-panel-head-row sh-grid-cols" role="row">
-          <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按严重度排序">严重度{sortMode === 'severity' ? ' ↓' : ''}</button>
-          <span className="sh-row-num">占用</span>
-          <span className="sh-row-num">每轮</span>
-          <span className="sh-row-num">规模</span>
-          <button type="button" className={`sh-col-head sh-row-num${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')} aria-label="按创建时间排序">创建{sortMode === 'time' ? ' ↓' : ''}</button>
+          <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按健康状态排序">状态{sortMode === 'severity' ? '↓' : ''}</button>
+          <span className="sh-row-num" title="上下文占用（窗口百分比）">占用</span>
+          <span className="sh-row-num" title="每轮输入计费当量（含缓存折扣）">输入</span>
+          <span className="sh-row-num" title="每轮输入费用（含缓存折扣，忙闲时价）">费用</span>
+          <span className="sh-row-num" title="轮次 / 消息数">规模</span>
+          <button type="button" className={`sh-col-head sh-row-num${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')} aria-label="按创建时间排序">创建{sortMode === 'time' ? '↓' : ''}</button>
         </div>
         <div className="sh-panel-list" ref={listRef}>
           {rows === null && loadError === null ? (
@@ -714,26 +725,31 @@ function OverviewBody(props: {
                 ? compact(health.effectivePerRound)
                 : '—'
               const occ = pct !== null ? `${pct}%` : '—'
-              const titleText = `${row.title ?? '未命名会话'}【${wsLabel}】`
+              const cost = moneyOf(health, isZh)
+              const titleText = `${row.title ?? '未命名会话'}[${wsLabel}]`
+              const moveTip = (e: React.MouseEvent) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                setTip({ x: e.clientX - r.left, y: e.clientY - r.top, w: r.width })
+              }
+              const tipLeft = tip !== null ? Math.min(Math.max(tip.x, 56), tip.w - 56) : 0
               return (
                 <button
                   type="button"
                   key={row.id}
                   className={`sh-panel-row sh-grid-cols${severity !== 'unknown' ? ` sh-sev-${severity}` : ''}`}
                   onClick={() => openSession(row.id)}
-                  onMouseEnter={() => setHoverId(row.id)}
-                  onMouseLeave={() => setHoverId(h => (h === row.id ? null : h))}
+                  onMouseEnter={moveTip}
+                  onMouseMove={moveTip}
+                  onMouseLeave={() => setTip(null)}
                   aria-label={`会话健康：${ariaSev}。${titleText}。${metaBits.join('，')}。点击打开并运行 /health`}
                 >
-                  {hoverId === row.id ? (
-                    <span className="sh-rowtip" role="tooltip">
-                      <span className="sh-rowtip-title">{titleText}</span>
-                      <span className="sh-rowtip-meta">{metaBits.join(' · ')}</span>
-                    </span>
+                  {tip !== null ? (
+                    <span className="sh-rowtip" role="tooltip" style={{ left: tipLeft, top: tip.y }}>{titleText}</span>
                   ) : null}
                   <span className="sh-row-sev"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
                   <span className="sh-row-num" title={pct !== null ? `上下文占用 ${pct}%` : undefined}>{occ}</span>
-                  <span className="sh-row-num" title={perRound !== '—' ? `每轮计费当量约 ${perRound} token（含缓存折扣）` : undefined}>{perRound}</span>
+                  <span className="sh-row-num" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
+                  <span className="sh-row-num" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
                   <span className="sh-row-num">{scale}</span>
                   <span className="sh-row-num" title={row.createdAt > 0 ? `创建于 ${ageOf(row.createdAt)}` : undefined}>{ageShort(row.createdAt)}</span>
                 </button>
