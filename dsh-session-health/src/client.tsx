@@ -109,7 +109,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-panel-close:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 /* The list keeps the height of exactly 5 rows whether or not there are 5 —
    the panel never resizes (no visual jump when sessions come and go). */
-.sh-panel-list{overflow-y:auto;padding:8px;flex:1;overscroll-behavior:contain;height:calc(41px * 5 + 16px);box-sizing:border-box}
+.sh-panel-list{overflow-y:auto;padding:8px;flex:none;overscroll-behavior:contain;height:calc(41px * 5 + 16px);box-sizing:border-box}
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
