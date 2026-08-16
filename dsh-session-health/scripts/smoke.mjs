@@ -694,6 +694,50 @@ await check('overview: parallel cold loads backfill health', async () => {
   assert.equal(rows[0].health.severity, 'blue') // async cold load backfilled
 })
 
+await check('overview: currentSessionId anchors the workspace scope', async () => {
+  const anchorCtx = {
+    get: name => ({
+      ...overviewServices,
+      workspaceRegistry: {
+        list: () => [
+          { id: 'w-a', path: '/a', sessionIds: ['anchor-session'] },
+          { id: 'w-b', path: '/b', sessionIds: ['other'] },
+        ],
+      },
+      sessionQuery: {
+        listSessions: async () => [
+          { header: { id: 'anchor-session', createdAt: 1, cwd: '/a' }, live: false, persisted: true },
+          { header: { id: 'other', createdAt: 2, cwd: '/b' }, live: false, persisted: true },
+        ],
+        readTitleSnapshots: async () => [],
+      },
+    })[name],
+  }
+  const rows = await buildOverview(anchorCtx, signal, { currentSessionId: 'anchor-session' })
+  assert.deepEqual(rows.map(r => r.id), ['anchor-session'])
+})
+
+await check('overview: archived sessions are hidden everywhere', async () => {
+  const archivedCtx = {
+    get: name => ({
+      ...overviewServices,
+      workspaceRegistry: {
+        list: () => [{ id: 'w1', path: '/ws', sessionIds: ['a1', 'a2'] }],
+        archivedSessionIds: ['a2'],
+      },
+      sessionQuery: {
+        listSessions: async () => [
+          { header: { id: 'a1', createdAt: 1, cwd: '/ws' }, live: false, persisted: true },
+          { header: { id: 'a2', createdAt: 2, cwd: '/ws' }, live: false, persisted: true },
+        ],
+        readTitleSnapshots: async () => [],
+      },
+    })[name],
+  }
+  const rows = await buildOverview(archivedCtx, signal, { currentSessionId: 'a1' })
+  assert.deepEqual(rows.map(r => r.id), ['a1'])
+})
+
 await check('overview: one broken record degrades that row only', async () => {
   const brokenCtx = {
     get: name => ({

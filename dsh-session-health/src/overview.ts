@@ -106,6 +106,65 @@ function resolveWorkspaceRoot(ctx: Context, sessionsStore: SessionsStoreLike | u
   }
 }
 
+/** The resolved current-workspace scope for one overview request. */
+export interface OverviewScope {
+  /** Workspace id; null when no registered workspace contains the anchor. */
+  workspaceId: string | null
+  /** Workspace display path; null when unregistered. */
+  path: string | null
+  /** Session ids of the workspace (archived ones excluded by the caller). */
+  sessionIds: ReadonlySet<string> | null
+}
+
+/**
+ * Resolve the current-workspace session scope. The sidebar groups sessions by
+ * Host Workspace membership (workspace sessionIds — the authoritative
+ * ownership account). The browser sends its current session id (the only
+ * reliable "current workspace" fact); the anchor's workspace is found by
+ * membership, falling back to a cwd-resolved workspace, then to the
+ * sandboxPolicy root. `sessionIds` stays null when nothing resolves — the
+ * caller then applies no membership cut rather than showing an empty panel.
+ */
+export function resolveOverviewScope(
+  ctx: Context,
+  opts: { currentSessionId?: string },
+): OverviewScope {
+  const workspaceRegistry = ctx.get('workspaceRegistry') as
+    | {
+        resolveByPath?(path: string): { id: string } | undefined
+        list?(): Array<{ id: string; path?: string; sessionIds?: readonly string[] }>
+      }
+    | undefined
+  if (workspaceRegistry === undefined) return { workspaceId: null, path: null, sessionIds: null }
+  try {
+    const entities = workspaceRegistry.list?.() ?? []
+    // 1) Membership anchor: the workspace whose sessionIds contain the
+    //    browser's current session (what the sidebar highlights as current).
+    let entity = opts.currentSessionId !== undefined
+      ? entities.find(w => w.sessionIds?.includes(opts.currentSessionId as string))
+      : undefined
+    // 2) cwd anchor: resolveByPath on the workspace root (sandboxPolicy →
+    //    newest live session cwd), matching the older cwd-cut behavior.
+    if (entity === undefined) {
+      const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
+      const root = resolveWorkspaceRoot(ctx, sessionsStore)
+      if (root !== null && workspaceRegistry.resolveByPath !== undefined) {
+        const ws = workspaceRegistry.resolveByPath(root)
+        if (ws !== undefined) entity = entities.find(w => w.id === ws.id)
+      }
+    }
+    if (entity === undefined) return { workspaceId: null, path: null, sessionIds: null }
+    const ids = entity.sessionIds
+    return {
+      workspaceId: entity.id,
+      path: entity.path ?? null,
+      sessionIds: ids !== undefined ? new Set(ids) : null,
+    }
+  } catch {
+    return { workspaceId: null, path: null, sessionIds: null }
+  }
+}
+
 /**
  * Build the overview rows for the current workspace's top-level sessions.
  * Never throws on a single bad session — per-record failures degrade to
@@ -113,7 +172,11 @@ function resolveWorkspaceRoot(ctx: Context, sessionsStore: SessionsStoreLike | u
  * panel. Returns [] when the sessionQuery service is absent (headless
  * assemblies keep working).
  */
-export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<OverviewRow[]> {
+export async function buildOverview(
+  ctx: Context,
+  signal: AbortSignal,
+  opts: { currentSessionId?: string } = {},
+): Promise<OverviewRow[]> {
   const sessionQuery = ctx.get('sessionQuery') as SessionQueryLike | undefined
   if (sessionQuery === undefined) return []
 
@@ -127,23 +190,17 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
 
   const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
   const workspaceRoot = resolveWorkspaceRoot(ctx, sessionsStore)
-  // The sidebar groups sessions by Host Workspace membership (workspace
-  // sessionIds — the authoritative ownership account), NOT by cwd. Resolve
-  // the current workspace for the root and keep only its members; without a
-  // registered workspace, fall back to the cwd-prefix cut below.
+  const scope = resolveOverviewScope(ctx, opts)
+  // Archived sessions are hidden from every sidebar grouping surface; the
+  // panel mirrors that (workspace accounting keeps them, visibility drops).
   const workspaceRegistry = ctx.get('workspaceRegistry') as
-    | { resolveByPath?(path: string): { id: string } | undefined; list?(): Array<{ id: string; path?: string; sessionIds?: readonly string[] }> }
+    | { archivedSessionIds?: readonly string[] }
     | undefined
-  let workspaceSessionIds: ReadonlySet<string> | null = null
-  if (workspaceRoot !== null && workspaceRegistry?.resolveByPath !== undefined) {
-    try {
-      const ws = workspaceRegistry.resolveByPath(workspaceRoot)
-      if (ws !== undefined) {
-        const entity = (workspaceRegistry.list?.() ?? []).find(w => w.id === ws.id)
-        if (entity?.sessionIds !== undefined) workspaceSessionIds = new Set(entity.sessionIds)
-      }
-    } catch { /* fall through to cwd cut */ }
-  }
+  let archived: ReadonlySet<string> | null = null
+  try {
+    const ids = workspaceRegistry?.archivedSessionIds
+    if (Array.isArray(ids)) archived = new Set(ids)
+  } catch { /* no archive cut */ }
   const projections = ctx.get('sessionProjections') as
     | { snapshot(session: unknown): { values?: Record<string, unknown> } }
     | undefined
@@ -168,11 +225,14 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
     const id = rec.header?.id
     if (typeof id !== 'string' || id === '') continue
     // The sidebar lists top-level sessions of the current workspace only:
-    // subagent children and sessions from other workspaces stay out.
+    // subagent children, archived sessions, and other workspaces stay out.
     if (rec.header.origin === 'subagent') continue
-    if (workspaceSessionIds !== null) {
-      if (!workspaceSessionIds.has(id)) continue
+    if (archived !== null && archived.has(id)) continue
+    if (scope.sessionIds !== null) {
+      if (!scope.sessionIds.has(id)) continue
     } else if (workspaceRoot !== null) {
+      // Degraded scope (no workspaceRegistry): fall back to the cwd prefix
+      // cut so the panel still mirrors a single-workspace view.
       const cwd = rec.header.cwd
       const inWorkspace = typeof cwd === 'string' && cwd.length > 0
         && (cwd === workspaceRoot || cwd.startsWith(`${workspaceRoot}/`))
@@ -280,11 +340,14 @@ async function readBody(req: IncomingMessage): Promise<string> {
 /** RPC request shape from the browser panel. */
 interface RpcCall {
   method?: string
+  /** The browser's current session id — the anchor for the workspace scope. */
+  currentSessionId?: string
 }
 
 /**
  * Full HTTP handler for POST /session-health-rpc. Methods:
- *   { method: 'overview' } → { ok: true, result: { sessions: OverviewRow[] } }
+ *   { method: 'overview', currentSessionId? } →
+ *     { ok: true, result: { sessions: OverviewRow[], workspace: {...} } }
  * Loopback-only (panel data is private to the machine); 405 on non-POST,
  * 400 on malformed JSON, 403 on non-loopback peers, 500 on service failure.
  */
@@ -315,8 +378,18 @@ export async function handleOverviewRpc(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const sessions = await buildOverview(ctx, controller.signal)
-    sendJson(res, 200, { ok: true, result: { sessions } })
+    const currentSessionId = typeof call.currentSessionId === 'string' && call.currentSessionId !== ''
+      ? call.currentSessionId
+      : undefined
+    const sessions = await buildOverview(ctx, controller.signal, { currentSessionId })
+    const scope = resolveOverviewScope(ctx, { currentSessionId })
+    sendJson(res, 200, {
+      ok: true,
+      result: {
+        sessions,
+        workspace: { id: scope.workspaceId, path: scope.path },
+      },
+    })
   } catch (e) {
     sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) })
   } finally {
