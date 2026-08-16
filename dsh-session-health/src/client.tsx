@@ -65,7 +65,7 @@ body[data-ds-dark-theme] .sh-sev-green{--sh-accent:color-mix(in srgb,var(--dsw-a
 body[data-ds-dark-theme] .sh-sev-blue{--sh-accent:color-mix(in srgb,var(--dsw-static-blue-500) 50%,white);--sh-ink:color-mix(in srgb,var(--dsw-static-blue-500) 55%,white)}
 body[data-ds-dark-theme] .sh-sev-yellow{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,white);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 55%,white)}
 body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-alias-state-error-primary) 35%,white);--sh-ink:color-mix(in srgb,var(--dsw-alias-state-error-primary) 55%,white)}
-.sh-tip{position:absolute;top:calc(100% + 8px);right:0;min-width:280px;background:var(--dsw-alias-bg-overlay);color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px 12px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.22);z-index:50;text-align:left}
+.sh-tip{position:absolute;top:calc(100% + 8px);right:0;min-width:280px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px 12px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.22);z-index:50;text-align:left}
 .sh-tip-title{font-size:13px;color:var(--dsw-alias-label-secondary);margin-bottom:8px}
 .sh-tip-title .sh-sev-label{color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600}
 .sh-tip-advice{font-size:13px;line-height:1.6;padding:8px 10px;border-radius:8px;font-weight:600;color:var(--sh-ink,var(--dsw-alias-label-primary));background:var(--sh-tint,transparent);margin-bottom:8px}
@@ -97,44 +97,44 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-fa-rail:hover{background:var(--dsw-alias-interactive-bg-hover)}
 /* Overview panel: frame-wide scrim + centered card. The shell.overlay layer
    is click-through by default — the panel opts back into pointer events. */
-.sh-scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 55%,transparent);display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto;z-index:60;animation:sh-fade-in .15s ease-out}
+.sh-scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--dsw-alias-bg-base) 62%,transparent);display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto;z-index:60;animation:sh-fade-in .15s ease-out}
 @keyframes sh-fade-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){.sh-scrim{animation:none}}
-.sh-panel{width:min(760px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.sh-panel{width:min(760px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
 .sh-panel-head{display:flex;align-items:baseline;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .sh-panel-title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .sh-panel-sub{font-size:12px;color:var(--dsw-alias-label-tertiary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sh-panel-close{flex:none;width:28px;height:28px;border:none;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:1;cursor:pointer}
 .sh-panel-close:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-close:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
-.sh-panel-legend{display:flex;flex-wrap:wrap;gap:4px 14px;padding:8px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.sh-panel-legend .sh-legend-item{display:inline-flex;align-items:center;gap:5px}
-.sh-panel-legend .sh-legend-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
-.sh-panel-list{overflow-y:auto;padding:8px;flex:1}
-.sh-panel-row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box}
+.sh-panel-list{overflow-y:auto;padding:8px;flex:1;overscroll-behavior:contain}
+/* Table-like layout: one grid per header/row, identical columns — title,
+   workspace and numbers never misalign. Columns: sev | session | ws | occ |
+   round | scale | created. */
+.sh-grid-cols{grid-template-columns:74px minmax(0,1fr) 108px 52px 64px 92px 78px}
+.sh-panel-head-row{display:grid;gap:8px;align-items:center;padding:6px 12px 6px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
+.sh-col-head:hover{color:var(--dsw-alias-label-primary)}
+.sh-col-head:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-col-head.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
+.sh-panel-row{display:grid;gap:8px;align-items:center;width:100%;padding:8px 12px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px}
 .sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
-.sh-panel-row .sh-row-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
-.sh-panel-row .sh-row-main{flex:1;min-width:0}
-.sh-panel-row .sh-row-title{font-size:13px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sh-panel-row .sh-row-title .sh-row-id{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-left:6px;font-variant-numeric:tabular-nums}
-.sh-panel-row .sh-row-meta{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:1px;font-variant-numeric:tabular-nums}
-.sh-panel-row .sh-row-sev{flex:none;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600}
-.sh-panel-row .sh-row-right{flex:none;text-align:right;font-size:12px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
+.sh-row-sev{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600;white-space:nowrap;overflow:hidden}
+.sh-row-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
+.sh-row-main{min-width:0}
+.sh-row-title{font-size:13px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.sh-row-title .sh-row-id{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-left:6px;font-variant-numeric:tabular-nums}
+.sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.sh-row-num{text-align:right;font-variant-numeric:tabular-nums}
 .sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
-.sh-panel-row .sh-row-ws{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-right:6px}
 .sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
 .sh-pager-btn{width:22px;height:22px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1;cursor:pointer;padding:0}
 .sh-pager-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .sh-pager-btn:disabled{opacity:.4;cursor:default}
 .sh-pager-btn:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-pager-info{font-variant-numeric:tabular-nums;min-width:34px;text-align:center}
-.sh-foot-sort{display:inline-flex;align-items:center;gap:4px;flex:none}
-.sh-sort-btn{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:5px}
-.sh-sort-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
-.sh-sort-btn:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-foot-hint{margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `
 
@@ -493,6 +493,18 @@ function ageOf(ts: number): string {
   return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Compact age for the created column (刚刚 / 5m / 3h / 2d / 08-14). */
+function ageShort(ts: number): string {
+  if (ts <= 0) return '—'
+  const diff = Date.now() - ts
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`
+  const d = new Date(ts)
+  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Sort modes: 'severity' = 方案 A (tier → live → newest), 'time' = newest first. */
 type SortMode = 'severity' | 'time'
 
@@ -511,16 +523,6 @@ function sortRows(rows: OverviewRowLike[], mode: SortMode): OverviewRowLike[] {
 
 /** Panel page size (agreed: 10 rows per page, warnings always on page one). */
 const PAGE_SIZE = 10
-
-/** Per-round money figure, same currency rule as the badge tooltip. */
-function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | null {
-  if (proj === null) return null
-  const cny = proj.effectivePerRoundCny
-  const usd = proj.effectivePerRoundUsd
-  if (isZh && cny !== null && cny !== undefined) return `¥${cny.toFixed(2)}/轮`
-  if (usd !== null && usd !== undefined) return `${formatUsd(usd)}/轮`
-  return null
-}
 
 /** Sidebar-foot action: opens the overview panel (wide row vs 56px rail). */
 function OverviewAction(props: {
@@ -605,14 +607,20 @@ function OverviewBody(props: {
     }
   }, [props.store])
 
-  // Esc closes; focus moves into the panel on open.
+  // Esc closes; focus moves into the panel on open. The page behind the
+  // overlay must not scroll (wheel passes through the scrim otherwise).
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') props.store.setOpen(false)
     }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
     closeRef.current?.focus()
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
   }, [props.store])
 
   const close = () => props.store.setOpen(false)
@@ -621,7 +629,6 @@ function OverviewBody(props: {
     try { void props.commands.execute(id, '/health') } catch { /* 静默 */ }
     close()
   }
-  const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
   const redCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'red').length
   const yellowCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'yellow').length
   const pageCount = rows === null ? 0 : Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
@@ -663,12 +670,14 @@ function OverviewBody(props: {
             ×
           </button>
         </div>
-        <div className="sh-panel-legend">
-          <span className="sh-legend-item sh-sev-red"><span className="sh-legend-dot" />建议收尾</span>
-          <span className="sh-legend-item sh-sev-yellow"><span className="sh-legend-dot" />建议留意</span>
-          <span className="sh-legend-item sh-sev-blue"><span className="sh-legend-dot" />继续，留意</span>
-          <span className="sh-legend-item sh-sev-green"><span className="sh-legend-dot" />放心继续</span>
-          <span className="sh-legend-item"><span className="sh-legend-dot" />无数据</span>
+        <div className="sh-panel-head-row sh-grid-cols" role="row">
+          <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按严重度排序">严重度{sortMode === 'severity' ? ' ↓' : ''}</button>
+          <span>会话</span>
+          <span className="sh-row-cell">工作区</span>
+          <span className="sh-row-num">占用</span>
+          <span className="sh-row-num">每轮</span>
+          <span className="sh-row-num">规模</span>
+          <button type="button" className={`sh-col-head sh-row-num${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')} aria-label="按创建时间排序">创建{sortMode === 'time' ? ' ↓' : ''}</button>
         </div>
         <div className="sh-panel-list" ref={listRef}>
           {rows === null && loadError === null ? (
@@ -684,7 +693,6 @@ function OverviewBody(props: {
               const pct = health?.ratio !== null && health?.ratio !== undefined
                 ? Math.min(Math.round(health.ratio * 100), 100)
                 : null
-              const money = moneyOf(health, isZh)
               const metaBits = [
                 row.createdAt > 0 ? `创建于 ${ageOf(row.createdAt)}` : null,
                 pct !== null ? `占用 ${pct}%` : '占用未知',
@@ -697,21 +705,28 @@ function OverviewBody(props: {
               ].filter((v): v is string => v !== null)
               const ariaSev = severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]
               const wsLabel = row.workspace !== null ? row.workspace.title : '未分组'
+              const scale = health !== null ? `${health.turns}轮/${health.userMessages + health.assistantMessages}条` : '—'
+              const perRound = health?.effectivePerRound !== null && health?.effectivePerRound !== undefined
+                ? compact(health.effectivePerRound)
+                : '—'
+              const occ = pct !== null ? `${pct}%` : '—'
               return (
                 <button
                   type="button"
                   key={row.id}
-                  className={`sh-panel-row${severity !== 'unknown' ? ` sh-sev-${severity}` : ''}`}
+                  className={`sh-panel-row sh-grid-cols${severity !== 'unknown' ? ` sh-sev-${severity}` : ''}`}
                   onClick={() => openSession(row.id)}
                   aria-label={`会话健康：${ariaSev}。${row.title ?? '未命名会话'}。工作区：${wsLabel}。${metaBits.join('，')}。点击打开并运行 /health`}
                 >
-                  <span className="sh-row-dot" />
+                  <span className="sh-row-sev"><span className="sh-row-dot" />{severity === 'unknown' ? '无数据' : SEVERITY_LABEL[severity]}</span>
                   <span className="sh-row-main">
-                    <span className="sh-row-title"><span className="sh-row-ws">{wsLabel}</span>{row.title ?? '未命名会话'}<span className="sh-row-id">{row.id.slice(0, 6)}</span></span>
-                    <span className="sh-row-meta">{metaBits.join(' · ')}</span>
+                    <span className="sh-row-title">{row.title ?? '未命名会话'}<span className="sh-row-id">{row.id.slice(0, 6)}</span></span>
                   </span>
-                  <span className="sh-row-sev">{severity === 'unknown' ? '无数据' : SEVERITY_LABEL[severity]}</span>
-                  <span className="sh-row-right">{money ?? ''}</span>
+                  <span className="sh-row-cell" title={row.workspace?.id ?? undefined}>{wsLabel}</span>
+                  <span className="sh-row-num" title={pct !== null ? `上下文占用 ${pct}%` : undefined}>{occ}</span>
+                  <span className="sh-row-num" title={perRound !== '—' ? `每轮计费当量约 ${perRound} token（含缓存折扣）` : undefined}>{perRound}</span>
+                  <span className="sh-row-num">{scale}</span>
+                  <span className="sh-row-num" title={row.createdAt > 0 ? `创建于 ${ageOf(row.createdAt)}` : undefined}>{ageShort(row.createdAt)}</span>
                 </button>
               )
             })
@@ -725,12 +740,7 @@ function OverviewBody(props: {
               <button type="button" className="sh-pager-btn" disabled={page >= pageCount - 1} onClick={() => gotoPage(page + 1)} aria-label="下一页">›</button>
             </span>
           ) : null}
-          <span className="sh-foot-sort">
-            排序：
-            <button type="button" className={`sh-sort-btn${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')}>严重度</button>
-            <button type="button" className={`sh-sort-btn${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')}>创建时间</button>
-          </span>
-          <span className="sh-foot-hint">每 5 秒刷新 · 点击行打开并运行 /health · Esc 关闭</span>
+          <span className="sh-foot-hint">每 5 秒刷新 · 点击行打开并运行 /health · 点表头切换排序 · Esc 关闭</span>
         </div>
       </div>
     </div>
