@@ -1,5 +1,17 @@
 # CHANGELOG — dsh-knowledge-sqlite
 
+## 0.1.5 (2026-08-16)
+
+- **feat**: L1 扩展缓存持久化——SQLite `expansion_cache` 表（按 workspace 隔离，
+  跨进程/重启复用）：同查询第二次起 **0 延迟、零降级**（内存 + 持久两级；
+  `fresh`/variance 语义同时清两级，保证评估独立性）。
+- **change**: `queryExpansion.timeoutMs` 默认 2500 → 3000（降低超时降级率；
+  fresh 口径 p95 右移、生产口径（缓存命中）≈0——权衡分析见 EXPERIMENTS §8）。
+- **test**: store 3 项（roundtrip/跨 ws 隔离/upsert 覆盖、clear、坏数据）+
+  service 1 项（新服务实例同 DB 命中持久缓存、fresh 后重建）。
+- 回顾：缓存层从"进程内存"到"持久化"是数据流决策，隔离键（workspace）与内容层一致，
+  无新坑入表。
+
 ## 0.1.4 (2026-08-16)
 
 - **feat**: human 套件新增 C 臂诊断——离线 reasoner variants（`human-expanded.json`

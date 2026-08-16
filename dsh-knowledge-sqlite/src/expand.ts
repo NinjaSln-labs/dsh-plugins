@@ -4,6 +4,10 @@
  * 每查询一次小模型调用（llm.stream），按归一化查询缓存，timeoutMs 超时/失败降级
  * `degraded: 'lexical'`（不是工具错误）。`expand: false` 或调用方 `variants` 跳过。
  *
+ * 缓存两级（0.1.5 起）：进程内存（本查询会话内命中）+ SQLite 持久化（按 workspace 隔离，
+ * 跨进程/重启复用——真实使用同查询第二次起 0 延迟、零降级）。`clear()` 同时清两级
+ * （variance/fresh 语义：强制独立扩展）。
+ *
  * 消息构造遵循 harness 约定（content blocks + source + id）——原型曾因字符串 content
  * 与 finish reason 字符串比较导致全部降级（见 research/memory-knowledge-seam/experiments/prototype/RESULTS-PROTOTYPE.md §4.4）。
  */
@@ -25,35 +29,55 @@ export interface QueryExpansionConfig {
   cache: boolean
 }
 
+/** 持久化缓存接口（store 实现：expansion_cache 表，按 workspace 隔离）。 */
+export interface ExpansionCacheStore {
+  get(wsId: string, normQuery: string): string[] | null
+  set(wsId: string, normQuery: string, variants: string[]): void
+  clear(): void
+}
+
 const EXPANSION_PROMPT = '你是记忆系统的查询扩展器。对用户输入的查询，生成 3-4 个同义/口语化/更具体的变体问法（中文），'
   + '用于检索同义改写。只输出 JSON：{"variants": ["变体1", "变体2", ...]}，不要输出其他内容。'
 
 export class QueryExpander {
   private readonly cache = new Map<string, string[]>()
   private msgSeq = 0
-  stats = { calls: 0, cacheHits: 0, degraded: 0, totalLatencyMs: 0 }
+  stats = { calls: 0, cacheHits: 0, persistHits: 0, degraded: 0, totalLatencyMs: 0 }
 
   constructor(
     private readonly ctx: Context,
     private readonly config: QueryExpansionConfig,
+    private readonly persist: ExpansionCacheStore | null = null,
   ) {}
 
   clear(): void {
     this.cache.clear()
+    this.persist?.clear()
   }
 
   /**
-   * 扩展一个查询。缓存键 = 归一化查询。
+   * 扩展一个查询。缓存键 = 归一化查询（内存层）+ (workspaceId, norm)（持久层）。
    * @param query 原始查询文本
    * @param signal 取消信号（来自工具执行）
+   * @param wsId 调用方 workspace id（持久化缓存隔离键）
    */
-  async expand(query: string, signal?: AbortSignal): Promise<ExpansionOutcome> {
+  async expand(query: string, signal?: AbortSignal, wsId?: string): Promise<ExpansionOutcome> {
     const norm = query.trim().toLowerCase().replace(/\s+/g, ' ')
     if (this.config.cache) {
       const cached = this.cache.get(norm)
       if (cached !== undefined) {
         this.stats.cacheHits++
         return { variants: cached, source: 'cache', degraded: false, latencyMs: 0 }
+      }
+      // 持久层命中（跨进程/重启）：回填内存缓存
+      if (wsId !== undefined && this.persist !== null) {
+        const stored = this.persist.get(wsId, norm)
+        if (stored !== null) {
+          this.stats.cacheHits++
+          this.stats.persistHits++
+          this.cache.set(norm, stored)
+          return { variants: stored, source: 'cache', degraded: false, latencyMs: 0 }
+        }
       }
     }
     this.stats.calls++
@@ -70,7 +94,10 @@ export class QueryExpander {
       this.stats.degraded++
       return { variants: [], source: null, degraded: true, latencyMs }
     }
-    if (this.config.cache) this.cache.set(norm, variants)
+    if (this.config.cache) {
+      this.cache.set(norm, variants)
+      if (wsId !== undefined && this.persist !== null) this.persist.set(wsId, norm, variants)
+    }
     return { variants, source: 'live', degraded: false, latencyMs }
   }
 
