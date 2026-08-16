@@ -116,6 +116,7 @@ Backlog → In Progress → Verify(DoD) → Done
 | 系统 compaction 遮蔽旧消息 | 历史汇报翻不到 | Sprint 计划数据流（重要结果要落盘 + 面板常驻） |
 | 通知直接 session.append 插队 | 上游 400（tool 消息无前置 tool_calls），会话卡死 | Sprint 计划数据流（必须走 agent.steer/followup 安全投递） |
 | 宿主重启丢插件定义 | 动态插件全部消失 | 重建时 host+client 双全，用 .mtask/pkgs 备份源码 |
+| 语料/目录迁移后 bundle 默认路径未同步 | 宿主 probe ENOENT、npm test 用例失败 | 发版前 grep 全仓路径引用（src 默认值 + tests + smoke），宿主冒烟 probe 一次 |
 
 ## 维护
 

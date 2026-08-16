@@ -209,7 +209,43 @@ async function evalHuman(
   const arms: Record<string, unknown> = {}
   arms.A = await evalArm(deps, humanQueries, 'base', false, null, dedupeMap)
   arms['L1-live'] = await evalArm(deps, humanQueries, 'rich', true, null, dedupeMap)
-  return { name: 'eval-human', ok: true, arms }
+  const armA = arms.A as { recall1: string; targets: number }
+  const armL1 = arms['L1-live'] as { recall1: string }
+  // V1.11 人类集 precision@1 ≥80%（信息性；单目标套件上 ≡ recall@1，如实并列两臂）
+  const targetN = Number(armA.targets)
+  const r1Of = (s: unknown): number => Number(String(s).split('/')[0])
+  const precision1 = {
+    armA: String(armA.recall1),
+    armL1Live: String(armL1.recall1),
+    note: '单目标套件 precision@1 ≡ recall@1（V1.11 信息性门禁 ≥80%）',
+    gateA: r1Of(armA.recall1) / targetN >= 0.8,
+    gateL1Live: r1Of(armL1.recall1) / targetN >= 0.8,
+  }
+  // none 查询（无目标）无误报：top1 必须为空或非记忆条目（干扰项/噪声不算误报）
+  const noneQueries = humanQueries.filter((q) => q.target === 'none')
+  const memoryIds = new Set(
+    [...dedupeMap].filter(([key]) => !key.startsWith('distractor-')).map(([, id]) => id),
+  )
+  const noneTop1: string[] = []
+  const noneFalsePositives: string[] = []
+  for (const q of noneQueries) {
+    const res = await deps.service._searchInternal(q.text, { table: TABLE_INTERNAL.base, expand: false })
+    const top = res.hits[0]
+    noneTop1.push(`${q.id}:${top === undefined ? '-' : top.id}`)
+    if (top !== undefined && memoryIds.has(top.id)) noneFalsePositives.push(q.id)
+  }
+  return {
+    name: 'eval-human',
+    ok: true,
+    arms,
+    precision1,
+    noneQueries: {
+      count: noneQueries.length,
+      top1: noneTop1.join(' '),
+      falsePositives: noneFalsePositives.length > 0 ? noneFalsePositives.join(',') : null,
+      pass: noneFalsePositives.length === 0,
+    },
+  }
 }
 
 interface QueryLike {
@@ -250,6 +286,8 @@ async function evalArm(
   return {
     arm: table,
     recall1: `${r1}/${scored.length} (${Math.round((100 * r1) / scored.length)}%)`,
+    // V1.11 信息性门禁：单目标套件上 precision@1 ≡ recall@1（DESIGN §门禁）
+    precision1: `${r1}/${scored.length} (${Math.round((100 * r1) / scored.length)}%)`,
     targets: scored.length,
     ranks: ranks.join(' '),
     degraded: degraded.length > 0 ? degraded.join(',') : null,
