@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — Client half.
+ * dsh-context-compass — Client half.
  *
  * Renders a session-health badge in `conversation.session.header.utilities`
  * (right side of the session header, next to the Session log button), styled
@@ -14,7 +14,7 @@
  * `remote.sessionHealth` can never mount — inject it and the entry stays
  * pending forever (web boot: waiting for service: remote.sessionHealth).
  *
- * Clicking the badge runs `/health` through the core commands Remote
+ * Clicking the badge runs `/compass` through the core commands Remote
  * (`remote.commands`, always mounted) for the full textual report.
  */
 import * as React from 'react'
@@ -166,7 +166,7 @@ function formatUsd(v: number): string {
  * Visible severity label — uniformly 4 characters per column head / row
  * cell, and the wording must stay MONOTONIC (no tier may read lighter than
  * the one below it): 放心继续 → 继续留意 → 建议收尾 → 尽快收尾. The full
- * advice text (hover / /health) carries the nuance; this is the速记.
+ * advice text (hover / /compass) carries the nuance; this is the速记.
  */
 const SEVERITY_LABEL: Record<HealthSeverity, string> = {
   green: '放心继续',
@@ -238,7 +238,7 @@ function HealthBadge(props: {
   const [hover, setHover] = React.useState(false)
   // 计费预期行的显示口径：金额（默认）↔ 计费当量 token 数。点击行切换，localStorage 记住。
   const [costAsTokens, setCostAsTokens] = React.useState<boolean>(() => {
-    try { return window.localStorage.getItem('dsh-session-health/costDisplay') === 'tokens' } catch { return false }
+    try { return window.localStorage.getItem('dsh-context-compass/costDisplay') === 'tokens' } catch { return false }
   })
   // 浮层消失延迟：徽章↔浮层的空隙由 .sh-tip::before 桥接，延迟兜底快速抖动；
   // 键盘聚焦（Tab 进徽章）也打开浮层，blur 移出子树才关闭。
@@ -303,12 +303,12 @@ function HealthBadge(props: {
   const pct = merged.ratio !== null ? Math.min(Math.round(merged.ratio * 100), 100) : null
 
   const runHealth = () => {
-    try { void props.commands.execute(props.sessionId, '/health') } catch { /* 静默 */ }
+    try { void props.commands.execute(props.sessionId, '/compass') } catch { /* 静默 */ }
   }
   const toggleCost = () => {
     setCostAsTokens(v => {
       const next = !v
-      try { window.localStorage.setItem('dsh-session-health/costDisplay', next ? 'tokens' : 'money') } catch { /* 静默 */ }
+      try { window.localStorage.setItem('dsh-context-compass/costDisplay', next ? 'tokens' : 'money') } catch { /* 静默 */ }
       return next
     })
   }
@@ -326,13 +326,13 @@ function HealthBadge(props: {
   }
 
   const state = severity === 'unknown' ? 'unknown' : severity
-  const text = '会话健康' + (pct !== null ? ` ${pct}%` : '')
+  const text = '上下文' + (pct !== null ? ` ${pct}%` : '')
 
   let tip: JSX.Element | null = null
   if (hover) {
     const color = severity === 'unknown' ? null : severity
     const label = severity === 'unknown' ? '未知（等待数据）' : SEVERITY_LABEL[severity]
-    const advice = proj?.advice ?? '正在获取会话健康数据…'
+    const advice = proj?.advice ?? '正在获取上下文罗盘数据…'
     const bar = (
       <span className="sh-bar">
         <span className="sh-bar-fill" style={{ width: `${pct !== null ? Math.min(pct, 100) : 0}%` }} />
@@ -341,7 +341,7 @@ function HealthBadge(props: {
     tip = (
       <div className={`sh-tip${color !== null ? ` sh-sev-${color}` : ''}`}>
         <div className="sh-tip-title">
-          会话健康：
+          上下文罗盘：
           <span className="sh-sev-label">{label}</span>
         </div>
         <div className="sh-tip-advice">{advice}</div>
@@ -415,7 +415,7 @@ function HealthBadge(props: {
             ) : null}
           </>
         ) : null}
-        <div className="sh-tip-hint">点击运行 /health 查看完整报告；点击计费预期切换金额 / token 显示</div>
+        <div className="sh-tip-hint">点击运行 /compass 查看完整报告；点击计费预期切换金额 / token 显示</div>
       </div>
     )
   }
@@ -434,7 +434,7 @@ function HealthBadge(props: {
         className={`sh-badge${state !== 'unknown' ? ` sh-sev-${state}` : ''}`}
         role="button"
         tabIndex={0}
-        aria-label={`会话健康：${severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]}`}
+        aria-label={`上下文罗盘：${severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]}`}
         onClick={runHealth}
         onKeyDown={onKeyDown}
       >
@@ -447,16 +447,16 @@ function HealthBadge(props: {
 }
 
 /**
- * Multi-session overview panel — the 多会话健康一览 roadmap item.
+ * Multi-session overview panel — the 上下文罗盘一览 roadmap item.
  *
  * Two seats share one tiny open-state store (created per apply, disposed with
  * the fiber): `sidebar.footer.action` opens the panel, `shell.overlay`
  * renders it while open and null otherwise (the overlay pattern: "each reads
  * its own store and renders null while closed"). Data rides the same-origin
- * host RPC route `/session-health-rpc` (bundle clients cannot mount a plugin
+ * host RPC route `/context-compass-rpc` (bundle clients cannot mount a plugin
  * Remote — the imgdraw seam), fetched on open and refreshed while open.
  * Rows are host-sorted red → yellow → blue → green → unknown; clicking a row
- * opens that session and runs /health for it.
+ * opens that session and runs /compass for it.
  */
 
 /** Refresh cadence of the open panel (ms). */
@@ -555,11 +555,11 @@ function OverviewAction(props: {
       type="button"
       className={`sh-fa${props.wide ? '' : ' sh-fa-rail'}`}
       onClick={() => props.store.setOpen(true)}
-      aria-label="会话健康一览（打开所有会话的健康面板）"
-      title="会话健康一览"
+      aria-label="上下文罗盘一览（打开所有会话的上下文面板）"
+      title="上下文罗盘一览"
     >
       <span className="sh-fa-dot" />
-      {props.wide ? <span>健康一览</span> : null}
+      {props.wide ? <span>罗盘一览</span> : null}
     </button>
   )
 }
@@ -584,7 +584,7 @@ function OverviewBody(props: {
 }): JSX.Element {
   const [rows, setRows] = React.useState<OverviewRowLike[] | null>(null)
   const [sortMode, setSortMode] = React.useState<SortMode>(() => {
-    try { return window.localStorage.getItem('dsh-session-health/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
+    try { return window.localStorage.getItem('dsh-context-compass/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
   })
   const [page, setPage] = React.useState(0)
   // Hover tooltip: VIEWPORT coords (fixed positioning — the tooltip never
@@ -606,7 +606,7 @@ function OverviewBody(props: {
     let timer: number | null = null
     const load = async () => {
       try {
-        const res = await fetch('/session-health-rpc', {
+        const res = await fetch('/context-compass-rpc', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ method: 'overview' }),
@@ -625,7 +625,7 @@ function OverviewBody(props: {
           setLoadError(json.error ?? '未知错误')
         }
       } catch {
-        if (alive) setLoadError('无法连接 /session-health-rpc')
+        if (alive) setLoadError('无法连接 /context-compass-rpc')
       }
     }
     void load()
@@ -656,7 +656,7 @@ function OverviewBody(props: {
   const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
   const openSession = (id: string) => {
     try { props.sessions.open(id) } catch { /* 静默 */ }
-    try { void props.commands.execute(id, '/health') } catch { /* 静默 */ }
+    try { void props.commands.execute(id, '/compass') } catch { /* 静默 */ }
     close()
   }
   const redCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'red').length
@@ -665,7 +665,7 @@ function OverviewBody(props: {
   const pageRows = rows === null ? null : rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const changeSort = (mode: SortMode) => {
     setSortMode(mode)
-    try { window.localStorage.setItem('dsh-session-health/overviewSort', mode) } catch { /* 静默 */ }
+    try { window.localStorage.setItem('dsh-context-compass/overviewSort', mode) } catch { /* 静默 */ }
     if (rows !== null) setRows(sortRows(rows, mode))
     setPage(0)
     listRef.current?.scrollTo({ top: 0 })
@@ -684,17 +684,17 @@ function OverviewBody(props: {
         className="sh-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="会话健康一览"
+        aria-label="上下文罗盘一览"
         onClick={e => e.stopPropagation()}
       >
         <div className="sh-panel-head">
-          <span className="sh-panel-title">会话健康一览</span>
+          <span className="sh-panel-title">上下文罗盘一览</span>
           <span className="sh-panel-sub">{sub}</span>
           <button
             type="button"
             ref={closeRef}
             className="sh-panel-close"
-            aria-label="关闭会话健康一览"
+            aria-label="关闭上下文罗盘一览"
             onClick={close}
           >
             ×
@@ -711,7 +711,7 @@ function OverviewBody(props: {
         </div>
         <div className="sh-panel-list" ref={listRef}>
           {rows === null && loadError === null ? (
-            <div className="sh-panel-empty">正在读取各会话健康数据…</div>
+            <div className="sh-panel-empty">正在读取各上下文罗盘数据…</div>
           ) : rows === null ? (
             <div className="sh-panel-empty">加载失败：{loadError}</div>
           ) : rows.length === 0 ? (
@@ -759,7 +759,7 @@ function OverviewBody(props: {
                   onMouseEnter={moveTip}
                   onMouseMove={moveTip}
                   onMouseLeave={() => setTip(null)}
-                  aria-label={`会话健康：${ariaSev}。${titleText}。${metaBits.join('，')}。点击打开并运行 /health`}
+                  aria-label={`上下文罗盘：${ariaSev}。${titleText}。${metaBits.join('，')}。点击打开并运行 /compass`}
                 >
                   {tip !== null && tip.rowId === row.id ? (
                     <span className={`sh-rowtip${tipBelow ? ' sh-rowtip-below' : ''}`} role="tooltip" style={{ left: tipLeft, top: tipTop }}>{titleText}</span>
@@ -784,7 +784,7 @@ function OverviewBody(props: {
               <button type="button" className="sh-pager-btn" disabled={page >= pageCount - 1} onClick={() => gotoPage(page + 1)} aria-label="下一页">›</button>
             </span>
           ) : null}
-          <span className="sh-foot-hint">每 5 秒刷新 · 点击行打开并运行 /health · 点表头切换排序 · Esc 关闭</span>
+          <span className="sh-foot-hint">每 5 秒刷新 · 点击行打开并运行 /compass · 点表头切换排序 · Esc 关闭</span>
         </div>
       </div>
     </div>
@@ -792,7 +792,7 @@ function OverviewBody(props: {
 }
 
 /** Package id — must match package.json `name` and the ModuleLoader handoff. */
-export const name = 'dsh-session-health'
+export const name = 'dsh-context-compass'
 
 /**
  * Required client services. Cordis forbids `ctx.remote` / `ctx.sessions` /
@@ -816,7 +816,7 @@ export const inject = ['slots', 'sessions', 'remote', 'remote.commands', 'locale
  */
 function injectStyles(): void {
   if (typeof document === 'undefined') return
-  const tagId = 'dsh-session-health/badge'
+  const tagId = 'dsh-context-compass/badge'
   if (document.querySelector(`style[data-plugin-css=${JSON.stringify(tagId)}]`) !== null) return
   const tag = document.createElement('style')
   tag.dataset.plugin = name

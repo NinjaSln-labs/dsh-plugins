@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — the /health command.
+ * dsh-context-compass — the /health command.
  *
  * User-initiated full textual report: first-line action + severity, reason,
  * details (scale, per-round cost, window ratio, compaction, probes), and a
@@ -95,8 +95,8 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
 /** Build the command definition (config closed over at mount time). */
 export function healthCommandDefinition(ctx: Context, config: ResolvedConfig): CommandDefinition {
   return {
-    name: 'health',
-    description: '评估当前会话健康度（继续 vs 新开）。参数：minimal / no-git / no-handoff / doc=<交接文档文件名> / remaining=<预计剩余轮数> / processes',
+    name: 'compass',
+    description: '评估当前上下文状态（继续 vs 新开）。参数：minimal / no-git / no-handoff / doc=<交接文档文件名> / remaining=<预计剩余轮数> / processes',
     input: { hint: 'minimal | no-git | no-handoff | doc=<文件名> | remaining=<轮数> | processes' },
     handler: async (invocation) => {
       const session = invocation.agent.session

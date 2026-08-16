@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — client bundle mount test.
+ * dsh-context-compass — client bundle mount test.
  *
  * Reproduces the browser boot path in Node: the built bundle registers via
  * `window.__ModuleLoader__.load({ id, factory })`, the factory returns the
@@ -34,13 +34,13 @@ globalThis.window = {
 }
 await import('../lib/client.js')
 assert.ok(handoff !== null, 'bundle must register via window.__ModuleLoader__.load')
-assert.equal(handoff.id, 'dsh-session-health')
+assert.equal(handoff.id, 'dsh-context-compass')
 
 // 2) Materialize the module: the loader calls factory(require) and uses the
 //    returned module.exports as the plugin module.
 const plugin = handoff.factory(require)
 assert.equal(typeof plugin.apply, 'function', 'exports must carry apply')
-assert.equal(plugin.name, 'dsh-session-health')
+assert.equal(plugin.name, 'dsh-context-compass')
 assert.ok(Array.isArray(plugin.inject), 'exports must carry the inject list')
 assert.ok(plugin.inject.includes('remote'), 'ctx.remote reads need the remote root injected')
 assert.ok(plugin.inject.includes('remote.commands'), 'remote.commands sub-service must be injected')
@@ -125,9 +125,9 @@ console.log('  ok  apply ran: badge + overview opener + overview panel seats reg
 
 // 5) The stylesheet was injected the client-modules way.
 assert.equal(styleTags.length, 1, 'apply must create exactly one style tag')
-assert.equal(styleTags[0].dataset.plugin, 'dsh-session-health', 'style tag must carry data-plugin (HMR ownership)')
+assert.equal(styleTags[0].dataset.plugin, 'dsh-context-compass', 'style tag must carry data-plugin (HMR ownership)')
 assert.ok(styleTags[0].textContent.includes('.sh-badge'), 'style tag must carry the badge CSS')
-console.log('  ok  stylesheet injected as <style data-plugin="dsh-session-health">')
+console.log('  ok  stylesheet injected as <style data-plugin="dsh-context-compass">')
 
 console.log('\nclient mount smoke passed')
 process.exit(0)

@@ -1,7 +1,7 @@
 /**
- * dsh-session-health — multi-session overview (panel data).
+ * dsh-context-compass — multi-session overview (panel data).
  *
- * Host side of the 多会话健康一览面板: one read-only snapshot of the
+ * Host side of the 上下文罗盘一览面板: one read-only snapshot of the
  * current workspace's top-level sessions for the browser panel
  * (`sidebar.footer.action` opens it, `shell.overlay` renders it).
  *
@@ -18,7 +18,7 @@
  *   (fresh signal, never the request's abort) populates the cache, so the
  *   panel's 5s refresh shows titles moments later
  *
- * Transport: same-origin JSON RPC (POST /session-health-rpc, loopback-only),
+ * Transport: same-origin JSON RPC (POST /context-compass-rpc, loopback-only),
  * the same pattern dsh-imgdraw established for bundle clients — a bundle
  * client cannot expose a plugin Remote, so browser↔host calls ride the
  * webServer route seam.
@@ -306,7 +306,7 @@ interface RpcCall {
 }
 
 /**
- * Full HTTP handler for POST /session-health-rpc. Methods:
+ * Full HTTP handler for POST /context-compass-rpc. Methods:
  *   { method: 'overview' } → { ok: true, result: { sessions: OverviewRow[] } }
  * Loopback-only (panel data is private to the machine); 405 on non-POST,
  * 400 on malformed JSON, 403 on non-loopback peers, 500 on service failure.

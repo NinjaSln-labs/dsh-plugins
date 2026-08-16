@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — mount smoke test.
+ * dsh-context-compass — mount smoke test.
  *
  * Mounts the built plugin the way the harness LOADER does (cordis-plugin-loader
  * unwrapExports: `module.default ?? module`, then `ctx.plugin(...)`) and
@@ -35,7 +35,7 @@ ctx.provide('fs', {
 // Read-only git worktree probe fixture: clean worktree, synced branch.
 const GIT_OUT = {
   'status --short': '',
-  'log --oneline -1': '166f5ac feat: dsh-session-health\n',
+  'log --oneline -1': '166f5ac feat: dsh-context-compass\n',
   'status -sb': '## main...origin/main\n',
 }
 ctx.provide('subprocess', {
@@ -88,7 +88,7 @@ const mod = await import('../lib/index.js')
 const plugin = mod.default ?? mod
 assert.equal(typeof plugin, 'object', 'plugin must be an OBJECT, not a factory function')
 assert.equal(typeof plugin.apply, 'function', 'plugin object must carry apply')
-assert.equal(plugin.name, 'dsh-session-health')
+assert.equal(plugin.name, 'dsh-context-compass')
 assert.ok(plugin.Config, 'plugin object must carry Config')
 
 await ctx.plugin(plugin).await()
@@ -98,7 +98,7 @@ await new Promise(resolve => setTimeout(resolve, 50))
 try {
   // 1) apply RAN (the loader-pitfall guard): the command registered.
   assert.ok(registrations.commands !== null, 'command registered (apply ran)')
-  assert.equal(registrations.commands.name, 'health')
+  assert.equal(registrations.commands.name, 'compass')
   const result = await registrations.commands.handler({
     agent: { id: 'agent-1', session },
     rawInput: '',
@@ -108,18 +108,18 @@ try {
   assert.ok(result.text.includes('健康度：**黄**'))
   assert.ok(result.text.includes('- [x] 未提交变更：0 个'), 'checklist commit item reflects the clean worktree')
   assert.ok(result.text.includes('- [x] 已 push：分支与远程同步'), 'checklist push item reflects the synced branch')
-  console.log('  ok  apply ran: /health command registered + handler runs')
+  console.log('  ok  apply ran: /compass command registered + handler runs')
 
-  // 2) session_health tool registered with a working execute.
+  // 2) context_compass tool registered with a working execute.
   assert.ok(registrations.tools !== null, 'tool registered')
-  assert.equal(registrations.tools.name, 'session_health')
+  assert.equal(registrations.tools.name, 'context_compass')
   const value = await registrations.tools.execute({}, {
     agent: { id: 'agent-1', session },
     signal: new AbortController().signal,
   })
   assert.equal(value.severity, 'yellow')
   assert.equal(value.recommendation, 'suggest-switch')
-  console.log('  ok  session_health tool registered + execute runs')
+  console.log('  ok  context_compass tool registered + execute runs')
 
   // 3) sessionHealth projection unit registered (unit contract shape).
   assert.ok(registrations.projections !== null, 'projection registered')
@@ -133,8 +133,8 @@ try {
   console.log('  ok  sessionHealth projection unit registered + fold works')
 
   // 4) Multi-session overview RPC route registered and serves sorted rows.
-  const route = registrations.routes.find(r => r.path === '/session-health-rpc')
-  assert.ok(route, '/session-health-rpc route registered via webServer')
+  const route = registrations.routes.find(r => r.path === '/context-compass-rpc')
+  assert.ok(route, '/context-compass-rpc route registered via webServer')
   assert.equal(route.kind, 'exact')
   const res = { status: null, body: null, writeHead: (s) => { res.status = s }, end: (b) => { res.body = b } }
   const req = { method: 'POST', socket: { remoteAddress: '127.0.0.1' } }
@@ -149,7 +149,7 @@ try {
   assert.equal(payload.result.sessions[0].health.severity, 'yellow')     // cold session read the projection cache
   assert.equal(payload.result.sessions[0].title, null)                  // titles are background-filled after first paint
   assert.equal(payload.result.sessions[1].health.severity, 'yellow')     // live session cut the registry snapshot
-  console.log('  ok  /session-health-rpc route registered + overview handler runs (top-level + non-archived)')
+  console.log('  ok  /context-compass-rpc route registered + overview handler runs (top-level + non-archived)')
 
   console.log('\nmount smoke passed')
   process.exit(0)

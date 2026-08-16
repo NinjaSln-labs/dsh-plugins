@@ -51,7 +51,7 @@ none 查询（3 条）top1 全为空/干扰项——无误报。
 
 ## 2. 动态原型验证（kpro-2，2026-08-14）
 
-沙箱内无法跑 node:sqlite → 三件套分层验证（详见 `research/prototype/RESULTS-PROTOTYPE.md`）：
+沙箱内无法跑 node:sqlite → 三件套分层验证（详见 `research/memory-knowledge-seam/experiments/prototype/RESULTS-PROTOTYPE.md`）：
 
 1. **SQLite 存储层**（`prototype/sqlite-trigram-verify.mjs`，真实 node:sqlite + FTS5 trigram）：
    精确复现 A 7% / C 21% / D 50% / human-A 65%（逐查询 rank 一致）
@@ -80,7 +80,7 @@ dsh-knowledge-sqlite 作为 profile bundle 挂载到 `dsh web`（`~/.dsh/profile
 | 扩展实测 | 31 次真实调用，26 成功（84%），5 超时降级（2.5s 超时），缓存生效 |
 
 挂载排障记录（社区插件加载的坑：internal loader 依赖 + default export 必须是插件对象）：
-`research/prototype/MOUNTING-NOTES.md`。
+`research/memory-knowledge-seam/experiments/prototype/MOUNTING-NOTES.md`。
 
 ## 4. 复现
 
@@ -91,7 +91,7 @@ node scale-eval.mjs      # 四臂 × 512 条 + PRF
 node variance.mjs        # 10 次方差（需要 API key）
 node human-eval.mjs      # 人类查询评估（22 记忆 + 500 干扰项）
 
-# 原型验证（research/prototype 目录）
+# 原型验证（research/memory-knowledge-seam/experiments/prototype 目录）
 node sqlite-trigram-verify.mjs   # SQLite 层基线（无 API 依赖）
 node js-bm25-calibration.mjs     # JS↔FTS5 校准（无 API 依赖）
 

@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — plugin configuration.
+ * dsh-context-compass — plugin configuration.
  *
  * Every threshold mirrors the community session-health skill's
  * two-dimensional continue-vs-new decision model, but as host-side defaults a
@@ -53,7 +53,7 @@ export interface CostConfig {
   /**
    * Cache-hit token price as a fraction of a full-price input token (e.g.
    * DeepSeek-style 0.1 = 1/10). Used for the per-round billable-equivalent
-   * figure ("计费预期") in the projection, /health, and the tool. Default 0.1.
+   * figure ("计费预期") in the projection, /compass, and the tool. Default 0.1.
    */
   cacheHitDiscount: number
   /**

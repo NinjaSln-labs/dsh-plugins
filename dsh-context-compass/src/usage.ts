@@ -1,8 +1,8 @@
 /**
- * dsh-session-health — shared cache-hit computation.
+ * dsh-context-compass — shared cache-hit computation.
  *
  * SINGLE algorithm location for the cache-hit rate. Both display surfaces of
- * this plugin (the badge tooltip client and the /health + session_health host
+ * this plugin (the badge tooltip client and the /health + context_compass host
  * paths) call {@link cacheHitRateOf} on the SAME value the core input-bar
  * stats line reads — the core `tokenUsage` projection's session totals — so
  * every surface always shows one number.

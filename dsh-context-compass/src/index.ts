@@ -1,12 +1,12 @@
 /**
- * dsh-session-health — Host half.
+ * dsh-context-compass — Host half.
  *
  * One plugin, three surfaces, one shared read-only assessment core:
  * - `sessionHealth` projection unit — reactive badge data (push frames, no
  *   polling, no Remote: community plugins cannot expose a Remote to the
  *   browser client — the client mounts a fixed generated list, see schemas.ts)
- * - `session_health` tool — model-callable self-check in long tasks
- * - `/health` command — user-initiated full textual report
+ * - `context_compass` tool — model-callable self-check in long tasks
+ * - `/compass` command — user-initiated full textual report
  *
  * Data sources (all read-only, all real):
  * - ctx.tokenMeter.measure(session) — exact per-round input pressure
@@ -32,7 +32,7 @@ export { sessionHealthTool } from './tool.ts'
 export { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, type OverviewRow } from './overview.ts'
 export type * from './types.ts'
 
-export const name = 'dsh-session-health'
+export const name = 'dsh-context-compass'
 
 /**
  * Cordis plugin — OBJECT form (never a factory).
@@ -95,7 +95,7 @@ export default {
       }).webServer
       const dispose = webServer.register({
         kind: 'exact',
-        path: '/session-health-rpc',
+        path: '/context-compass-rpc',
         handler: (req: IncomingMessage, res: ServerResponse) => handleOverviewRpc(req, res, wsCtx),
       })
       ctx.effect(() => () => { try { dispose() } catch { /* ignore */ } })

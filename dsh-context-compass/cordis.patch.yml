@@ -1,0 +1,6 @@
+# dsh-context-compass bundle layer: mounts the host service + /compass command
+# and the browser badge. Apply as a profile overlay or via `dsh plugin add`.
+
+- insert:
+    - id: context-compass
+      name: 'dsh-context-compass'

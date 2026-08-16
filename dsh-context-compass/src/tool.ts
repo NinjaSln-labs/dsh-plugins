@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — the session_health tool.
+ * dsh-context-compass — the context_compass tool.
  *
  * Model-callable read-only assessment: the model self-checks the work-nature
  * questions (1a dependsOnEarly / 1b earlyDecisionRecorded / 4 remainingRounds)
@@ -32,7 +32,7 @@ const PARAMETERS = {
   },
   handoffDoc: {
     type: 'string',
-    description: '交接文档文件名（可选；用于恢复能力检查，与 /health doc= 一致）',
+    description: '交接文档文件名（可选；用于恢复能力检查，与 /compass doc= 一致）',
   },
 } as const
 
@@ -111,21 +111,21 @@ function renderToolText(value: {
 }): string {
   if (value.report !== undefined && value.report.length > 0) return value.report
   const s = value.signals
-  if (s === undefined) return value.summary ?? '会话健康评估完成。'
+  if (s === undefined) return value.summary ?? '上下文罗盘评估完成。'
   const parts: string[] = [value.summary ?? '']
   if (s.windowPercent !== undefined) parts.push(`窗口占用 ${s.windowPercent}%`)
   if (s.tokensPerRound !== undefined) parts.push(`每轮输入 ${s.tokensPerRound} token`)
   if (s.turns !== undefined) parts.push(`${s.turns} 轮`)
   if (s.messageCount !== undefined) parts.push(`${s.messageCount} 条消息`)
   if ((s.compactions ?? 0) > 0) parts.push(`已压缩 ${s.compactions} 次`)
-  return parts.filter(Boolean).join('；') + '。如需完整报告可让用户运行 /health。'
+  return parts.filter(Boolean).join('；') + '。如需完整报告可让用户运行 /compass。'
 }
 
 /** Build the model-facing tool (config closed over at mount time). */
 export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDefinition {
   return defineTool({
-    name: 'session_health',
-    description: '评估当前会话健康度（继续 vs 新开）：真实 token 测量 + 窗口占比 + 切换成本提示。长任务中自查用，只读、无副作用；若建议切换，请把报告交给用户决定。',
+    name: 'context_compass',
+    description: '评估当前上下文状态（继续 vs 新开）：真实 token 测量 + 窗口占比 + 切换成本提示。长任务中自查用，只读、无副作用；若建议切换，请把报告交给用户决定。',
     parameters: PARAMETERS,
     output: {
       schema: OUTPUT_SCHEMA,
@@ -135,7 +135,7 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
     execute: async (args, exec) => {
       const session = exec.agent?.session
       if (session === undefined) {
-        throw new Error('无法定位当前会话（session_health 仅在会话上下文中可用）')
+        throw new Error('无法定位当前会话（context_compass 仅在会话上下文中可用）')
       }
       const report = await assess(ctx, session, exec.agent?.id, exec.signal, config, {
         docName: args.handoffDoc ?? null,
@@ -190,7 +190,7 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
     },
     presentCall: (args) => ({
       card: 'generic',
-      title: '评估会话健康度',
+      title: '评估上下文状态',
       kind: 'read',
       rawInput: args.reason ?? '',
     }),

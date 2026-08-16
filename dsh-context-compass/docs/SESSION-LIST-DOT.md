@@ -6,7 +6,7 @@
 
 ### 背景
 
-- `dsh-session-health` 的头部徽章挂在 `conversation.session.header.utilities`——只覆盖**当前打开**的会话。
+- `dsh-context-compass` 的头部徽章挂在 `conversation.session.header.utilities`——只覆盖**当前打开**的会话。
 - 会话列表（侧栏 `WorkspaceBrowser`，整体占用 `sidebar.workspaces` slot）逐行展示会话，但**没有 per-row 渲染位**，社区插件无法在行内挂组件。
 
 ### 数据层已就绪（无改动需求）
@@ -48,7 +48,7 @@ ctx.slots.inject('session.row.trailing', () => ctx.slots.register(
 - 冷会话也有值（投影缓存），无值显示灰点
 - 悬停 tooltip 含 severity/占用/计费预期；点击跳转会话并运行 `/health`
 - a11y：色点非纯颜色传达（aria-label 含判定文案）
-- 卸载/HMR：`style[data-plugin="dsh-session-health"]` 正常清理
+- 卸载/HMR：`style[data-plugin="dsh-context-compass"]` 正常清理
 
 ### 落地顺序
 
@@ -82,7 +82,7 @@ Plugin side can ship the registration preemptively: `slots.inject` on an undecla
 - Cold sessions show cached values; gray when absent
 - Tooltip with severity/occupancy/cost; click opens the session and runs `/health`
 - a11y: not color-only (aria-label with the verdict text)
-- HMR/unload cleans `style[data-plugin="dsh-session-health"]`
+- HMR/unload cleans `style[data-plugin="dsh-context-compass"]`
 
 ### Sequencing
 
