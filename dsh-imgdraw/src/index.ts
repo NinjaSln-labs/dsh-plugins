@@ -449,9 +449,12 @@ export default {
   apply(ctx: Context, config: ImgdrawConfig = {}): void {
     const engine = new ImgdrawEngine(config)
 
-    // webServer routes (optional service: headless assemblies lose HTTP only).
-    const webServer = ctx.get('webServer') as { register(route: unknown): () => void; port?: number; host?: string } | undefined
-    if (webServer) {
+    // webServer routes — 用 ctx.inject 等待服务（bundle 在 boot 早期 apply，
+    // ctx.get('webServer') 大概率是 undefined；inject 会在服务激活后回调）。
+    ctx.inject(['webServer'], (wsCtx) => {
+      const webServer = (wsCtx as unknown as {
+        webServer: { register(route: unknown): () => void; port?: number; host?: string }
+      }).webServer
       const disposers: Array<() => void> = []
       try {
         const origin = config.publicOrigin
@@ -510,7 +513,7 @@ export default {
       ctx.effect(() => () => {
         for (const d of disposers) { try { d() } catch { /* ignore */ } }
       })
-    }
+    })
 
     // draw_image tool (hard dependency: the tool registry).
     ctx.inject(['tools'], (toolsCtx) => {
