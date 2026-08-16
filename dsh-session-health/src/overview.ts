@@ -1,16 +1,22 @@
 /**
  * dsh-session-health — multi-session overview (panel data).
  *
- * Host side of the 多会话健康一览面板: one read-only snapshot of every
- * session's health verdict for the browser panel (`sidebar.footer.action`
- * opens it, `shell.overlay` renders it).
+ * Host side of the 多会话健康一览面板: one read-only snapshot of the
+ * current workspace's top-level sessions for the browser panel
+ * (`sidebar.footer.action` opens it, `shell.overlay` renders it).
  *
- * Data path: `sessionQuery.listSessions()` → per-record health value
- * (live sessions cut the projection registry's O(1) snapshot; cold sessions
- * read the persisted projection cache, falling back to an async cold load)
- * and titles (live sessions cut the log-backed title fold; the rest are
- * batch-read). Everything is read-only — the panel never mutates sessions,
- * projections, or caches.
+ * Scope mirrors the sidebar exactly: top-level sessions (subagent children
+ * excluded) that are not archived (`workspaceRegistry.archivedSessionIds` —
+ * the registry-global archive set every grouping surface hides).
+ *
+ * LATENCY: the panel must open fast. The two expensive reads — cold
+ * projection loads and title folds (both read the session log) — are
+ * handled so the first frame never waits on a log read:
+ * - cold projection loads run in parallel and backfill in place
+ * - titles come from the live in-memory fold or a short-TTL in-memory
+ *   cache; cache misses return null this frame and a BACKGROUND fill
+ *   (fresh signal, never the request's abort) populates the cache, so the
+ *   panel's 5s refresh shows titles moments later
  *
  * Transport: same-origin JSON RPC (POST /session-health-rpc, loopback-only),
  * the same pattern dsh-imgdraw established for bundle clients — a bundle
@@ -24,7 +30,7 @@ import type { HealthSeverity, SessionHealthProjection } from './types.ts'
 /** One session row in the overview panel. */
 export interface OverviewRow {
   id: string
-  /** Best-known title; null when no title event exists yet. */
+  /** Best-known title; null when no title event exists yet (or still loading). */
   title: string | null
   /** True when the session is currently materialized in ctx.sessions. */
   live: boolean
@@ -32,10 +38,6 @@ export interface OverviewRow {
   createdAt: number
   /** The health verdict; null when no projection value exists (cold + no cache row). */
   health: SessionHealthProjection | null
-  /** Session working directory (diagnostics / workspace display). */
-  cwd: string | null
-  /** Subagent-child marker from the session header (diagnostics). */
-  origin: string | null
 }
 
 const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
@@ -59,7 +61,7 @@ export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
 /** Loose face of the sessionQuery service (only the parts overview needs). */
 interface SessionQueryLike {
   listSessions(signal?: AbortSignal): Promise<Array<{
-    header: { id: string; createdAt?: number; cwd?: string; origin?: string }
+    header: { id: string; createdAt?: number; origin?: string }
     live?: boolean
     persisted?: boolean
   }>>
@@ -75,112 +77,60 @@ interface SessionQueryLike {
 
 /** Loose face of the in-memory session store (live sessions). */
 interface SessionsStoreLike {
-  get(id: string): { header?: { id?: string; cwd?: string } } | undefined
+  get(id: string): { header?: { id?: string } } | undefined
 }
 
 /**
- * Current workspace root for the panel's session scope. The sidebar shows one
- * workspace's sessions at a time, so the overview must match: sandboxPolicy's
- * workspaceRoot when configured, else the cwd of the newest live session.
- * Returns null when neither is available — the caller then skips the cwd
- * filter rather than showing an empty panel.
+ * Short-TTL in-memory title cache. Title folds read the whole session log,
+ * which is the dominant cost of an overview request; the cache lets the
+ * first frame skip every log read and the background fill (see below)
+ * populate it seconds later. TTL keeps renames/misses fresh on the 5s
+ * panel refresh cadence.
  */
-function resolveWorkspaceRoot(ctx: Context, sessionsStore: SessionsStoreLike | undefined): string | null {
-  try {
-    const sp = ctx.get('sandboxPolicy') as { workspaceRoot?: string } | undefined
-    if (sp?.workspaceRoot !== undefined && sp.workspaceRoot !== null && sp.workspaceRoot !== '') {
-      return sp.workspaceRoot
-    }
-  } catch { /* fall through */ }
-  if (sessionsStore === undefined) return null
-  try {
-    // Newest live session's cwd as a fallback workspace anchor.
-    const live = (ctx.get('sessions') as { list?(): Array<{ header?: { cwd?: string; id?: string } }> } | undefined)?.list?.()
-    let newest: { header?: { cwd?: string; id?: string } } | undefined
-    for (const s of live ?? []) {
-      if (s.header?.cwd && (newest === undefined || (s.header.id ?? '') > (newest.header?.id ?? ''))) newest = s
-    }
-    return newest?.header?.cwd ?? null
-  } catch {
-    return null
-  }
-}
+const titleCache = new Map<string, { title: string; at: number }>()
+const TITLE_TTL_MS = 60_000
 
-/** The resolved current-workspace scope for one overview request. */
-export interface OverviewScope {
-  /** Workspace id; null when no registered workspace contains the anchor. */
-  workspaceId: string | null
-  /** Workspace display path; null when unregistered. */
-  path: string | null
-  /** Session ids of the workspace (archived ones excluded by the caller). */
-  sessionIds: ReadonlySet<string> | null
+/** Forget the cache (tests / plugin re-apply). */
+export function clearTitleCache(): void {
+  titleCache.clear()
 }
 
 /**
- * Resolve the current-workspace session scope. The sidebar groups sessions by
- * Host Workspace membership (workspace sessionIds — the authoritative
- * ownership account). The browser sends its current session id (the only
- * reliable "current workspace" fact); the anchor's workspace is found by
- * membership, falling back to a cwd-resolved workspace, then to the
- * sandboxPolicy root. `sessionIds` stays null when nothing resolves — the
- * caller then applies no membership cut rather than showing an empty panel.
+ * Background title fill: read the batch with a FRESH signal (the request's
+ * abort must never kill a fill that outlives the response) and populate the
+ * cache. Failures stay silent — the next refresh retries. Fire-and-forget.
  */
-export function resolveOverviewScope(
-  ctx: Context,
-  opts: { currentSessionId?: string },
-): OverviewScope {
-  const workspaceRegistry = ctx.get('workspaceRegistry') as
-    | {
-        resolveByPath?(path: string): { id: string } | undefined
-        list?(): Array<{ id: string; path?: string; sessionIds?: readonly string[] }>
+function scheduleTitleFill(ctx: Context, ids: string[], fillSignal: AbortSignal): void {
+  if (ids.length === 0) return
+  const sessionQuery = ctx.get('sessionQuery') as SessionQueryLike | undefined
+  if (sessionQuery?.readTitleSnapshots === undefined) return
+  const controller = new AbortController()
+  fillSignal.addEventListener('abort', () => controller.abort(), { once: true })
+  const promise = (async () => {
+    try {
+      const observations = await sessionQuery.readTitleSnapshots(ids, controller.signal)
+      for (const o of observations) {
+        if (o.status !== 'fulfilled') continue
+        const t = o.value?.title?.title
+        if (typeof t === 'string' && t !== '') titleCache.set(o.sessionId, { title: t, at: Date.now() })
       }
-    | undefined
-  if (workspaceRegistry === undefined) return { workspaceId: null, path: null, sessionIds: null }
-  try {
-    const entities = workspaceRegistry.list?.() ?? []
-    // 1) Membership anchor: the workspace whose sessionIds contain the
-    //    browser's current session (what the sidebar highlights as current).
-    let entity = opts.currentSessionId !== undefined
-      ? entities.find(w => w.sessionIds?.includes(opts.currentSessionId as string))
-      : undefined
-    // 2) cwd anchor: resolveByPath on the workspace root (sandboxPolicy →
-    //    newest live session cwd), matching the older cwd-cut behavior.
-    if (entity === undefined) {
-      const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
-      const root = resolveWorkspaceRoot(ctx, sessionsStore)
-      if (root !== null && workspaceRegistry.resolveByPath !== undefined) {
-        const ws = workspaceRegistry.resolveByPath(root)
-        if (ws !== undefined) entity = entities.find(w => w.id === ws.id)
-      }
-    }
-    if (entity === undefined) return { workspaceId: null, path: null, sessionIds: null }
-    const ids = entity.sessionIds
-    return {
-      workspaceId: entity.id,
-      path: entity.path ?? null,
-      sessionIds: ids !== undefined ? new Set(ids) : null,
-    }
-  } catch {
-    return { workspaceId: null, path: null, sessionIds: null }
-  }
+    } catch { /* next refresh retries */ }
+  })()
+  void promise
 }
 
 /**
- * Build the overview rows for the current workspace's top-level sessions.
+ * Build the overview rows: top-level (non-subagent), non-archived sessions.
  * Never throws on a single bad session — per-record failures degrade to
  * `health: null` / `title: null` so one broken record cannot blank the whole
  * panel. Returns [] when the sessionQuery service is absent (headless
  * assemblies keep working).
  */
-export async function buildOverview(
-  ctx: Context,
-  signal: AbortSignal,
-  opts: { currentSessionId?: string } = {},
-): Promise<OverviewRow[]> {
+export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<OverviewRow[]> {
   const sessionQuery = ctx.get('sessionQuery') as SessionQueryLike | undefined
   if (sessionQuery === undefined) return []
 
-  let records: Array<{ header: { id: string; createdAt?: number; cwd?: string; origin?: string }; live?: boolean; persisted?: boolean }>
+  let records: Array<{ header: { id: string; createdAt?: number; origin?: string }; live?: boolean; persisted?: boolean }>
   try {
     records = await sessionQuery.listSessions(signal)
   } catch {
@@ -188,9 +138,6 @@ export async function buildOverview(
   }
   if (!Array.isArray(records) || records.length === 0) return []
 
-  const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
-  const workspaceRoot = resolveWorkspaceRoot(ctx, sessionsStore)
-  const scope = resolveOverviewScope(ctx, opts)
   // Archived sessions are hidden from every sidebar grouping surface; the
   // panel mirrors that (workspace accounting keeps them, visibility drops).
   const workspaceRegistry = ctx.get('workspaceRegistry') as
@@ -201,6 +148,8 @@ export async function buildOverview(
     const ids = workspaceRegistry?.archivedSessionIds
     if (Array.isArray(ids)) archived = new Set(ids)
   } catch { /* no archive cut */ }
+
+  const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
   const projections = ctx.get('sessionProjections') as
     | { snapshot(session: unknown): { values?: Record<string, unknown> } }
     | undefined
@@ -215,29 +164,20 @@ export async function buildOverview(
     | undefined
 
   const rows: OverviewRow[] = []
-  const pendingTitles: string[] = []
-  // Cold projection loads are the slow path (per-session disk reads): collect
-  // them and run them in PARALLEL instead of serially awaiting each one —
-  // serial cold loads are what made the panel take seconds on many sessions.
+  // Cold projection loads are a slow path (per-session disk reads): collect
+  // them and run them in PARALLEL instead of serially awaiting each one.
   const coldLoads: Array<{ id: string; promise: Promise<SessionHealthProjection | null> }> = []
+  // Title cache misses: filled in the background, never awaited this frame.
+  const titleMisses: string[] = []
+  const now = Date.now()
 
   for (const rec of records) {
     const id = rec.header?.id
     if (typeof id !== 'string' || id === '') continue
-    // The sidebar lists top-level sessions of the current workspace only:
-    // subagent children, archived sessions, and other workspaces stay out.
+    // The sidebar lists top-level sessions only: subagent children and
+    // archived sessions stay out.
     if (rec.header.origin === 'subagent') continue
     if (archived !== null && archived.has(id)) continue
-    if (scope.sessionIds !== null) {
-      if (!scope.sessionIds.has(id)) continue
-    } else if (workspaceRoot !== null) {
-      // Degraded scope (no workspaceRegistry): fall back to the cwd prefix
-      // cut so the panel still mirrors a single-workspace view.
-      const cwd = rec.header.cwd
-      const inWorkspace = typeof cwd === 'string' && cwd.length > 0
-        && (cwd === workspaceRoot || cwd.startsWith(`${workspaceRoot}/`))
-      if (!inWorkspace) continue
-    }
     const createdAt = typeof rec.header.createdAt === 'number' ? rec.header.createdAt : 0
 
     // Health value: live projection snapshot first, then the persisted cache
@@ -270,25 +210,28 @@ export async function buildOverview(
       })
     }
 
-    // Title: live log-backed fold first, batch query for the rest.
+    // Title: live log-backed fold (in-memory, fast) first, then the cache.
+    // A miss returns null THIS frame and schedules a background fill — the
+    // panel's 5s refresh picks the title up without ever blocking first
+    // paint on a log read.
     let title: string | null = null
     if (liveSession !== undefined && titleSvc !== undefined) {
-      try { title = titleSvc.get(liveSession)?.title ?? null } catch { /* batch below */ }
+      try { title = titleSvc.get(liveSession)?.title ?? null } catch { /* cache below */ }
     }
-    if (title === null) pendingTitles.push(id)
+    if (title === null) {
+      const cached = titleCache.get(id)
+      if (cached !== undefined && now - cached.at < TITLE_TTL_MS) {
+        title = cached.title
+      } else {
+        titleMisses.push(id)
+      }
+    }
 
-    rows.push({
-      id,
-      title,
-      live: rec.live === true,
-      createdAt,
-      health,
-      cwd: typeof rec.header.cwd === 'string' ? rec.header.cwd : null,
-      origin: typeof rec.header.origin === 'string' ? rec.header.origin : null,
-    })
+    rows.push({ id, title, live: rec.live === true, createdAt, health })
   }
 
-  // Parallel cold loads, then backfill in place.
+  // Parallel cold loads, then backfill in place (fast path: most sessions
+  // are served by the sync cachedSnapshot and this list stays empty).
   if (coldLoads.length > 0) {
     const byId = new Map(rows.map(r => [r.id, r]))
     const settled = await Promise.all(coldLoads.map(c => c.promise))
@@ -298,18 +241,8 @@ export async function buildOverview(
     }
   }
 
-  // Batch title observation for sessions without a live fold (cold sessions).
-  if (pendingTitles.length > 0 && sessionQuery.readTitleSnapshots !== undefined) {
-    try {
-      const observations = await sessionQuery.readTitleSnapshots(pendingTitles, signal)
-      const byId = new Map(rows.map(r => [r.id, r]))
-      for (const o of observations) {
-        if (o.status !== 'fulfilled') continue
-        const row = byId.get(o.sessionId)
-        if (row !== undefined && o.value?.title?.title) row.title = o.value.title.title
-      }
-    } catch { /* titles stay null */ }
-  }
+  // Background title fill (never awaited; fresh signal, own abort scope).
+  if (titleMisses.length > 0) scheduleTitleFill(ctx, titleMisses, signal)
 
   return sortOverviewRows(rows)
 }
@@ -340,14 +273,11 @@ async function readBody(req: IncomingMessage): Promise<string> {
 /** RPC request shape from the browser panel. */
 interface RpcCall {
   method?: string
-  /** The browser's current session id — the anchor for the workspace scope. */
-  currentSessionId?: string
 }
 
 /**
  * Full HTTP handler for POST /session-health-rpc. Methods:
- *   { method: 'overview', currentSessionId? } →
- *     { ok: true, result: { sessions: OverviewRow[], workspace: {...} } }
+ *   { method: 'overview' } → { ok: true, result: { sessions: OverviewRow[] } }
  * Loopback-only (panel data is private to the machine); 405 on non-POST,
  * 400 on malformed JSON, 403 on non-loopback peers, 500 on service failure.
  */
@@ -378,18 +308,8 @@ export async function handleOverviewRpc(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const currentSessionId = typeof call.currentSessionId === 'string' && call.currentSessionId !== ''
-      ? call.currentSessionId
-      : undefined
-    const sessions = await buildOverview(ctx, controller.signal, { currentSessionId })
-    const scope = resolveOverviewScope(ctx, { currentSessionId })
-    sendJson(res, 200, {
-      ok: true,
-      result: {
-        sessions,
-        workspace: { id: scope.workspaceId, path: scope.path },
-      },
-    })
+    const sessions = await buildOverview(ctx, controller.signal)
+    sendJson(res, 200, { ok: true, result: { sessions } })
   } catch (e) {
     sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) })
   } finally {

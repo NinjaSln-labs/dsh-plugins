@@ -26,11 +26,8 @@ ctx.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 
 ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
 ctx.provide('sessions', { get: id => (id === 's1' ? session : undefined) })
 ctx.provide('sandboxPolicy', { workspaceRoot: '/tmp/ws' })
-// The sidebar's session scope is workspace membership (sessionIds), not cwd.
-ctx.provide('workspaceRegistry', {
-  resolveByPath: path => (path === '/tmp/ws' ? { id: 'ws-1' } : undefined),
-  list: () => [{ id: 'ws-1', path: '/tmp/ws', sessionIds: ['s1', 's2'] }],
-})
+// The overview scope is: top-level + non-archived (sidebar visibility).
+ctx.provide('workspaceRegistry', { archivedSessionIds: ['other-ws'] })
 ctx.provide('fs', {
   resolve: async p => p,
   stat: async p => (p === '.git' ? {} : undefined),
@@ -146,12 +143,12 @@ try {
   assert.equal(res.status, 200)
   const payload = JSON.parse(res.body)
   assert.equal(payload.ok, true)
-  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s2', 's1']) // workspace-filtered, same tier → newest first
-  assert.equal(payload.result.sessions.length, 2, 'other-workspace + subagent sessions are filtered out')
+  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s2', 's1']) // top-level + non-archived, same tier → newest first
+  assert.equal(payload.result.sessions.length, 2, 'archived + subagent sessions are filtered out')
   assert.equal(payload.result.sessions[0].health.severity, 'yellow')     // cold session read the projection cache
-  assert.equal(payload.result.sessions[0].title, '标题-s2')              // batch title path
+  assert.equal(payload.result.sessions[0].title, null)                  // titles are background-filled after first paint
   assert.equal(payload.result.sessions[1].health.severity, 'yellow')     // live session cut the registry snapshot
-  console.log('  ok  /session-health-rpc route registered + overview handler runs (workspace-filtered)')
+  console.log('  ok  /session-health-rpc route registered + overview handler runs (top-level + non-archived)')
 
   console.log('\nmount smoke passed')
   process.exit(0)
