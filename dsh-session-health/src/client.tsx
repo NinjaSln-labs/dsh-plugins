@@ -111,19 +111,22 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:88px 60px 84px 84px 92px 64px}
-.sh-panel-head-row{display:grid;gap:8px;align-items:center;padding:6px 12px 6px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.sh-grid-cols{grid-template-columns:minmax(100px,1fr) 52px 56px 78px 78px 88px 62px}
+.sh-panel-head-row{display:grid;gap:12px;align-items:center;padding:8px 14px 7px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
 .sh-col-head:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-col-head.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
-.sh-panel-row{display:grid;gap:8px;align-items:center;position:relative;width:100%;padding:9px 12px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px}
+.sh-panel-row{display:grid;gap:12px;align-items:center;position:relative;width:100%;padding:11px 14px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
 .sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
-.sh-row-sev{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sh-ink,var(--dsw-alias-label-secondary));font-weight:600;white-space:nowrap;overflow:hidden}
-.sh-row-dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
+/* Severity as a tinted chip (theme-adaptive tint/ink from the palette). */
+.sh-sev-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;background:var(--sh-tint,transparent);color:var(--sh-ink,var(--dsw-alias-label-secondary));font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;width:fit-content}
+.sh-row-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
+.sh-row-live{color:var(--dsw-alias-state-success-primary);font-weight:600}
+.sh-row-cold{color:var(--dsw-alias-label-tertiary)}
 .sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.sh-row-num{text-align:right;font-variant-numeric:tabular-nums}
+.sh-row-num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
 .sh-rowtip{position:absolute;transform:translate(-50%,calc(-100% - 8px));z-index:30;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
 .sh-panel-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
@@ -579,8 +582,9 @@ function OverviewBody(props: {
     try { return window.localStorage.getItem('dsh-session-health/overviewSort') === 'time' ? 'time' : 'severity' } catch { return 'severity' }
   })
   const [page, setPage] = React.useState(0)
-  // Hover tooltip position (row-relative px); the identity is 会话名[项目名].
-  const [tip, setTip] = React.useState<{ x: number; y: number; w: number } | null>(null)
+  // Hover tooltip: row-relative px + the OWNING row id — without the id every
+  // row rendered its own tooltip while any row was hovered.
+  const [tip, setTip] = React.useState<{ rowId: string; x: number; y: number; w: number } | null>(null)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const closeRef = React.useRef<HTMLButtonElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -687,7 +691,8 @@ function OverviewBody(props: {
           </button>
         </div>
         <div className="sh-panel-head-row sh-grid-cols" role="row">
-          <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按健康状态排序">状态{sortMode === 'severity' ? '↓' : ''}</button>
+          <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按健康状态排序">健康{sortMode === 'severity' ? '↓' : ''}</button>
+          <span title="会话是否正在运行（激活）">状态</span>
           <span className="sh-row-num" title="上下文占用（窗口百分比）">占用</span>
           <span className="sh-row-num" title="每轮输入计费当量（含缓存折扣）">输入</span>
           <span className="sh-row-num" title="每轮输入费用（含缓存折扣，忙闲时价）">费用</span>
@@ -729,7 +734,7 @@ function OverviewBody(props: {
               const titleText = `${row.title ?? '未命名会话'}[${wsLabel}]`
               const moveTip = (e: React.MouseEvent) => {
                 const r = e.currentTarget.getBoundingClientRect()
-                setTip({ x: e.clientX - r.left, y: e.clientY - r.top, w: r.width })
+                setTip({ rowId: row.id, x: e.clientX - r.left, y: e.clientY - r.top, w: r.width })
               }
               const tipLeft = tip !== null ? Math.min(Math.max(tip.x, 56), tip.w - 56) : 0
               return (
@@ -743,10 +748,11 @@ function OverviewBody(props: {
                   onMouseLeave={() => setTip(null)}
                   aria-label={`会话健康：${ariaSev}。${titleText}。${metaBits.join('，')}。点击打开并运行 /health`}
                 >
-                  {tip !== null ? (
+                  {tip !== null && tip.rowId === row.id ? (
                     <span className="sh-rowtip" role="tooltip" style={{ left: tipLeft, top: tip.y }}>{titleText}</span>
                   ) : null}
-                  <span className="sh-row-sev"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
+                  <span className="sh-sev-chip"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
+                  <span className={`sh-row-live${row.live ? '' : ' sh-row-cold'}`} title={row.live ? '会话正在运行（激活）' : '会话已持久化（冷却）'}>{row.live ? '在线' : '冷却'}</span>
                   <span className="sh-row-num" title={pct !== null ? `上下文占用 ${pct}%` : undefined}>{occ}</span>
                   <span className="sh-row-num" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
                   <span className="sh-row-num" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
