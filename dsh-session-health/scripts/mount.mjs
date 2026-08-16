@@ -143,7 +143,8 @@ try {
   assert.equal(res.status, 200)
   const payload = JSON.parse(res.body)
   assert.equal(payload.ok, true)
-  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s2', 's1']) // top-level + non-archived, same tier → newest first
+  // Same tier (yellow): the LIVE session ranks first (方案 A), then newest.
+  assert.deepEqual(payload.result.sessions.map(r => r.id), ['s1', 's2']) // top-level + non-archived, live first
   assert.equal(payload.result.sessions.length, 2, 'archived + subagent sessions are filtered out')
   assert.equal(payload.result.sessions[0].health.severity, 'yellow')     // cold session read the projection cache
   assert.equal(payload.result.sessions[0].title, null)                  // titles are background-filled after first paint

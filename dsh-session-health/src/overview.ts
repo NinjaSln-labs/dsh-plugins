@@ -38,6 +38,8 @@ export interface OverviewRow {
   createdAt: number
   /** The health verdict; null when no projection value exists (cold + no cache row). */
   health: SessionHealthProjection | null
+  /** Owning workspace (display title); null when the session is ungrouped. */
+  workspace: { id: string; title: string } | null
 }
 
 const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
@@ -48,12 +50,17 @@ export function rankOf(health: SessionHealthProjection | null | undefined): numb
   return SEVERITY_RANK[health.severity] ?? 4
 }
 
-/** Stable sort: severity tier first (red on top), newest session first inside a tier. */
+/**
+ * Stable sort (agreed priority — 方案 A): severity tier first (red on top),
+ * then LIVE sessions (in-flight / currently open ones are the ones the user
+ * cares about), then newest-created first inside a tier.
+ */
 export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
   return [...rows].sort((a, b) => {
     const ra = rankOf(a.health)
     const rb = rankOf(b.health)
     if (ra !== rb) return ra - rb
+    if (a.live !== b.live) return a.live ? -1 : 1
     return (b.createdAt ?? 0) - (a.createdAt ?? 0)
   })
 }
@@ -141,13 +148,29 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   // Archived sessions are hidden from every sidebar grouping surface; the
   // panel mirrors that (workspace accounting keeps them, visibility drops).
   const workspaceRegistry = ctx.get('workspaceRegistry') as
-    | { archivedSessionIds?: readonly string[] }
+    | {
+        archivedSessionIds?: readonly string[]
+        list?(): Array<{ id: string; path?: string; title?: string; sessionIds?: readonly string[] }>
+      }
     | undefined
   let archived: ReadonlySet<string> | null = null
   try {
     const ids = workspaceRegistry?.archivedSessionIds
     if (Array.isArray(ids)) archived = new Set(ids)
   } catch { /* no archive cut */ }
+  // Session → workspace display map (title ?? path basename). A session can
+  // appear in several workspace accounts in principle; first match wins.
+  const workspaceBySession = new Map<string, { id: string; title: string }>()
+  try {
+    for (const w of workspaceRegistry?.list?.() ?? []) {
+      const title = (w.title !== undefined && w.title !== null && w.title !== '')
+        ? w.title
+        : (w.path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? w.id
+      for (const sid of w.sessionIds ?? []) {
+        if (!workspaceBySession.has(sid)) workspaceBySession.set(sid, { id: w.id, title })
+      }
+    }
+  } catch { /* rows stay ungrouped */ }
 
   const sessionsStore = ctx.get('sessions') as SessionsStoreLike | undefined
   const projections = ctx.get('sessionProjections') as
@@ -227,7 +250,14 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       }
     }
 
-    rows.push({ id, title, live: rec.live === true, createdAt, health })
+    rows.push({
+      id,
+      title,
+      live: rec.live === true,
+      createdAt,
+      health,
+      workspace: workspaceBySession.get(id) ?? null,
+    })
   }
 
   // Parallel cold loads, then backfill in place (fast path: most sessions
