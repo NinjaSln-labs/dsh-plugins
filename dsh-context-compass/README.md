@@ -1,24 +1,24 @@
-# dsh-session-health
+# dsh-context-compass
 
 [English](README.md) | [中文](README.zh.md)
 
-Session health for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
+Context compass for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
-- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **per-round cost in money** (CNY for the zh locale, USD otherwise — official DeepSeek peak/off-peak pricing, `忙时价/闲时价` tagged), model window, session scale, and compaction count. **Click runs `/health`** for the full report. Keyboard-accessible.
-- **`/health` command** — full textual report with optional probes:
-  - `/health` — everything (git / handoff / process probes, configurable)
-  - `/health minimal` — core metrics only (token / window / scale)
-  - `/health no-git` / `/health no-handoff` — skip a probe
-  - `/health doc=<your-file>` — check your own handoff document (no preset filename; the concept is yours, the name is yours)
-  - `/health remaining=<rounds>` — cost expectation in USD: `per-round cost × remaining rounds ≈ expected input spend` (cache-discounted)
-  - `/health processes` — force the process probe
-- **`session_health` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `cost`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
+- **Header badge** — colored dot + border (green/blue/yellow/red) next to the Session log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the one wire path community plugins own; client Remotes are a fixed generated list, so no Remote, no polling). Hover shows advice, window-ratio bar, per-round token cost with **cache-hit rate** (hit rate reflects context stability; compactions reset it), compaction-aware **next-input estimate (cache hits excluded)**, **per-round cost in money** (CNY for the zh locale, USD otherwise — official DeepSeek peak/off-peak pricing, `忙时价/闲时价` tagged), model window, session scale, and compaction count. **Click runs `/compass`** for the full report. Keyboard-accessible.
+- **`/compass` command** — full textual report with optional probes:
+  - `/compass` — everything (git / handoff / process probes, configurable)
+  - `/compass minimal` — core metrics only (token / window / scale)
+  - `/compass no-git` / `/compass no-handoff` — skip a probe
+  - `/compass doc=<your-file>` — check your own handoff document (no preset filename; the concept is yours, the name is yours)
+  - `/compass remaining=<rounds>` — cost expectation in USD: `per-round cost × remaining rounds ≈ expected input spend` (cache-discounted)
+  - `/compass processes` — force the process probe
+- **`context_compass` tool** — model-callable read-only assessment for long tasks: structured verdict (`severity`, `recommendation`, `signals`, `cost`, `handoffReady`) plus a full markdown report at yellow/red tiers. The model self-checks the work-nature questions (`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`); the host measures everything else.
 - **`sessionHealth` projection** — durable host-computed fold (turns, messages, compactions, last-wins pressure/window, last-request cache buckets, severity + advice) pushed to every client; survives replay and page reloads.
-- **Multi-session health overview panel** (v0.6.0) — a "健康一览" action beside Settings at the sidebar foot opens a frame-wide panel (`shell.overlay`) listing **every session's** verdict. Data comes from a same-origin host RPC (`/session-health-rpc`, loopback-only): live sessions cut the projection registry snapshot, cold sessions read the persisted projection cache (async cold load fallback); titles come from the log-backed fold / batch query. Rows are sorted red → yellow → blue → green → unknown (newest first inside a tier), refreshed every 5 s while open; clicking a row opens that session and runs `/health` for it. Esc / backdrop click close; keyboard- and screen-reader-accessible (severity is never color-only).
+- **Multi-session health overview panel** (v0.6.0) — a "罗盘一览" action beside Settings at the sidebar foot opens a frame-wide panel (`shell.overlay`) listing **every session's** verdict. Data comes from a same-origin host RPC (`/session-health-rpc`, loopback-only): live sessions cut the projection registry snapshot, cold sessions read the persisted projection cache (async cold load fallback); titles come from the log-backed fold / batch query. Rows are sorted red → yellow → blue → green → unknown (newest first inside a tier), refreshed every 5 s while open; clicking a row opens that session and runs `/compass` for it. Esc / backdrop click close; keyboard- and screen-reader-accessible (severity is never color-only).
 
 ## Handoff checklist (automated)
 
-When yellow/red, `/health` appends a **real-state checklist** instead of static prose: `git status --short` / `git log --oneline -1` / `git status -sb` (read-only whitelisted argv via `ctx.subprocess`) drive the commit/push items, the handoff probe drives the doc item, and the process probe drives the process item. Uncheckable items are marked `[ ]` with the reason — never silently "done".
+When yellow/red, `/compass` appends a **real-state checklist** instead of static prose: `git status --short` / `git log --oneline -1` / `git status -sb` (read-only whitelisted argv via `ctx.subprocess`) drive the commit/push items, the handoff probe drives the doc item, and the process probe drives the process item. Uncheckable items are marked `[ ]` with the reason — never silently "done".
 
 ## Decision model
 
@@ -83,7 +83,7 @@ the money display to static USD.
   deepseek-v4-flash off-peak ¥1.5/M / $0.22/M miss, ¥0.05/M / $0.007/M hit;
   peak ¥3.0/M / $0.44/M miss, ¥0.10/M / $0.014/M hit.
 - **Currency by region**: the badge shows **CNY when the app locale is zh,
-  USD otherwise**; /health lists both.
+  USD otherwise**; /compass lists both.
 - Refresh every `priceRefreshHours` (default 24h); failures keep the last
   good document; static `inputPricePerM` / `cacheHitDiscount` (flat USD, no
   period) apply until the first success or with `priceSource: 'static'`.
@@ -108,7 +108,7 @@ Every signal comes from the harness itself — nothing is estimated:
 ## Install
 
 ```sh
-dsh plugin add dsh-session-health
+dsh plugin add dsh-context-compass
 # then restart / reload the profile that mounts it
 ```
 
@@ -118,7 +118,7 @@ Or add to a profile overlay:
 # your profile cordis.patch.yml
 - insert:
     - id: session-health
-      name: 'dsh-session-health'
+      name: 'dsh-context-compass'
 ```
 
 ## Development

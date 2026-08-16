@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — pricing resolution.
+ * dsh-context-compass — pricing resolution.
  *
  * Money display needs input prices. The harness carries none, so the plugin
  * resolves them through a live cache driven by the OFFICIAL DeepSeek pricing
@@ -208,5 +208,5 @@ export function startPricingRefresh(
   const urls = [...new Set([config.priceUrl, config.priceFallbackUrl].filter(Boolean))]
   const refresh = () => void cache.refreshAny(urls)
   refresh()
-  return ctx.effect(() => intervalDisposer(ctx, refresh, config.priceRefreshHours * 3_600_000), 'dsh-session-health: pricing refresh')
+  return ctx.effect(() => intervalDisposer(ctx, refresh, config.priceRefreshHours * 3_600_000), 'dsh-context-compass: pricing refresh')
 }

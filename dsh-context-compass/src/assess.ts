@@ -1,7 +1,7 @@
 /**
- * dsh-session-health — shared assessment core.
+ * dsh-context-compass — shared assessment core.
  *
- * One assess() feeds the /health command, the session_health tool, and (in
+ * One assess() feeds the /compass command, the context_compass tool, and (in
  * light form) the Remote service: exact token-meter measurement, model
  * window, event counts (projection snapshot preferred, sessionQuery
  * fallback), and optional git / handoff / process probes. Purely read-only —
@@ -287,7 +287,7 @@ async function probeHandoff(
   }
   const candidates = [...(docName !== null ? [docName] : []), ...config.checks.handoff.paths]
   if (candidates.length === 0) {
-    probes.push('交接文档：未配置检查路径（配置 checks.handoff.paths 或 /health doc=文件名 指定）')
+    probes.push('交接文档：未配置检查路径（配置 checks.handoff.paths 或 /compass doc=文件名 指定）')
     return null
   }
   for (const name of candidates) {

@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — runtime schemas (host-only).
+ * dsh-context-compass — runtime schemas (host-only).
  *
  * The zod schema validates the projection value before every push. Nothing in
  * this module is imported by the client bundle.

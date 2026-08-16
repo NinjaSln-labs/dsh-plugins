@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — small shared helpers.
+ * dsh-context-compass — small shared helpers.
  */
 
 /** Compact token formatting: 123456 -> 123K, 1234567 -> 1.2M, 10000000 -> 10M. */

@@ -1,5 +1,5 @@
 /**
- * dsh-session-health — the sessionHealth projection unit.
+ * dsh-context-compass — the sessionHealth projection unit.
  *
  * A pure event fold with zero dependencies on other units: turns / messages /
  * compaction count from session events, plus last-wins provider pressure and
@@ -118,7 +118,7 @@ export function healthView(
 
   // Last-request buckets for the per-round money math. The cache-hit RATE is
   // deliberately NOT computed here: it lives in src/usage.ts and both the
-  // badge and /health read the core `tokenUsage` projection (the same value
+  // badge and /compass read the core `tokenUsage` projection (the same value
   // the input-bar stats line shows) — one data source, one algorithm spot.
   const lastUsage = state.lastUsage
   const uncachedInputTokens = lastUsage?.inputTokens ?? null

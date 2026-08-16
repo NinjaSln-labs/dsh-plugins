@@ -65,7 +65,7 @@ Plugin row config (all optional, defaults are the V1.11 proposal defaults):
       maxCandidates: 200
     authorization:
       allowedGlobalWriters: []                 # agent/preset ids allowed to write global scope
-    corpusPath: 'research/memory-experiment'   # probe corpus base (relative to workspace)
+    corpusPath: 'research/memory-knowledge-seam/experiments/memory-experiment'   # probe corpus base (relative to workspace)
 ```
 
 ## Storage layout
@@ -95,4 +95,4 @@ probe 实验套件（A/C/D 确定性臂精确复现 + contract 全过）。
 - [DESIGN](docs/DESIGN.md) — V1.11 proposal full text (community design, not official)
 - [REVIEWS](docs/REVIEWS.md) — 11-round review chain summary (0C/0M/0m)
 - [EXPERIMENTS](docs/EXPERIMENTS.md) — RESULTS-v3 + prototype verification (kpro-2, live L1, contract 11/11, ask-gate)
-- Prototype workbench: `research/prototype/` (SQLite blueprint, JS↔FTS5 calibration 0/72 mismatch, dynamic-plugin verification)
+- Prototype workbench: `research/memory-knowledge-seam/experiments/prototype/` (SQLite blueprint, JS↔FTS5 calibration 0/72 mismatch, dynamic-plugin verification)

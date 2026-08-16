@@ -1,9 +1,9 @@
 /**
- * dsh-session-health — smoke test.
+ * dsh-context-compass — smoke test.
  *
  * Drives the built lib/ with stub services: projection fold over synthetic
- * events, the shared assess() core, the /health command handler, and the
- * session_health tool execute. Run after `npm run build`.
+ * events, the shared assess() core, the /compass command handler, and the
+ * context_compass tool execute. Run after `npm run build`.
  *
  *   npm run build && npm run smoke
  */
@@ -437,7 +437,7 @@ await check('projection: official pricing drives cny/usd money fields', () => {
   assert.equal(v.pricePeriod, 'offpeak')
 })
 
-/* ---------- /health command handler ---------- */
+/* ---------- /compass command handler ---------- */
 const cmdDef = healthCommandDefinition(ctx, config)
 await check('command: full report text', async () => {
   const result = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: '', signal })
@@ -465,10 +465,10 @@ await check('command: no session degrades to error', async () => {
   assert.equal(result.kind, 'error')
 })
 
-/* ---------- session_health tool ---------- */
+/* ---------- context_compass tool ---------- */
 const tool = sessionHealthTool(ctx, config)
 await check('tool: registers name + read kind', () => {
-  assert.equal(tool.name, 'session_health')
+  assert.equal(tool.name, 'context_compass')
   assert.equal(tool.presentCall({ reason: 'x' }).kind, 'read')
 })
 

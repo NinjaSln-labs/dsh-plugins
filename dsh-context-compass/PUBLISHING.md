@@ -1,27 +1,27 @@
-# 发布记录：dsh-session-health
+# 发布记录：dsh-context-compass
 
-**已发布**（GitHub + npm）：`dsh-session-health@0.6.0`（latest），`dsh-knowledge-sqlite@0.1.2`。
+**已发布**（GitHub + npm）：`dsh-context-compass@0.6.0`（latest），`dsh-knowledge-sqlite@0.1.2`。
 
 ## 发布状态（2026-08-16 更新）
 
 | 项 | 状态 |
 |---|---|
-| npm | ✅ `dsh-session-health@0.6.0`（latest，CI 自动发布，run 31924069699）· `dsh-knowledge-sqlite@0.1.2`（latest） |
-| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main（`523c94e`），tag `session-health-v0.6.0` |
+| npm | ✅ `dsh-context-compass@0.6.0`（latest，CI 自动发布，run 31924069699）· `dsh-knowledge-sqlite@0.1.2`（latest） |
+| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main（`523c94e`），tag `context-compass-v0.6.0` |
 | 本地验证 | ⏳ 重启 `dsh web` + 硬刷新后验证一览面板（profile 当前为 file: 开发模式，重建自动同步） |
 | 双语文档 | ✅ README.md / README.zh.md（含面板节） |
 
 **0.6.0 发布过程修复的两个 CI 坑**（`publish.yml` 首次成功跑通）：
 1. `npm ci` 需要 lockfile，但 `package-lock.json` 曾被 `.gitignore` 排除 → 入库（`123168c`）
-2. setup-node `cache: npm` 在仓库根探测锁文件，`working-directory` 管不到 action → 显式 `cache-dependency-path: dsh-session-health/package-lock.json`（`523c94e`）
+2. setup-node `cache: npm` 在仓库根探测锁文件，`working-directory` 管不到 action → 显式 `cache-dependency-path: dsh-context-compass/package-lock.json`（`523c94e`）
 
 ## 版本历史
 
-- **0.6.0** — **多会话健康一览面板**（0.6.x 路线图第一波第 2 项）：侧栏底部「健康一览」按钮（`sidebar.footer.action`，rail 态仅显色点）+ 全屏面板（`shell.overlay`）列出所有会话判定。宿主新增 `src/overview.ts`：`sessionQuery.listSessions` → 在线会话切投影注册表快照、冷会话读 `sessionProjectionCache`（cachedSnapshot → coldSnapshot 兜底）、标题走日志折叠 / `readTitleSnapshots` 批量；`/session-health-rpc`（POST，loopback-only，405/400/403/500 齐全）。客户端行按红→黄→蓝→绿→未知排序（host 排序 + 客户端防御性重排），打开期间 5s 刷新，点击行 `sessions.open` + `remote.commands.execute('/health')`，Esc/遮罩关闭，非纯颜色传达。面板无新配置（始终启用）。**dev 模式**：profile 依赖从 `^0.5.8` 切换为 `file:`（与 imgdraw 一致，重建自动同步）。**host + client 改动，需重启 dsh web + 刷新浏览器生效**
+- **0.6.0** — **多会话罗盘一览面板**（0.6.x 路线图第一波第 2 项）：侧栏底部「罗盘一览」按钮（`sidebar.footer.action`，rail 态仅显色点）+ 全屏面板（`shell.overlay`）列出所有会话判定。宿主新增 `src/overview.ts`：`sessionQuery.listSessions` → 在线会话切投影注册表快照、冷会话读 `sessionProjectionCache`（cachedSnapshot → coldSnapshot 兜底）、标题走日志折叠 / `readTitleSnapshots` 批量；`/session-health-rpc`（POST，loopback-only，405/400/403/500 齐全）。客户端行按红→黄→蓝→绿→未知排序（host 排序 + 客户端防御性重排），打开期间 5s 刷新，点击行 `sessions.open` + `remote.commands.execute('/health')`，Esc/遮罩关闭，非纯颜色传达。面板无新配置（始终启用）。**dev 模式**：profile 依赖从 `^0.5.8` 切换为 `file:`（与 imgdraw 一致，重建自动同步）。**host + client 改动，需重启 dsh web + 刷新浏览器生效**
 - **0.5.8** — 缓存命中率**单数据源 + 单算法位置**：插件不再自己累计 usage（移除 usageTotals/窗口折叠），徽章客户端读核心 `tokenUsage` 投影 face、`/health`/工具读同一投影的 registry 快照——与输入栏**同一个投影对象**；算法收敛到 `src/usage.ts` 的 `cacheHitRateOf()`（client bundle 与 host lib 共用同一源文件），公式与核心 StatsLine 互相指认。**0.5.7（自带累计）未发布，被本版取代**。**host 侧改动，需重启 dsh web 生效**
 - **0.5.7** — 缓存命中率与 **dsh 核心输入栏统计（`tokenUsage`）完全同口径**：会话累计 `cacheRead/(uncachedInput+cacheRead+cacheWrite)`（分母含 cacheWrite），折叠语义与 token-meter 一致（per-(turn,step) 去重替换，绝不双计）；显示舍入统一为 `Math.round`——徽章浮层、`/health`、工具、输入栏四处数值一致（修复「浮层 3% vs 输入栏 93%」）。**未发布，被 0.5.8 取代**
 - **0.5.5** — 浮层可达性：徽章↔浮层空隙加隐形桥接层（`.sh-tip::before`，悬停路径不断）+ 250ms 消失延迟（防抖动）+ 键盘聚焦打开（Tab 到徽章即显示，移出子树才关）+ 150ms 入场动画（尊重 prefers-reduced-motion）——修复「浮层难进去、计费预期切换行点不到」
-- **0.5.4** — 浮层「计费预期」行可点击切换显示口径：金额（默认，¥/$ 按 locale）↔ 计费当量 token 数（`effectivePerRound`，缓存折扣后）；偏好存 localStorage（`dsh-session-health/costDisplay`）；行内 hover/焦点态 + 键盘可达，底行提示更新
+- **0.5.4** — 浮层「计费预期」行可点击切换显示口径：金额（默认，¥/$ 按 locale）↔ 计费当量 token 数（`effectivePerRound`，缓存折扣后）；偏好存 localStorage（`dsh-context-compass/costDisplay`）；行内 hover/焦点态 + 键盘可达，底行提示更新
 - **0.5.3** — 浮层档位标签去掉颜色字（「绿（放心继续）」→「放心继续」——颜色由着色 chip 表达）；aria-label 保留颜色字（屏幕阅读器看不到颜色）
 - **0.5.2** — 徽章/浮层四档配色重做（跨主题可读）：蓝色不再用静态 `--dsw-static-blue-500`（暗色浮层上仅 ~1.6:1，看不清）；每档位引入 `--sh-accent`（点/边/条）/`--sh-ink`（文字）/`--sh-tint`（底纹）三个主题自适应角色——浅色主题加深、`body[data-ds-dark-theme]` 下提亮（color-mix），明暗两主题文字对比度均 ≥3:1，四色色相保持区分度；悬停底纹改用 color-mix 跟随 alias token
 - **0.5.1** — 定价源可达性修复：默认 `cost.priceUrl` 从 GitHub raw 改为 jsdelivr CDN 镜像（raw 在部分网络不可达 → 拉取静默失败 → 金额显示降级为静态 USD，zh 界面不显示 CNY）；新增 `cost.priceFallbackUrl`（默认 GitHub raw），同一刷新周期内自动回退，先成功者胜
@@ -32,13 +32,13 @@
 - **0.4.5** — 计费预期显示金额（`cost.inputPricePerM`）
 - **0.4.0** — 缓存命中核算、费用预期、交接清单自动化（git 只读探测）
 - **0.3.0** — 压缩感知占用显示（contextPressure 合并）、消息数代理阈值
-- **0.2.0** — `session_health` 工具、投影驱动 badge、阈值可配置化、进程检测
+- **0.2.0** — `context_compass` 工具、投影驱动 badge、阈值可配置化、进程检测
 
 ## 重新安装 / 验证
 
 ```sh
-dsh plugin add dsh-session-health
-# 或 profile package.json：dsh-session-health: ^0.4.8
+dsh plugin add dsh-context-compass
+# 或 profile package.json：dsh-context-compass: ^0.4.8
 # 重启 dsh + 浏览器硬刷新
 ```
 
@@ -50,8 +50,8 @@ dsh plugin add dsh-session-health
 - **客户端 bundle**：改 `src/client.tsx` 后必须 `npm run build`（tsc + esbuild `__ModuleLoader__` 工厂格式）；host 与 client 变更都需要重启 dsh + 刷新浏览器
 - **发布流程（CI 自动发布 + 人工审批门）**：
   ```sh
-  cd dsh-session-health
-  npm version patch -m "chore: release v%s"   # 自动提交 + 打 tag session-health-vX.Y.Z
+  cd dsh-context-compass
+  npm version patch -m "chore: release v%s"   # 自动提交 + 打 tag context-compass-vX.Y.Z
   git push && git push --tags                  # CI（.github/workflows/publish.yml）接手：
                                                #   验证链（build/typecheck/smoke/mount/client-mount）
                                                #   → tag 版本一致性守卫 → 等你在 GitHub 批准
@@ -59,5 +59,5 @@ dsh plugin add dsh-session-health
                                                #   → npm publish
   ```
   应急手动发布（CI 不可用时）：`npm run build && npm run smoke && npm run mount && node scripts/client-mount.mjs && npm publish --access public`（本机 npm 登录态）
-- **一次性配置（CI 首次使用前）**：npm granular access token（仅授权 `dsh-session-health` 包）→ GitHub secrets `NPM_TOKEN`；GitHub Environments 建 `npm-publish` 并设 Required reviewers（自己）——**token 绝不进聊天/对话**
+- **一次性配置（CI 首次使用前）**：npm granular access token（仅授权 `dsh-context-compass` 包）→ GitHub secrets `NPM_TOKEN`；GitHub Environments 建 `npm-publish` 并设 Required reviewers（自己）——**token 绝不进聊天/对话**
 - **安全**：token 存 GitHub secrets；怀疑泄露时 secrets 一键轮换；workflow 权限最小化（contents: read，token 仅注入 publish 步骤）
