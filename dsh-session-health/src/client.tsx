@@ -100,7 +100,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--dsw-alias-bg-base) 62%,transparent);display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto;z-index:60;animation:sh-fade-in .15s ease-out}
 @keyframes sh-fade-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){.sh-scrim{animation:none}}
-.sh-panel{width:min(660px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.sh-panel{width:min(620px,100%);max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
 .sh-panel-head{display:flex;align-items:baseline;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .sh-panel-title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .sh-panel-sub{font-size:12px;color:var(--dsw-alias-label-tertiary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -113,7 +113,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:96px 48px 52px 72px 74px 86px 60px}
+.sh-grid-cols{grid-template-columns:96px 48px 52px 76px 78px 86px 48px}
 .sh-panel-head-row{display:grid;gap:10px;align-items:center;padding:9px 16px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;font-weight:500;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
@@ -612,8 +612,12 @@ function OverviewBody(props: {
         const json = (await res.json()) as { ok?: boolean; error?: string; result?: { sessions?: OverviewRowLike[] } }
         if (!alive) return
         if (json.ok === true && Array.isArray(json.result?.sessions)) {
-          setRows(sortRows(json.result.sessions, sortModeRef.current))
-          setPage(0)
+          const next = sortRows(json.result.sessions, sortModeRef.current)
+          // Refresh keeps the current page (a 5s poll must not kick the user
+          // back to page one); clamp when sessions shrank below the page.
+          const pages = Math.max(1, Math.ceil(next.length / PAGE_SIZE))
+          setPage(p => Math.min(p, pages - 1))
+          setRows(next)
           setLoadError(null)
         } else {
           setLoadError(json.error ?? '未知错误')
