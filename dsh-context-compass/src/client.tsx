@@ -131,6 +131,27 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
 .sh-rowtip{position:fixed;transform:translate(-50%,-100%);z-index:80;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
 .sh-rowtip-below{transform:translate(-50%,0)}
+/* /compass rich card in the chat flow (commandview seat). */
+.sh-ccard{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);padding:10px 12px;font-size:12px;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:6px}
+.sh-ccard[data-error="true"]{border-color:var(--dsw-alias-state-error-primary)}
+.sh-ccard-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sh-ccard-title{font-size:12px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}
+.sh-ccard-summary{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.sh-ccard-state{font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.sh-ccard-toggle{margin-left:auto;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;padding:2px 8px;cursor:pointer;flex:none}
+.sh-ccard-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-ccard-toggle:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-ccard-reason{font-size:12px;line-height:1.6}
+.sh-ccard-metrics{display:flex;flex-wrap:wrap;gap:4px 14px}
+.sh-ccard-metric{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+.sh-ccard-mkey{color:var(--dsw-alias-label-tertiary)}
+.sh-ccard-mval{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
+.sh-ccard-mfull{color:var(--dsw-alias-label-secondary)}
+.sh-ccard-checklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.sh-ccard-cdone{color:var(--dsw-alias-state-success-primary)}
+.sh-ccard-copen{color:var(--dsw-alias-label-secondary)}
+.sh-ccard-body{margin:0;padding:8px 10px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary);max-height:40vh;overflow-y:auto}
+
 .sh-panel-empty{display:flex;align-items:center;justify-content:center;height:100%;text-align:center;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 .sh-panel-foot{padding:8px 16px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;min-height:34px}
 .sh-pager{display:inline-flex;align-items:center;gap:6px;flex:none}
@@ -443,6 +464,155 @@ function HealthBadge(props: {
       </span>
       {tip}
     </span>
+  )
+}
+
+/**
+ * /compass 富卡片 —— the `conversation.chat.commandview` seat (keyed by
+ * command name, currently unoccupied) renders a structured card from the
+ * command's markdown report instead of the generic text row.
+ *
+ * The report text format is owned by buildCommandText (src/command.ts):
+ *   **放心继续**（健康度：**绿**）
+ *   <reason>
+ *   详情：
+ *   - 会话规模：…
+ *   - 每轮输入约 …（窗口 …%）
+ *   - 缓存命中率 …
+ *   - 计费预期：…
+ *   [切换前检查：]
+ *   - [x] 未提交变更：…
+ * Parsing is best-effort: unknown shapes fall back to the raw text row.
+ */
+
+/** Parsed structure of one /compass report. */
+export interface CompassReport {
+  /** 绿/蓝/黄/红; null when the text does not carry the mark. */
+  severity: 'green' | 'blue' | 'yellow' | 'red' | null
+  /** First-line conclusion without markdown bold markers. */
+  summary: string
+  /** Reason line(s) right below the conclusion. */
+  reason: string
+  /** Detail rows (会话规模 / 每轮 / 缓存命中 / 计费…). */
+  metrics: string[]
+  /** Handoff checklist rows verbatim ([x]/[ ]). */
+  checklist: string[]
+}
+
+const SEV_MAP: Record<string, 'green' | 'blue' | 'yellow' | 'red'> = {
+  绿: 'green',
+  蓝: 'blue',
+  黄: 'yellow',
+  红: 'red',
+}
+
+/** Best-effort parser for the report text produced by buildCommandText. */
+export function parseCompassReport(text: string): CompassReport {
+  const lines = text.split(/\r?\n/)
+  const sev = text.match(/健康度：\*\*(绿|蓝|黄|红)\*\*/)
+  const summary = (lines[0] ?? '').replace(/\*\*/g, '').trim()
+  const rest = lines.slice(1)
+  const reason: string[] = []
+  const metrics: string[] = []
+  const checklist: string[] = []
+  let inChecklist = false
+  for (const raw of rest) {
+    const line = raw.trim()
+    if (line === '') continue
+    if (line.startsWith('- [x]') || line.startsWith('- [ ]')) {
+      inChecklist = true
+      checklist.push(line)
+      continue
+    }
+    if (inChecklist) continue
+    if (line.startsWith('- ')) { metrics.push(line.slice(2).trim()); continue }
+    if (line === '详情：' || line === '切换前检查：') continue
+    reason.push(line)
+  }
+  return {
+    severity: sev !== null ? SEV_MAP[sev[1]] ?? null : null,
+    summary: summary !== '' ? summary : '（无结论）',
+    reason: reason.join(' '),
+    metrics,
+    checklist,
+  }
+}
+
+/**
+ * The /compass rich card: severity chip + conclusion + reason, key metric
+ * rows, the real handoff checklist, and the full report in a <pre> body
+ * (the default card's own body is a <pre> too — no markdown renderer
+ * involved). Running/error states degrade to the generic text row.
+ */
+function CompassCommandCard(props: {
+  node: {
+    name?: string | null
+    outcome?: { kind?: string; text?: string } | null
+  }
+}): JSX.Element {
+  const [expanded, setExpanded] = React.useState(true)
+  const outcome = props.node.outcome
+  const text = outcome?.text
+  if (outcome === null || outcome === undefined) {
+    return (
+      <div className="sh-ccard">
+        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">运行中…</span></div>
+      </div>
+    )
+  }
+  if (outcome.kind !== 'success' || text === undefined || text === '') {
+    return (
+      <div className="sh-ccard" data-error="true">
+        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">执行失败</span></div>
+        {text !== undefined ? <pre className="sh-ccard-body">{text}</pre> : null}
+      </div>
+    )
+  }
+  const report = parseCompassReport(text)
+  const sev = report.severity
+  return (
+    <div className={`sh-ccard${sev !== null ? ` sh-sev-${sev}` : ''}`}>
+      <div className="sh-ccard-head">
+        <span className="sh-ccard-title">/compass</span>
+        {sev !== null ? <span className="sh-sev-chip"><span className="sh-row-dot" />{SEVERITY_LABEL[sev]}</span> : null}
+        <span className="sh-ccard-summary">{report.summary}</span>
+        <button
+          type="button"
+          className="sh-ccard-toggle"
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+          aria-label={expanded ? '收起完整报告' : '展开完整报告'}
+        >
+          {expanded ? '收起' : '展开'}
+        </button>
+      </div>
+      {report.reason !== '' ? <div className="sh-ccard-reason">{report.reason}</div> : null}
+      {report.metrics.length > 0 ? (
+        <div className="sh-ccard-metrics">
+          {report.metrics.map((m, i) => {
+            const colon = m.indexOf('：')
+            const key = colon > 0 ? m.slice(0, colon) : null
+            const value = colon > 0 ? m.slice(colon + 1) : m
+            return key !== null
+              ? (
+                <span key={i} className="sh-ccard-metric">
+                  <span className="sh-ccard-mkey">{key}</span>
+                  <span className="sh-ccard-mval">{value}</span>
+                </span>
+              )
+              : <span key={i} className="sh-ccard-metric sh-ccard-mfull">{m}</span>
+          })}
+        </div>
+      ) : null}
+      {report.checklist.length > 0 ? (
+        <ul className="sh-ccard-checklist">
+          {report.checklist.map((c, i) => (
+            <li key={i} className={c.startsWith('- [x]') ? 'sh-ccard-cdone' : 'sh-ccard-copen'}>{c.slice(5)}</li>
+          ))}
+        </ul>
+      ) : null}
+      {expanded ? <pre className="sh-ccard-body">{text}</pre> : null}
+    </div>
   )
 }
 
@@ -851,6 +1021,13 @@ export function apply(ctx: ClientContext): void {
         locale={locale}
       />
     ),
+  ) as never)
+
+  // /compass rich card: the commandview seat dispatches by command name and
+  // is currently unoccupied — registering 'compass' upgrades the row.
+  ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register(
+    { name: 'conversation.chat.commandview', key: 'compass' } as never,
+    (props: { node: never }) => <CompassCommandCard node={props.node} />,
   ) as never)
 
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
