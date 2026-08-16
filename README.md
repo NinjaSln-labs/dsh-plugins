@@ -4,7 +4,9 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 社区插件合集。所有插件均为公开 npm 包，可通过 `dsh plugin add <name>` 安装。
 
-> 所有插件均为本项目**自研原创开发**，非第三方插件的聚合或转载。
+## ⭐ 原创声明
+
+本项目所有插件均为**自研原创开发**，非第三方插件的聚合或转载。
 
 ## 插件
 
