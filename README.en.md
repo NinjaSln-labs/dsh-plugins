@@ -1,12 +1,12 @@
 # DSH Plugins
 
-[简体中文](README.md) | English
-
-Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). All plugins are public npm packages, installable via `dsh plugin add <name>`.
-
 ## ⭐ Originality Statement
 
 All plugins are **developed in-house from scratch** — not an aggregation or repackaging of third-party plugins.
+
+[简体中文](README.md) | English
+
+Community plugin collection for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). All plugins are public npm packages, installable via `dsh plugin add <name>`.
 
 ## Plugins
 
