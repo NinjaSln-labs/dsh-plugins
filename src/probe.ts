@@ -206,19 +206,27 @@ async function evalHuman(
 ): Promise<Record<string, unknown>> {
   const humanQueries = readJson(join(base, 'human-queries.json')) as Array<{ id: string; text: string; target: string }>
   const dedupeMap = await deps.service._dedupeIds()
+  // C 臂：离线 reasoner variants（human-expanded.json，与 hard 套件同口径）——
+  // 分离"扩展模型能力"与"实时降级"两个变量（0.1.4 诊断臂）
+  const humanExpanded = readJson(join(base, 'human-expanded.json')) as Array<{ id: string; variants?: string[] }>
+  const humanExpandedById = new Map(humanExpanded.map((e) => [e.id, e]))
   const arms: Record<string, unknown> = {}
   arms.A = await evalArm(deps, humanQueries, 'base', false, null, dedupeMap)
+  arms.C = await evalArm(deps, humanQueries, 'base', false, (q) => humanExpandedById.get(q.id)?.variants ?? [], dedupeMap)
   arms['L1-live'] = await evalArm(deps, humanQueries, 'rich', true, null, dedupeMap)
   const armA = arms.A as { recall1: string; targets: number }
+  const armC = arms.C as { recall1: string }
   const armL1 = arms['L1-live'] as { recall1: string }
-  // V1.11 人类集 precision@1 ≥80%（信息性；单目标套件上 ≡ recall@1，如实并列两臂）
+  // V1.11 人类集 precision@1 ≥80%（信息性；单目标套件上 ≡ recall@1，如实并列各臂）
   const targetN = Number(armA.targets)
   const r1Of = (s: unknown): number => Number(String(s).split('/')[0])
   const precision1 = {
     armA: String(armA.recall1),
+    armC: String(armC.recall1),
     armL1Live: String(armL1.recall1),
     note: '单目标套件 precision@1 ≡ recall@1（V1.11 信息性门禁 ≥80%）',
     gateA: r1Of(armA.recall1) / targetN >= 0.8,
+    gateC: r1Of(armC.recall1) / targetN >= 0.8,
     gateL1Live: r1Of(armL1.recall1) / targetN >= 0.8,
   }
   // none 查询（无目标）无误报：top1 必须为空或非记忆条目（干扰项/噪声不算误报）
