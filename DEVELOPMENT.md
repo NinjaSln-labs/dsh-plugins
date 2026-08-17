@@ -117,6 +117,7 @@ Backlog → In Progress → Verify(DoD) → Done
 | 通知直接 session.append 插队 | 上游 400（tool 消息无前置 tool_calls），会话卡死 | Sprint 计划数据流（必须走 agent.steer/followup 安全投递） |
 | 宿主重启丢插件定义 | 动态插件全部消失 | 重建时 host+client 双全，用 .mtask/pkgs 备份源码 |
 | 语料/目录迁移后 bundle 默认路径未同步 | 宿主 probe ENOENT、npm test 用例失败 | 发版前 grep 全仓路径引用（src 默认值 + tests + smoke），宿主冒烟 probe 一次 |
+| 低延迟子任务配置跟随主模型路由 | 主模型换 reasoning/中转模型后子任务隐性退化（TTFT 3s+、100% 降级） | 子任务显式禁用思维链（reasoningEffort off）+ 固定 model；用宿主 latency 套件回归 |
 
 ## 维护
 

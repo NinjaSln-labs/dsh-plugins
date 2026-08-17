@@ -1,5 +1,18 @@
 # CHANGELOG — dsh-knowledge-sqlite
 
+## 0.1.6 (2026-08-16)
+
+- **fix**: 扩展请求显式关闭思维链（`reasoningEffort: 'off'` → pi-ai `thinking: {type:'disabled'}`）。
+  根因：扩展 provider/model 跟随会话默认，若默认路由是 reasoning 模型（如 opencode-go 的
+  deepseek-v4-flash，`reasoning: true`），thinking 预热使 TTFT 高达 3.4s / 总耗时 11.3s，
+  timeout 3000 下 100% 降级（详见 EXPERIMENTS §9 根因分析）；关闭后退化为普通生成。
+- 部署配套：profile patch 配置 `queryExpansion.model: 'deepseek-v4-flash'`（默认 provider
+  内优先 v4-flash，不配 provider——跟随会话默认路由）。
+- **test**: +2（扩展请求携带 reasoningEffort=off；model 显式配置生效、provider 跟随默认；
+  mock llm 记录路由参数）。
+- 回顾：本次根因是"配置跟随主模型"这一数据流决策，主模型换推理模型后扩展隐性退化——
+  新增速查表行（见 DEVELOPMENT.md）。
+
 ## 0.1.5 (2026-08-16)
 
 - **feat**: L1 扩展缓存持久化——SQLite `expansion_cache` 表（按 workspace 隔离，

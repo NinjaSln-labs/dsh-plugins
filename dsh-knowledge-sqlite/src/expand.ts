@@ -22,6 +22,9 @@ export interface ExpansionOutcome {
 
 export interface QueryExpansionConfig {
   enabled: boolean
+  /** 专用扩展 provider（0.1.6：显式指定，优先级高于会话默认 provider——扩展是低延迟任务，
+   *  不应跟随主模型路由（中转/推理模型 TTFT 可达 3s+，见 EXPERIMENTS §9）） */
+  provider?: string
   /** 专用扩展模型（V1.11：unset = 会话默认模型） */
   model?: string
   maxOutputTokens: number
@@ -132,6 +135,11 @@ export class QueryExpander {
           }],
           maxTokens: this.config.maxOutputTokens,
           temperature: 0.2,
+          // 0.1.6：扩展是低延迟任务，显式关闭思维链——reasoning 模型的 thinking 预热
+          // 可让 TTFT 高达 3s+（实测 opencode-go deepseek-v4-flash 默认 thinking 全开，
+          // TTFT 3387ms / total 11.3s，见 EXPERIMENTS §9）；'off' → pi-ai
+          // `thinking: { type: 'disabled' }`，退化为普通生成。
+          reasoningEffort: 'off',
           signal,
         })
         for await (const chunk of stream) {

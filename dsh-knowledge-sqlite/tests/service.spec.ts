@@ -21,12 +21,14 @@ interface BootOptions {
   llmFail?: boolean
   corpusPath?: string
   dbPath?: string
+  queryExpansion?: Record<string, unknown>
 }
 
 async function boot(opts: BootOptions = {}) {
   const ctx = new Context()
   const registered: Array<{ name: string }> = []
   const emitted: Array<{ event: string; payload: unknown }> = []
+  const llmCalls: Array<{ provider?: unknown; model?: unknown; reasoningEffort?: unknown }> = []
 
   ctx.provide('agents', {
     currentInitiator: () => opts.agent ?? undefined,
@@ -35,21 +37,24 @@ async function boot(opts: BootOptions = {}) {
     currentSelection: () => ({ provider: 'mock-provider', model: 'mock-model' }),
   })
   ctx.provide('llm', {
-    stream: () => ({
-      async *[Symbol.asyncIterator]() {
-        if (opts.llmFail === true) {
-          yield { type: 'finish', reason: { kind: 'error', failure: { message: 'mock fail' } } }
-          return
-        }
-        if (opts.llmTimeoutMs !== undefined && opts.llmTimeoutMs > 0) {
-          await new Promise((r) => setTimeout(r, opts.llmTimeoutMs))
-          return
-        }
-        const variants = opts.llmVariants ?? ['变体一', '变体二']
-        yield { type: 'text-delta', text: JSON.stringify({ variants }) }
-        yield { type: 'finish', reason: { kind: 'stop' } }
-      },
-    }),
+    stream: (options: { provider?: unknown; model?: unknown; reasoningEffort?: unknown }) => {
+      llmCalls.push({ provider: options?.provider, model: options?.model, reasoningEffort: options?.reasoningEffort })
+      return {
+        async *[Symbol.asyncIterator]() {
+          if (opts.llmFail === true) {
+            yield { type: 'finish', reason: { kind: 'error', failure: { message: 'mock fail' } } }
+            return
+          }
+          if (opts.llmTimeoutMs !== undefined && opts.llmTimeoutMs > 0) {
+            await new Promise((r) => setTimeout(r, opts.llmTimeoutMs))
+            return
+          }
+          const variants = opts.llmVariants ?? ['变体一', '变体二']
+          yield { type: 'text-delta', text: JSON.stringify({ variants }) }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        },
+      }
+    },
   })
   ctx.provide('tools', {
     register: (def: { name: string }) => {
@@ -75,6 +80,7 @@ async function boot(opts: BootOptions = {}) {
 
   const config: Record<string, unknown> = { databasePath: opts.dbPath ?? join(mkdtempSync(join(tmpdir(), 'knl-svc-')), 'k.sqlite') }
   if (opts.corpusPath !== undefined) config.corpusPath = opts.corpusPath
+  if (opts.queryExpansion !== undefined) config.queryExpansion = opts.queryExpansion
   const fiber = ctx.plugin(knowledgeSqlite, config as never)
   await fiber.await()
   const service = ctx.get('knowledge') as KnowledgeService | undefined
@@ -84,6 +90,7 @@ async function boot(opts: BootOptions = {}) {
     service,
     registered,
     emitted,
+    llmCalls,
     dispose: () => { void fiber.dispose() },
   }
 }
@@ -284,6 +291,33 @@ describe('L1 扩展缓存持久化（0.1.5）', () => {
     expect(fresh.ok).toBe(true)
     const s3 = await app.service.search('部署服务怎么启动', {})
     expect(s3.expansion?.source).toBe('live')
+  })
+})
+
+describe('L1 扩展专用路由（0.1.6：关思维链 + 显式模型）', () => {
+  it('扩展请求默认跟随会话 provider/model，且携带 reasoningEffort=off', async () => {
+    app = await boot({ agent })
+    await app.service._seedWrite({ content: '路由测试 记忆条目', dedupeKey: 'route-1' },
+      { workspaceId: '/ws/one', ownerId: 'sess-1', authorTier: 'explicit' })
+    const s = await app.service.search('路由测试怎么搜', {})
+    expect(s.expansion?.used).toBe(true)
+    expect(app.llmCalls.length).toBe(1)
+    // 关键：0.1.6 起扩展显式关闭思维链（reasoning 模型 thinking 预热可达 3s+，EXPERIMENTS §9）
+    expect(app.llmCalls[0].reasoningEffort).toBe('off')
+    // provider/model 跟随会话默认（无 queryExpansion.provider 配置）
+    expect(app.llmCalls[0].provider).toBe('mock-provider')
+    expect(app.llmCalls[0].model).toBe('mock-model')
+  })
+
+  it('queryExpansion.model 显式配置优先于会话默认模型（provider 仍跟随默认）', async () => {
+    app = await boot({ agent, queryExpansion: { model: 'deepseek-v4-flash' } })
+    await app.service._seedWrite({ content: '路由测试 记忆条目二', dedupeKey: 'route-2' },
+      { workspaceId: '/ws/one', ownerId: 'sess-1', authorTier: 'explicit' })
+    const s = await app.service.search('路由测试怎么搜', {})
+    expect(s.expansion?.used).toBe(true)
+    expect(app.llmCalls[0].provider).toBe('mock-provider')
+    expect(app.llmCalls[0].model).toBe('deepseek-v4-flash')
+    expect(app.llmCalls[0].reasoningEffort).toBe('off')
   })
 })
 
