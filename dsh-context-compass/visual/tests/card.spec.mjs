@@ -14,7 +14,8 @@ import { openSession, setTheme, settle } from '../helpers.mjs'
 
 const CARD_MASK_SELECTORS = [
   '.sh-ccard-body',
-  '.sh-ccard-mval',
+  // 指标区整块掩码：行数与 key 随会话数据变化（已压缩行按 compactions 条件渲染）。
+  '.sh-ccard-metrics',
   '.sh-ccard-summary',
   '.sh-ccard-reason',
   '.sh-sev-chip',
