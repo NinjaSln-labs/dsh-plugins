@@ -17,6 +17,11 @@
 
 ## 版本历史
 
+- **0.7.6** — **修复富卡片跨会话回顾出框**：回顾 metric 的 value 是整段快照（`context-compass-handoff-snapshot） | severity: …`），`.sh-ccard-metric` 的 `white-space:nowrap` 让它单行撑破卡片。双修：
+  - **文案**：probeCrossSession 过滤 `---`/标识行/timestamp，只留语义键值行（severity/recommendation/compacted/…），≤160 字符截断——回顾简短可读
+  - **CSS**：`.sh-ccard-metric` 改 `white-space:normal` + value `overflow-wrap:anywhere`——任何长 metric 折行不溢出（防御所有未来长值）
+  - **host + client 改动，需重启 + 硬刷新生效**
+
 - **0.7.5** — **修复 knowledge.search 丢 this（跨会话回顾二次修复）**：0.7.4 修好 withInitiator 后实机错误变为「Cannot read properties of undefined (reading 'readCaller')」——`const search = knowledge?.search` 解构后调用丢了 knowledge 服务 this（search 内部用 `this.readCaller()`）。修复：`search.call(knowledge, …)`。smoke 的 knowledge stub 加 this 依赖（内部有 `readCaller` 字段 + 无 this 抛错），与 agents stub 一起构成双重 this-绑定回归保护。**host 侧改动，需重启生效**
 
 - **0.7.4** — **修复 withInitiator 丢 this 导致跨会话回顾恒「检索失败」**：0.7.3 把 `withInitiator` 解构成局部变量直接调用，丢了 agents 服务的 `this`（内部用 `this.activeInitiatorRuns`）→ `runWithInitiator` 抛「Cannot read properties of undefined」→ 每次 /compass 的回顾都走 catch 降级。修复：`withInitiator.call(agents, …)` 保留 this 绑定。smoke 的 agents stub 加 this 依赖（解构调用会在单测里直接抛错），防此 class 回归。实机验证：/kbtest 命令上下文 hits=1 命中快照。**host 侧改动，需重启生效**

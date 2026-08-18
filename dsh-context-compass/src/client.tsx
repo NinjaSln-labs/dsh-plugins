@@ -147,10 +147,11 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-ccard-toggle:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-ccard-reason{font-size:12px;line-height:1.6}
 .sh-ccard-metrics{display:flex;flex-wrap:wrap;gap:4px 14px}
-.sh-ccard-metric{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
-.sh-ccard-mkey{color:var(--dsw-alias-label-tertiary)}
-.sh-ccard-mval{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
-.sh-ccard-mfull{color:var(--dsw-alias-label-secondary)}
+/* 短 metric 单行、长 metric（如跨会话回顾快照）可折行——绝不撑破卡片。 */
+.sh-ccard-metric{display:inline-flex;align-items:baseline;gap:4px;white-space:normal;min-width:0}
+.sh-ccard-mkey{color:var(--dsw-alias-label-tertiary);flex:none}
+.sh-ccard-mval{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;min-width:0}
+.sh-ccard-mfull{color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere;min-width:0}
 .sh-ccard-checklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .sh-ccard-cdone{color:var(--dsw-alias-state-success-primary)}
 .sh-ccard-copen{color:var(--dsw-alias-label-secondary)}
