@@ -64,19 +64,42 @@ interface KnowledgeLike {
  * search for the last handoff snapshot (read-only; workspace-scope safe) and
  * return a one-line "跨会话回顾" note. Returns null when the service is
  * absent, the search fails, or no snapshot exists — never throws.
+ *
+ * The knowledge service derives the caller identity (workspaceId=cwd) from
+ * `agents.currentInitiator()` — which is UNDEFINED inside a /compass command
+ * handler (commands run outside the agent-turn chain). So the search is
+ * wrapped in `agents.withInitiator(agent, …)` to give it a real initiator
+ * boundary; otherwise search returns empty hits even when snapshots exist.
  */
 export async function probeCrossSession(
   ctx: Context,
+  agentId: string | undefined,
   signal: AbortSignal,
   probes: string[],
 ): Promise<void> {
   const knowledge = ctx.get('knowledge') as KnowledgeLike | undefined
-  if (knowledge === undefined || typeof knowledge.search !== 'function') {
+  const search = knowledge?.search
+  if (knowledge === undefined || typeof search !== 'function') {
     probes.push('知识库未安装（dsh-knowledge-sqlite），跨会话回顾已跳过')
     return
   }
+  // Resolve the command's agent so the knowledge caller can derive identity.
+  const agents = ctx.get('agents') as
+    | { get?(id: string): unknown; withInitiator?<T>(agent: unknown, operation: () => T): T }
+    | undefined
+  const agent = agents?.get?.(agentId ?? '')
+  const withInitiator = agents?.withInitiator
+  if (agents === undefined || agent === undefined || typeof withInitiator !== 'function') {
+    probes.push('跨会话回顾：无法定位 agent 身份（已跳过）')
+    return
+  }
   try {
-    const result = await knowledge.search(SNAPSHOT_QUERY, { expand: false, signal })
+    // withInitiator 已在上面的 typeof 守卫里确认存在；抽成非可选局部再调用。
+    const invoke: (agent: unknown, operation: () => Promise<unknown>) => Promise<unknown> =
+      withInitiator as (agent: unknown, operation: () => Promise<unknown>) => Promise<unknown>
+    const result = await invoke(agent, () =>
+      search(SNAPSHOT_QUERY, { expand: false, signal }),
+    ) as { hits?: Array<{ content?: string; createdAt?: number; dedupeKey?: string | null }> }
     const hit = result?.hits?.find(h => h !== undefined && typeof h.content === 'string' && h.content.length > 0)
     const content = hit?.content
     if (hit === undefined || content === undefined || content === '') {
