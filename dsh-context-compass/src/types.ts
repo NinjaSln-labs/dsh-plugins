@@ -9,6 +9,13 @@
 /** Severity tiers of the two-dimensional continue-vs-new model. */
 export type HealthSeverity = 'green' | 'blue' | 'yellow' | 'red'
 
+/**
+ * A session's real activity (NOT in-memory materialization — that was the old
+ * bug: `live` meant "object exists in ctx.sessions", not "is running"). Only
+ * an Agent whose lifecycle status is `running` counts as actively working.
+ */
+export type SessionActivity = 'running' | 'loaded' | 'cold'
+
 /** Verdict for the model-facing tool. */
 export type HealthRecommendation = 'continue' | 'continue-with-note' | 'suggest-switch' | 'danger-zone'
 

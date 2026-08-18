@@ -128,7 +128,8 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Severity as a tinted chip (theme-adaptive tint/ink from the palette). */
 .sh-sev-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;background:var(--sh-tint,transparent);color:var(--sh-ink,var(--dsw-alias-label-secondary));font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;width:fit-content}
 .sh-row-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--sh-accent,var(--dsw-alias-label-tertiary))}
-.sh-row-live{color:var(--dsw-alias-state-success-primary);font-weight:600}
+.sh-row-running{color:var(--dsw-alias-state-success-primary);font-weight:600}
+.sh-row-loaded{color:var(--dsw-alias-label-secondary)}
 .sh-row-cold{color:var(--dsw-alias-label-tertiary)}
 .sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
@@ -684,7 +685,8 @@ const PANEL_REFRESH_MS = 5000
 interface OverviewRowLike {
   id: string
   title: string | null
-  live: boolean
+  /** 真实活动三态：运行中（智能体回回合）/ 已加载（内存驻留待命）/ 冷却（仅持久化）。 */
+  status: 'running' | 'loaded' | 'cold'
   createdAt: number
   health: SessionHealthProjection | null
   workspace: { id: string; title: string } | null
@@ -734,8 +736,20 @@ function dateFull(ts: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Sort modes: 'severity' = 方案 A (tier → live → newest), 'time' = newest first. */
+/** Sort modes: 'severity' = 方案 A (tier → activity → newest), 'time' = newest first. */
 type SortMode = 'severity' | 'time'
+
+/** Activity sort rank: running first, then loaded, then cold. */
+function activityRankOf(status: OverviewRowLike['status'] | undefined): number {
+  return status === 'running' ? 0 : status === 'loaded' ? 1 : 2
+}
+
+/** 状态列的三态文案/样式/说明（运行中=智能体回合中；已加载=待命；冷却=仅持久化）。 */
+const ACTIVITY_LABEL: Record<OverviewRowLike['status'], { label: string; cls: string; tip: string; meta: string }> = {
+  running: { label: '运行中', cls: 'sh-row-running', tip: '智能体正在处理回回合（进行中）', meta: '运行中（智能体在工作）' },
+  loaded: { label: '已加载', cls: 'sh-row-loaded', tip: '内存驻留待命（空闲）', meta: '已加载（内存驻留·空闲）' },
+  cold: { label: '冷却', cls: 'sh-row-cold', tip: '仅持久化（未加载）', meta: '冷会话（仅持久化）' },
+}
 
 /** 每轮金额（含缓存折扣），zh 显示 CNY 否则 USD；null 表示暂无计费数据。 */
 function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | null {
@@ -755,7 +769,9 @@ function sortRows(rows: OverviewRowLike[], mode: SortMode): OverviewRowLike[] {
     const ra = a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
     const rb = b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
     if (ra !== rb) return ra - rb
-    if (a.live !== b.live) return a.live ? -1 : 1
+    const aa = activityRankOf(a.status)
+    const ab = activityRankOf(b.status)
+    if (aa !== ab) return aa - ab
     return (b.createdAt ?? 0) - (a.createdAt ?? 0)
   })
 }
@@ -920,7 +936,7 @@ function OverviewBody(props: {
         </div>
         <div className="sh-panel-head-row sh-grid-cols" role="row">
           <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按健康状态排序">健康{sortMode === 'severity' ? '↓' : ''}</button>
-          <span title="会话是否正在运行（激活）">状态</span>
+          <span title="运行中=智能体正在处理回回合；已加载=内存驻留待命；冷却=仅持久化">状态</span>
           <span className="sh-row-num" title="上下文占用（窗口百分比）">占用</span>
           <span className="sh-row-num" title="每轮输入计费当量（含缓存折扣）">输入</span>
           <span className="sh-row-num" title="每轮输入费用（含缓存折扣，忙闲时价）">费用</span>
@@ -951,7 +967,7 @@ function OverviewBody(props: {
                 health !== null && health.compactions > 0
                   ? `已压缩 ${health.compactions} 次${health.compressionRatio !== null && health.compressionRatio !== undefined ? `（上次压缩比例 ≈ ${Math.round(health.compressionRatio * 100)}%，快照口径）` : ''}`
                   : null,
-                row.live ? '在线' : '冷会话',
+                ACTIVITY_LABEL[row.status]?.meta ?? '冷会话',
               ].filter((v): v is string => v !== null)
               const ariaSev = severity === 'unknown' ? '未知' : SEVERITY_ARIA[severity]
               const wsLabel = row.workspace !== null ? row.workspace.title : '未分组'
@@ -985,7 +1001,7 @@ function OverviewBody(props: {
                     <span className={`sh-rowtip${tipBelow ? ' sh-rowtip-below' : ''}`} role="tooltip" style={{ left: tipLeft, top: tipTop }}>{titleText}</span>
                   ) : null}
                   <span className="sh-sev-chip"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
-                  <span className={`sh-row-live${row.live ? '' : ' sh-row-cold'}`} title={row.live ? '会话正在运行（激活）' : '会话已持久化（冷却）'}>{row.live ? '在线' : '冷却'}</span>
+                  <span className={`sh-row-${row.status ?? 'cold'}`} title={ACTIVITY_LABEL[row.status]?.tip ?? '仅持久化（未加载）'}>{ACTIVITY_LABEL[row.status]?.label ?? '冷却'}</span>
                   <span className="sh-row-num" title={pct !== null ? `上下文占用 ${pct}%` : undefined}>{occ}</span>
                   <span className="sh-row-num" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
                   <span className="sh-row-num" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
