@@ -1,7 +1,7 @@
 {
   "name": "dsh-context-compass",
   "description": "Session health for DeepSeek Harness: real token-meter data, configurable continue-vs-new decision model. Reactive header badge (compaction-aware), /health command, context_compass tool.",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "publishConfig": {
     "access": "public"
   },

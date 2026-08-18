@@ -17,6 +17,13 @@
 
 ## 版本历史
 
+- **0.7.7** — **长文本溢出全量排查（举一反三）**：0.7.6 只修了卡片 metric，系统扫描全部展示层后补三处：
+  - `.sh-tip`（浮层）加 `max-width:min(420px, calc(100vw - 24px))`——原来只有 min-width:280 无上限，advice/lag 提示超长会撑出视口
+  - `.sh-tip-advice` / `.sh-tip-row .sh-v` 加 `overflow-wrap:anywhere`——长 advice/value 折行不溢出
+  - `.sh-row-num`（面板数值格）加 `nowrap + ellipsis + overflow:hidden`——数值格永不撑破固定列宽
+  - 已确认安全（无需改）：`.sh-badge`/`.sh-fa`（短文案+overflow:hidden）、`.sh-panel-sub`/`.sh-rowtip`/`.sh-foot-hint`（已有 ellipsis）、`.sh-ccard-body`（pre-wrap+break-word）、`.sh-ccard-head`（flex-wrap）
+  - **client 侧改动，硬刷新生效；visual 基线需重验**
+
 - **0.7.6** — **修复富卡片跨会话回顾出框**：回顾 metric 的 value 是整段快照（`context-compass-handoff-snapshot） | severity: …`），`.sh-ccard-metric` 的 `white-space:nowrap` 让它单行撑破卡片。双修：
   - **文案**：probeCrossSession 过滤 `---`/标识行/timestamp，只留语义键值行（severity/recommendation/compacted/…），≤160 字符截断——回顾简短可读
   - **CSS**：`.sh-ccard-metric` 改 `white-space:normal` + value `overflow-wrap:anywhere`——任何长 metric 折行不溢出（防御所有未来长值）
