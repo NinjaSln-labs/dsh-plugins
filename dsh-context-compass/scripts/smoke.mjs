@@ -285,7 +285,16 @@ const agentsStub = {
 const knowledgeHitCtx = {
   get: name => name === 'knowledge'
     ? {
-      search: async () => ({
+      // knowledge.search 依赖 this（真实服务用 this.readCaller()）——stub
+      // 也检查 this，回归「插件必须 .call(knowledge, …) 保留 this」。
+      search(...args) {
+        if (this === undefined || this.readCaller === undefined) {
+          throw new Error('knowledge.search called without service this-binding')
+        }
+        return this._searchImpl(...args)
+      },
+      readCaller: () => ({}),
+      _searchImpl: async () => ({
         hits: [{
           content: '---\n交接快照（context-compass-handoff-snapshot）\nseverity: red\nrecommendation: danger-zone\ncompacted: 2\ncompression_ratio: 60\nuncommitted: 3\nhandoff_ready: false\ntimestamp: 2026-08-16T10:00:00.000Z',
           createdAt: Date.parse('2026-08-16T10:00:00.000Z'),

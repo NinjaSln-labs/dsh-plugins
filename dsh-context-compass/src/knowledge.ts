@@ -97,8 +97,9 @@ export async function probeCrossSession(
     // withInitiator 是 agents 服务方法，内部用 this.activeInitiatorRuns 等
     // 实例状态——必须保留 this（.call(agents, …)）。解构后直接调用会丢
     // this 并在 runWithInitiator 里抛「Cannot read properties of undefined」。
+    // knowledge.search 同理：内部用 this.readCaller()，也必须 .call(knowledge)。
     const result = await withInitiator.call(agents, agent, () =>
-      search(SNAPSHOT_QUERY, { expand: false, signal }),
+      search.call(knowledge, SNAPSHOT_QUERY, { expand: false, signal }),
     ) as { hits?: Array<{ content?: string; createdAt?: number; dedupeKey?: string | null }> }
     const hit = result?.hits?.find(h => h !== undefined && typeof h.content === 'string' && h.content.length > 0)
     const content = hit?.content
