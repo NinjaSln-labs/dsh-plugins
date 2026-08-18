@@ -110,11 +110,15 @@ export async function probeCrossSession(
     // 只取快照段本身（search 可能截断/混入其他内容）：截到固定标识行。
     const idx = content.indexOf(KNOWLEDGE_SNAPSHOT_KEY)
     const body = idx >= 0 ? content.slice(idx) : content
-    const firstLines = body.split('\n').slice(0, 6).map(l => l.trim()).filter(Boolean)
+    // 只保留语义键值行：跳过 `---` / 标识行 / timestamp（回顾要简短可读）。
+    const keyLines = body.split('\n')
+      .map(l => l.trim())
+      .filter(l => l !== '' && l !== '---' && !l.includes(KNOWLEDGE_SNAPSHOT_KEY) && !/^timestamp:/.test(l))
     const when = typeof hit.createdAt === 'number' && hit.createdAt > 0
       ? new Date(hit.createdAt).toISOString().slice(0, 10)
       : '上次'
-    probes.push(`跨会话回顾（${when}）：${firstLines.join(' | ') || '历史交接快照'}`)
+    const brief = keyLines.join(' | ').slice(0, 160)
+    probes.push(`跨会话回顾（${when}）：${brief || '历史交接快照'}${keyLines.join(' | ').length > 160 ? '…' : ''}`)
   } catch (e) {
     const why = e instanceof Error && e.message ? e.message : String(e)
     probes.push(`跨会话回顾：检索失败（已跳过：${why.slice(0, 120)}）`)
