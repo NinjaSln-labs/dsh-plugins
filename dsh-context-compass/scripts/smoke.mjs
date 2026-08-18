@@ -267,6 +267,12 @@ await check('assess: minimal skips probes', async () => {
 })
 
 /* ---------- knowledge linkage (D2, decoupled) ---------- */
+// knowledge.search 依赖 agents.currentInitiator 派生身份；命令上下文无
+// initiator，插件用 agents.withInitiator(agent, op) 包裹——stub 里模拟它。
+const agentsStub = {
+  get: () => ({ id: 'agent-1', session: { id: 'agent-1', header: { cwd: '/tmp/ws' } } }),
+  withInitiator: (_agent, op) => op(),
+}
 const knowledgeHitCtx = {
   get: name => name === 'knowledge'
     ? {
@@ -279,7 +285,9 @@ const knowledgeHitCtx = {
         degraded: null,
       }),
     }
-    : services[name],
+    : name === 'agents'
+      ? agentsStub
+      : services[name],
 }
 await check('knowledge: absent service degrades to a skip probe (no dependency)', async () => {
   const report = await assess(ctx, session, 'agent-1', signal, config, {})
@@ -296,11 +304,25 @@ await check('knowledge: cross-session lookback from a mounted service', async ()
   assert.ok(note.includes('severity: red'))
 })
 
+await check('knowledge: mounted but no resolvable agent → skip, never throws', async () => {
+  const noAgentCtx = {
+    get: name => name === 'knowledge'
+      ? { search: async () => { throw new Error('should not be called') } }
+      : name === 'agents'
+        ? { get: () => undefined, withInitiator: (_a, op) => op() }
+        : services[name],
+  }
+  const report = await assess(noAgentCtx, session, 'agent-1', signal, config, {})
+  assert.ok(report.probes.some(p => p.includes('无法定位 agent 身份')))
+})
+
 await check('knowledge: search failure degrades, never throws', async () => {
   const failCtx = {
     get: name => name === 'knowledge'
       ? { search: async () => { throw new Error('boom') } }
-      : services[name],
+      : name === 'agents'
+        ? agentsStub
+        : services[name],
   }
   const report = await assess(failCtx, session, 'agent-1', signal, config, {})
   assert.ok(report.probes.some(p => p.includes('检索失败')))

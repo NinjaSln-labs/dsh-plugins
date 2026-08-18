@@ -465,7 +465,7 @@ export async function assess(
   // 知识库联动（解耦版，D2）：可选探测 ctx.get('knowledge') 做只读跨会话
   // 回顾；未装则 probe 一行跳过。minimal 模式跳过（核心指标仅）。
   if (!opts.minimal && config.checks.knowledge.enabled) {
-    await probeCrossSession(ctx, signal, probes)
+    await probeCrossSession(ctx, agentId, signal, probes)
   }
 
   // Cache-hit accounting + cost expectation. The cache-hit RATE rides the

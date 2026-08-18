@@ -17,6 +17,8 @@
 
 ## 版本历史
 
+- **0.7.3** — **修复跨会话回顾空命中**：实机验证发现 `knowledge.search()` 依赖 `agents.currentInitiator()` 派生调用方身份（workspaceId=cwd），而 `/compass` 命令执行**不在** agent 回合链上 → `readCaller()` 返回 null → search 永远返回空 hits（即使库里已有快照）。修复：probeCrossSession 用 `agents.withInitiator(agent, …)` 包裹 search，为命令执行建立真实 initiator 边界；agent 解析失败则 probe「无法定位 agent 身份」降级。**host 侧改动，需重启生效**
+
 - **0.7.2** — **知识库联动（解耦版，D2）**：不绑定 dsh-knowledge-sqlite（其他用户不一定装），写入不越权（`knowledge` 的写面是内部 `_seedWrite` / 门控工具，插件无正当身份）：
   - `/compass` 报告尾部附**结构化交接快照段**（固定键 `context-compass-handoff-snapshot`：severity/recommendation/compacted/compression_ratio/uncommitted/handoff_ready/timestamp）——纯文本可 grep，任何知识/记忆插件或用户都能摄取
   - **可选探测** `ctx.get('knowledge')`（同 tokenMeter/subprocess 探测降级模式）：挂载则只读 `search()`（`expand:false`）检索历史快照 → 输出「跨会话回顾（上次 severity/交接就绪…）」；未挂载则 probe 一行「知识库未安装，跳过」；检索失败降级不抛错
