@@ -94,10 +94,10 @@ export async function probeCrossSession(
     return
   }
   try {
-    // withInitiator 已在上面的 typeof 守卫里确认存在；抽成非可选局部再调用。
-    const invoke: (agent: unknown, operation: () => Promise<unknown>) => Promise<unknown> =
-      withInitiator as (agent: unknown, operation: () => Promise<unknown>) => Promise<unknown>
-    const result = await invoke(agent, () =>
+    // withInitiator 是 agents 服务方法，内部用 this.activeInitiatorRuns 等
+    // 实例状态——必须保留 this（.call(agents, …)）。解构后直接调用会丢
+    // this 并在 runWithInitiator 里抛「Cannot read properties of undefined」。
+    const result = await withInitiator.call(agents, agent, () =>
       search(SNAPSHOT_QUERY, { expand: false, signal }),
     ) as { hits?: Array<{ content?: string; createdAt?: number; dedupeKey?: string | null }> }
     const hit = result?.hits?.find(h => h !== undefined && typeof h.content === 'string' && h.content.length > 0)
@@ -114,7 +114,8 @@ export async function probeCrossSession(
       ? new Date(hit.createdAt).toISOString().slice(0, 10)
       : '上次'
     probes.push(`跨会话回顾（${when}）：${firstLines.join(' | ') || '历史交接快照'}`)
-  } catch {
-    probes.push('跨会话回顾：检索失败（已跳过）')
+  } catch (e) {
+    const why = e instanceof Error && e.message ? e.message : String(e)
+    probes.push(`跨会话回顾：检索失败（已跳过：${why.slice(0, 120)}）`)
   }
 }

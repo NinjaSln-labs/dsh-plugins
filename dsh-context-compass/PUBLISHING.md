@@ -17,6 +17,8 @@
 
 ## 版本历史
 
+- **0.7.4** — **修复 withInitiator 丢 this 导致跨会话回顾恒「检索失败」**：0.7.3 把 `withInitiator` 解构成局部变量直接调用，丢了 agents 服务的 `this`（内部用 `this.activeInitiatorRuns`）→ `runWithInitiator` 抛「Cannot read properties of undefined」→ 每次 /compass 的回顾都走 catch 降级。修复：`withInitiator.call(agents, …)` 保留 this 绑定。smoke 的 agents stub 加 this 依赖（解构调用会在单测里直接抛错），防此 class 回归。实机验证：/kbtest 命令上下文 hits=1 命中快照。**host 侧改动，需重启生效**
+
 - **0.7.3** — **修复跨会话回顾空命中**：实机验证发现 `knowledge.search()` 依赖 `agents.currentInitiator()` 派生调用方身份（workspaceId=cwd），而 `/compass` 命令执行**不在** agent 回合链上 → `readCaller()` 返回 null → search 永远返回空 hits（即使库里已有快照）。修复：probeCrossSession 用 `agents.withInitiator(agent, …)` 包裹 search，为命令执行建立真实 initiator 边界；agent 解析失败则 probe「无法定位 agent 身份」降级。**host 侧改动，需重启生效**
 
 - **0.7.2** — **知识库联动（解耦版，D2）**：不绑定 dsh-knowledge-sqlite（其他用户不一定装），写入不越权（`knowledge` 的写面是内部 `_seedWrite` / 门控工具，插件无正当身份）：
