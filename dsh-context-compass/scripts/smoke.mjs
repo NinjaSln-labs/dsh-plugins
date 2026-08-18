@@ -266,6 +266,46 @@ await check('assess: minimal skips probes', async () => {
   assert.ok(!report.probes.some(p => p.includes('交接')))
 })
 
+/* ---------- knowledge linkage (D2, decoupled) ---------- */
+const knowledgeHitCtx = {
+  get: name => name === 'knowledge'
+    ? {
+      search: async () => ({
+        hits: [{
+          content: '---\n交接快照（context-compass-handoff-snapshot）\nseverity: red\nrecommendation: danger-zone\ncompacted: 2\ncompression_ratio: 60\nuncommitted: 3\nhandoff_ready: false\ntimestamp: 2026-08-16T10:00:00.000Z',
+          createdAt: Date.parse('2026-08-16T10:00:00.000Z'),
+          dedupeKey: 'context-compass-handoff-snapshot',
+        }],
+        degraded: null,
+      }),
+    }
+    : services[name],
+}
+await check('knowledge: absent service degrades to a skip probe (no dependency)', async () => {
+  const report = await assess(ctx, session, 'agent-1', signal, config, {})
+  assert.ok(report.probes.some(p => p.includes('知识库未安装')))
+  // 「跨会话回顾已跳过」是跳过行本身；真正的回顾行以「跨会话回顾（」开头。
+  assert.ok(!report.probes.some(p => p.includes('跨会话回顾（')))
+})
+
+await check('knowledge: cross-session lookback from a mounted service', async () => {
+  const report = await assess(knowledgeHitCtx, session, 'agent-1', signal, config, {})
+  const note = report.probes.find(p => p.includes('跨会话回顾（'))
+  assert.ok(note !== undefined, `expected lookback probe, got: ${JSON.stringify(report.probes)}`)
+  assert.ok(note.includes('2026-08-16'))
+  assert.ok(note.includes('severity: red'))
+})
+
+await check('knowledge: search failure degrades, never throws', async () => {
+  const failCtx = {
+    get: name => name === 'knowledge'
+      ? { search: async () => { throw new Error('boom') } }
+      : services[name],
+  }
+  const report = await assess(failCtx, session, 'agent-1', signal, config, {})
+  assert.ok(report.probes.some(p => p.includes('检索失败')))
+})
+
 /* ---------- git-state automation + cost expectation ---------- */
 const GIT_OUT = {
   'status --short': ' M a.ts\n?? b.ts\n',
@@ -584,6 +624,35 @@ await check('buildCommandText: compression ratio line with caliber note', () => 
   }, { minimal: false })
   assert.ok(unknown.includes('已压缩 1 次：早期细节概要化'))
   assert.ok(!unknown.includes('NaN'))
+})
+
+await check('knowledge: snapshot block appended to the report (fixed keys, grep-able)', () => {
+  const text = buildCommandText({
+    severity: 'yellow',
+    recommendation: 'suggest-switch',
+    summary: 'x',
+    reason: 'r',
+    signals: { total: 600_000, window: 1_000_000, ratio: 0.6, turns: 20, userMessages: 30, assistantMessages: 29, compactions: 2, compactionRatio: 0.42 },
+    probes: [],
+    handoff: { isGitRepo: true, hasHandoff: false, runningProcesses: [], uncommittedCount: 3, lastCommit: 'abc' },
+  }, { minimal: false })
+  assert.ok(text.includes('交接快照（context-compass-handoff-snapshot）'))
+  assert.ok(text.includes('severity: yellow'))
+  assert.ok(text.includes('recommendation: suggest-switch'))
+  assert.ok(text.includes('compacted: 2'))
+  assert.ok(text.includes('compression_ratio: 42'))
+  assert.ok(text.includes('uncommitted: 3'))
+  assert.ok(text.includes('handoff_ready: false'))
+  assert.ok(/timestamp: \d{4}-\d{2}-\d{2}T/.test(text))
+  // No compactions → the compacted/compression keys are omitted, others stay.
+  const noCompact = buildCommandText({
+    severity: 'green', recommendation: 'continue', summary: 'x', reason: 'r',
+    signals: { total: 10_000, window: 1_000_000, ratio: 0.01, turns: 2, userMessages: 3, assistantMessages: 2, compactions: 0 },
+    probes: [], handoff: { isGitRepo: null, hasHandoff: null, runningProcesses: [] },
+  }, { minimal: true })
+  assert.ok(noCompact.includes('severity: green'))
+  assert.ok(!noCompact.includes('compacted:'))
+  assert.ok(!noCompact.includes('compression_ratio:'))
 })
 
 /* ---------- multi-session overview (panel data + RPC) ---------- */

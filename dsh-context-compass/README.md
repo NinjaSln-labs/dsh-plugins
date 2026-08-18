@@ -20,6 +20,13 @@
 
 黄/红档时，`/compass` 追加**真实状态清单**而非静态文案：`git status --short` / `git log --oneline -1` / `git status -sb`（经 `ctx.subprocess` 的只读白名单 argv）驱动 commit/push 项，交接文档探测驱动文档项，进程探测驱动进程项。无法检查的项标记 `[ ]` 并说明原因——绝不静默显示「已完成」。
 
+## 知识库联动（解耦，v0.7.2）
+
+不绑定任何特定知识库插件（未装则跳过）：
+
+- `/compass` 报告尾部附**结构化交接快照段**（固定键名 `context-compass-handoff-snapshot`：severity / recommendation / compacted / compression_ratio / uncommitted / handoff_ready / timestamp）——纯文本、可 grep，任何记忆/知识插件或用户都能摄取（如 `knowledge_write` 存入库）。
+- **可选探测** `ctx.get('knowledge')`：存在（如 dsh-knowledge-sqlite）则在新会话用其只读 `search()` 检索历史快照，给 `/compass` 加一段「跨会话回顾（上次会话 severity/交接就绪…）」；不存在则 probe 一行「知识库未安装，跳过」。写入面留给用户/模型显式调用（自带 ask 门控），插件不越权。
+
 ## 判定模型
 
 二维「继续 vs 切换」（社区 session-health 方法论），参数在插件配置中：

@@ -21,6 +21,13 @@ Context compass for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-h
 
 On yellow/red, `/compass` appends a **real-state checklist** instead of static copy: `git status --short` / `git log --oneline -1` / `git status -sb` (read-only whitelisted argv through `ctx.subprocess`) drive the commit/push items, the handoff-doc probe drives the doc item, the process probe drives the process item. Items that cannot be checked are marked `[ ]` with the reason — never silently shown as "done".
 
+## Knowledge linkage (decoupled, v0.7.2)
+
+Not bound to any specific knowledge plugin (skipped when absent):
+
+- `/compass` appends a **structured handoff-snapshot block** (fixed key `context-compass-handoff-snapshot`: severity / recommendation / compacted / compression_ratio / uncommitted / handoff_ready / timestamp) — plain text, grep-able, ingestible by any memory/knowledge plugin or the user (e.g. via `knowledge_write`).
+- **Optional probe** `ctx.get('knowledge')`: when mounted (e.g. dsh-knowledge-sqlite), a new session's `/compass` does a read-only `search()` for past snapshots and adds a "跨会话回顾 (last session severity / handoff state…)" line; when absent, a probe line says "知识库未安装，跳过". Writes stay with the user/model via the gated `knowledge_write` tool — the plugin never bypasses the gate.
+
 ## Decision model
 
 Two-dimensional "continue vs switch" (community session-health methodology), parameterized in the plugin config:

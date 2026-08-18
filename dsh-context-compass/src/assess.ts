@@ -13,6 +13,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
 import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
 import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
+import { probeCrossSession } from './knowledge.ts'
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
 import { PERIOD_LABEL, formatCny } from './util.ts'
 import type { PriceCache, PricePeriod } from './pricing.ts'
@@ -460,6 +461,11 @@ export async function assess(
   }
   if (!opts.minimal && config.checks.sessionResume.enabled) {
     probes.push('DSH 会话持久化：会话自动落盘，新会话可从会话列表恢复')
+  }
+  // 知识库联动（解耦版，D2）：可选探测 ctx.get('knowledge') 做只读跨会话
+  // 回顾；未装则 probe 一行跳过。minimal 模式跳过（核心指标仅）。
+  if (!opts.minimal && config.checks.knowledge.enabled) {
+    await probeCrossSession(ctx, signal, probes)
   }
 
   // Cache-hit accounting + cost expectation. The cache-hit RATE rides the

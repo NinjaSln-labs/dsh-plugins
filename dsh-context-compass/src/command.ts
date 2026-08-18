@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { ResolvedConfig } from './config.ts'
 import { assess, type HealthReport } from './assess.ts'
+import { buildSnapshotText } from './knowledge.ts'
 import { PERIOD_LABEL, formatCny, formatCompact, formatHitRate, formatUsd } from './util.ts'
 import type { HealthSeverity } from './types.ts'
 
@@ -92,6 +93,10 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
         : '- [ ] 运行中进程：未检查（dev server / 测试服务需自行确认）'
     lines.push('', '切换前检查（在任务边界处）：', commitItem, pushItem, handoffItem, processItem)
   }
+  // 结构化交接快照（机器可摄取，固定键名；始终输出——任何记忆/知识插件
+  // 与用户都能 grep/写入，不绑定具体知识库）。probes 里的跨会话回顾在上
+  // 面 lines.push(...report.probes...) 已包含。
+  lines.push('', buildSnapshotText(report))
   return lines.join('\n')
 }
 

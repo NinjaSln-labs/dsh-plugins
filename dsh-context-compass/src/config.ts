@@ -42,6 +42,8 @@ export interface ChecksConfig {
   handoff: { enabled: boolean; paths: string[] }
   sessionResume: { enabled: boolean }
   processes: { enabled: boolean }
+  /** 知识库联动（解耦版）：探测 ctx.get('knowledge') 做跨会话回顾；未装则跳过。默认 true。 */
+  knowledge: { enabled: boolean }
 }
 
 export interface ProjectionConfig {
@@ -116,6 +118,7 @@ export const Config: z<Config> = z.object({
     }),
     sessionResume: z.object({ enabled: z.boolean().default(true) }),
     processes: z.object({ enabled: z.boolean().default(true) }),
+    knowledge: z.object({ enabled: z.boolean().default(true) }),
   }),
   projection: z.object({ enabled: z.boolean().default(true) }),
   cost: z.object({
@@ -156,6 +159,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     },
     sessionResume: { enabled: config.checks?.sessionResume?.enabled ?? true },
     processes: { enabled: config.checks?.processes?.enabled ?? true },
+    knowledge: { enabled: config.checks?.knowledge?.enabled ?? true },
   }
   const projection: ProjectionConfig = { enabled: config.projection?.enabled ?? true }
   const cost: CostConfig = {

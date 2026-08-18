@@ -1,0 +1,97 @@
+/**
+ * dsh-context-compass — 知识库联动（解耦版，D2）。
+ *
+ * 两个互补、都零依赖的动作：
+ *
+ * 1. `/compass` 报告尾部附**结构化交接快照段**（固定键名、纯文本、可 grep）
+ *    ——任何记忆/知识插件、甚至用户自己都能摄取，不特指 dsh-knowledge-sqlite。
+ * 2. **可选探测** `ctx.get('knowledge')`：存在则用其只读 `search()` 检索历史
+ *    交接快照，给当前 `/compass` 加一段「跨会话回顾」；不存在则跳过（probe
+ *    一行说明），绝不报错、不依赖、不影响未装该插件的用户。
+ *
+ * 写回刻意不做：`knowledge` 的写入面要么是内部 `_seedWrite`（trusted writer，
+ * 插件无正当身份）、要么是带 ask 门控的 `knowledge_write` 工具——留给用户/
+ * 模型显式调用，插件不越权、不绕过门控。
+ */
+import type { Context } from '@deepseek-ai/cordis'
+import type { HealthReport } from './assess.ts'
+
+/** 快照段的固定标识（dedupeKey / 检索词都用它）——跨会话回顾的稳定锚点。 */
+export const KNOWLEDGE_SNAPSHOT_KEY = 'context-compass-handoff-snapshot'
+
+/** 检索历史快照的查询词：FTS trigram 中文子串 ≥3 字符可命中。 */
+const SNAPSHOT_QUERY = '交接快照'
+
+/**
+ * Build the structured handoff-snapshot block appended to the /compass
+ * report. Fixed keys, plain text, grep-able — deliberately decoupled from
+ * any specific knowledge backend.
+ */
+export function buildSnapshotText(report: HealthReport): string {
+  const s = report.signals
+  const h = report.handoff
+  const lines = [
+    '---',
+    `交接快照（${KNOWLEDGE_SNAPSHOT_KEY}）`,
+    `severity: ${report.severity}`,
+    `recommendation: ${report.recommendation}`,
+    ...(typeof s.compactions === 'number' && s.compactions > 0
+      ? [`compacted: ${s.compactions}`, ...(typeof s.compactionRatio === 'number' && s.compactionRatio !== null
+          ? [`compression_ratio: ${Math.round(s.compactionRatio * 100)}`]
+          : [])]
+      : []),
+    ...(typeof s.turns === 'number' ? [`turns: ${s.turns}`] : []),
+    ...(h.uncommittedCount !== null ? [`uncommitted: ${h.uncommittedCount}`] : []),
+    ...(h.hasHandoff !== null ? [`handoff_ready: ${h.hasHandoff ? 'true' : 'false'}`] : []),
+    `timestamp: ${new Date().toISOString()}`,
+  ]
+  return lines.join('\n')
+}
+
+/** Loose face of the optional `knowledge` service (only what we read). */
+interface KnowledgeLike {
+  search?(query: string, opts?: {
+    scope?: string
+    expand?: boolean
+    signal?: AbortSignal
+  }): Promise<{
+    hits?: Array<{ content?: string; createdAt?: number; dedupeKey?: string | null }>
+  }>
+}
+
+/**
+ * Optional cross-session lookback: when a `knowledge` service is mounted,
+ * search for the last handoff snapshot (read-only; workspace-scope safe) and
+ * return a one-line "跨会话回顾" note. Returns null when the service is
+ * absent, the search fails, or no snapshot exists — never throws.
+ */
+export async function probeCrossSession(
+  ctx: Context,
+  signal: AbortSignal,
+  probes: string[],
+): Promise<void> {
+  const knowledge = ctx.get('knowledge') as KnowledgeLike | undefined
+  if (knowledge === undefined || typeof knowledge.search !== 'function') {
+    probes.push('知识库未安装（dsh-knowledge-sqlite），跨会话回顾已跳过')
+    return
+  }
+  try {
+    const result = await knowledge.search(SNAPSHOT_QUERY, { expand: false, signal })
+    const hit = result?.hits?.find(h => h !== undefined && typeof h.content === 'string' && h.content.length > 0)
+    const content = hit?.content
+    if (hit === undefined || content === undefined || content === '') {
+      probes.push('知识库已安装，但未找到历史交接快照（首个 /compass 尚无回顾）')
+      return
+    }
+    // 只取快照段本身（search 可能截断/混入其他内容）：截到固定标识行。
+    const idx = content.indexOf(KNOWLEDGE_SNAPSHOT_KEY)
+    const body = idx >= 0 ? content.slice(idx) : content
+    const firstLines = body.split('\n').slice(0, 6).map(l => l.trim()).filter(Boolean)
+    const when = typeof hit.createdAt === 'number' && hit.createdAt > 0
+      ? new Date(hit.createdAt).toISOString().slice(0, 10)
+      : '上次'
+    probes.push(`跨会话回顾（${when}）：${firstLines.join(' | ') || '历史交接快照'}`)
+  } catch {
+    probes.push('跨会话回顾：检索失败（已跳过）')
+  }
+}

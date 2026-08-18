@@ -17,6 +17,12 @@
 
 ## 版本历史
 
+- **0.7.2** — **知识库联动（解耦版，D2）**：不绑定 dsh-knowledge-sqlite（其他用户不一定装），写入不越权（`knowledge` 的写面是内部 `_seedWrite` / 门控工具，插件无正当身份）：
+  - `/compass` 报告尾部附**结构化交接快照段**（固定键 `context-compass-handoff-snapshot`：severity/recommendation/compacted/compression_ratio/uncommitted/handoff_ready/timestamp）——纯文本可 grep，任何知识/记忆插件或用户都能摄取
+  - **可选探测** `ctx.get('knowledge')`（同 tokenMeter/subprocess 探测降级模式）：挂载则只读 `search()`（`expand:false`）检索历史快照 → 输出「跨会话回顾（上次 severity/交接就绪…）」；未挂载则 probe 一行「知识库未安装，跳过」；检索失败降级不抛错
+  - 新增 `src/knowledge.ts`（`buildSnapshotText`/`probeCrossSession`）+ `checks.knowledge.enabled`（默认 true）；smoke 53 项（+4：快照段/absent 降级/命中回顾/失败降级）；实机探针确认本 profile 的 knowledge 已挂载
+  - **host 侧改动，需重启 dsh web + 刷新浏览器生效**
+
 - **0.7.1** — **修复一览面板「在线」语义错位**：旧实现把 `sessionQuery.listSessions` 的 `live`（= 会话对象存在于内存 `ctx.sessions`，只要被加载/打开过就常驻）当成「在线」显示并与 tooltip「正在运行（激活）」挂钩——0 轮空会话、早已停用的待命会话都被标成「在线」。**实测**（动态 host 探针）：`agents.list()` 7 个 agent 中仅 2 个 `status='running'`，面板却标 7 个在线。修复后状态列改三态，信号源换成 `agents.get(id)?.status === 'running'`（DHS 侧栏「进行中」同源）：
   - **运行中**（`running`）= 该会话的 Agent 生命周期状态为 `running`（正在处理回回合）
   - **已加载**（`loaded`）= 内存驻留但空闲（旧「在线」的合理部分）
