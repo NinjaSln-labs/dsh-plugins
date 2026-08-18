@@ -25,15 +25,20 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { HealthSeverity, SessionHealthProjection } from './types.ts'
+import type { HealthSeverity, SessionActivity, SessionHealthProjection } from './types.ts'
 
 /** One session row in the overview panel. */
 export interface OverviewRow {
   id: string
   /** Best-known title; null when no title event exists yet (or still loading). */
   title: string | null
-  /** True when the session is currently materialized in ctx.sessions. */
-  live: boolean
+  /**
+   * Real activity: `running` = the session's Agent lifecycle status is
+   * `running` (actively processing a turn — the sidebar's 进行中 signal);
+   * `loaded` = materialized in ctx.sessions but idle; `cold` = persisted
+   * only. NOT the old `live` flag (that meant mere in-memory presence).
+   */
+  status: SessionActivity
   /** Session creation time (Unix epoch ms) — secondary sort key. */
   createdAt: number
   /** The health verdict; null when no projection value exists (cold + no cache row). */
@@ -50,17 +55,26 @@ export function rankOf(health: SessionHealthProjection | null | undefined): numb
   return SEVERITY_RANK[health.severity] ?? 4
 }
 
+/** Activity sort rank: running first, then loaded, then cold. */
+function activityRank(status: SessionActivity | null | undefined): number {
+  return status === 'running' ? 0 : status === 'loaded' ? 1 : 2
+}
+
 /**
  * Stable sort (agreed priority — 方案 A): severity tier first (red on top),
- * then LIVE sessions (in-flight / currently open ones are the ones the user
- * cares about), then newest-created first inside a tier.
+ * then REAL activity (running agents burning tokens now > loaded/idle >
+ * cold — the ones the user cares about), then newest-created first inside a
+ * tier. The old sort by `live` (in-memory presence) ranked idle sessions
+ * above genuinely running ones in other states and is gone.
  */
 export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
   return [...rows].sort((a, b) => {
     const ra = rankOf(a.health)
     const rb = rankOf(b.health)
     if (ra !== rb) return ra - rb
-    if (a.live !== b.live) return a.live ? -1 : 1
+    const aa = activityRank(a.status)
+    const ab = activityRank(b.status)
+    if (aa !== ab) return aa - ab
     return (b.createdAt ?? 0) - (a.createdAt ?? 0)
   })
 }
@@ -185,6 +199,13 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   const titleSvc = ctx.get('sessionTitle') as
     | { get(session: unknown): { title?: string } | undefined }
     | undefined
+  // Real activity signal: the Agent registry. `agents.get(id)?.status ===
+  // 'running'` is the genuine "actively processing" state (the sidebar's
+  // 进行中 marker). Absent service (headless assembly) → never report
+  // running; fall back to loaded/cold from the session-store presence.
+  const agents = ctx.get('agents') as
+    | { get(id: string): { status?: 'idle' | 'running' } | undefined }
+    | undefined
 
   const rows: OverviewRow[] = []
   // Cold projection loads are a slow path (per-session disk reads): collect
@@ -250,10 +271,19 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       }
     }
 
+    // Activity: running agent > loaded (in memory, idle) > cold (persisted).
+    // `agents.get` is a registry lookup, cheap per row; guarded per session.
+    let status: SessionActivity = rec.live === true ? 'loaded' : 'cold'
+    if (agents !== undefined) {
+      try {
+        if (agents.get(id)?.status === 'running') status = 'running'
+      } catch { /* fall back to loaded/cold */ }
+    }
+
     rows.push({
       id,
       title,
-      live: rec.live === true,
+      status,
       createdAt,
       health,
       workspace: workspaceBySession.get(id) ?? null,

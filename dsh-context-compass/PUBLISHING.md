@@ -17,6 +17,12 @@
 
 ## 版本历史
 
+- **0.7.1** — **修复一览面板「在线」语义错位**：旧实现把 `sessionQuery.listSessions` 的 `live`（= 会话对象存在于内存 `ctx.sessions`，只要被加载/打开过就常驻）当成「在线」显示并与 tooltip「正在运行（激活）」挂钩——0 轮空会话、早已停用的待命会话都被标成「在线」。**实测**（动态 host 探针）：`agents.list()` 7 个 agent 中仅 2 个 `status='running'`，面板却标 7 个在线。修复后状态列改三态，信号源换成 `agents.get(id)?.status === 'running'`（DHS 侧栏「进行中」同源）：
+  - **运行中**（`running`）= 该会话的 Agent 生命周期状态为 `running`（正在处理回回合）
+  - **已加载**（`loaded`）= 内存驻留但空闲（旧「在线」的合理部分）
+  - **冷却**（`cold`）= 仅持久化
+  - RPC 契约 `sessions[].live` → `sessions[].status`；排序层级同档内 运行中 > 已加载 > 冷却（旧排序把 idle 顶到正在运行的上面）；headless 无 `agents` 服务时降级 loaded/cold（绝不误报运行中）。**host + client 改动，需重启 dsh web + 刷新浏览器生效**
+
 - **0.7.0** — **路线图第一波收官三项**（0.6.x 路线图，见 `research/session-health-plugin/DESIGN.md` §8）：
   1. **压缩比例量化**：折叠在 `compaction/end` 捕获压缩前压力，首个后续 usage 样本推出 1 − 压缩后/压缩前（不依赖事件载荷；下降才记，压力不降记 null 不虚报）；投影 wire 新增 `compressionRatio`（schema v8，stateVersion 8）；advice / `/compass` 报告 / 工具信号 / 面板 meta 全部带「快照口径」标注
   2. **压缩后判定滞后标注**：占用条改用压缩感知 `projectedTokens`（下次请求成本），`lagOf` 纯函数检测判定（last-wins 压力）与占用条 ≥5pp 分叉且发生过压缩 → 浮层 warn 色提示「压缩后判定滞后：判定基于压缩前压力（x%），预计下次请求后更新（≈ y%）」

@@ -25,6 +25,10 @@ test('panel light: 四档矩阵 + 固定 5 行高度 + 行序', async ({ page })
   await expect(chips.nth(2)).toHaveText('继续留意')
   await expect(chips.nth(3)).toHaveText('放心继续')
   await expect(chips.nth(4)).toHaveText('暂无数据')
+  // 状态列覆盖三态：运行中 / 已加载 / 冷却（fixture 行程与 RPC mock 同步）。
+  await expect(page.locator('.sh-panel-row').nth(0)).toContainText('运行中')
+  await expect(page.locator('.sh-panel-row').nth(1)).toContainText('已加载')
+  await expect(page.locator('.sh-panel-row').nth(2)).toContainText('冷却')
   // 固定 5 行高度：列表几何不得随行数变化（41px × 5 + 16px padding）。
   const box = await page.locator('.sh-panel-list').boundingBox()
   expect(Math.round(box.height)).toBe(41 * 5 + 16)

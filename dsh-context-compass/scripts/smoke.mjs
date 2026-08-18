@@ -635,7 +635,7 @@ const overviewServices = {
 }
 const overviewCtx = { get: name => overviewServices[name] }
 
-await check('overview: live snapshot / cache / cold fallback + titles + severity sort', async () => {
+await check('overview: snapshot / cache / cold fallback + titles + severity sort', async () => {
   const rows = await buildOverview(overviewCtx, signal)
   assert.equal(rows.length, 4)
   // Red first, yellow second, green third, unknown last (host sort).
@@ -644,8 +644,10 @@ await check('overview: live snapshot / cache / cold fallback + titles + severity
   assert.equal(rows[1].health.severity, 'yellow')
   assert.equal(rows[2].health.severity, 'green')
   assert.equal(rows[3].health, null) // cold + no cache row → null, never a crash
-  assert.equal(rows[0].live, true)
-  assert.equal(rows[1].live, false)
+  // Activity falls back to loaded/cold from the source `live` flag when the
+  // agents service is absent (no running detection, never a false 运行中).
+  assert.equal(rows[0].status, 'loaded') // source live:true → loaded
+  assert.equal(rows[1].status, 'cold')   // source live:false → cold
   // Titles are background-filled (never awaited on first paint): first frame
   // returns null; the dedicated title-cache check covers the fill+hit cycle.
   assert.equal(rows[0].title, null)
@@ -655,9 +657,9 @@ await check('overview: live snapshot / cache / cold fallback + titles + severity
 
 await check('overview: same-tier rows sort newest-first', () => {
   const rows = sortOverviewRows([
-    { id: 'a', title: null, live: false, createdAt: 100, health: healthOf('green') },
-    { id: 'b', title: null, live: false, createdAt: 400, health: healthOf('green') },
-    { id: 'c', title: null, live: false, createdAt: 200, health: healthOf('red') },
+    { id: 'a', title: null, status: 'cold', createdAt: 100, health: healthOf('green') },
+    { id: 'b', title: null, status: 'cold', createdAt: 400, health: healthOf('green') },
+    { id: 'c', title: null, status: 'cold', createdAt: 200, health: healthOf('red') },
   ])
   assert.deepEqual(rows.map(r => r.id), ['c', 'b', 'a'])
   assert.equal(rankOf(healthOf('red')), 0)
@@ -666,6 +668,37 @@ await check('overview: same-tier rows sort newest-first', () => {
   assert.equal(rankOf(healthOf('green')), 3)
   assert.equal(rankOf(null), 4)
   assert.equal(rankOf(undefined), 4)
+})
+
+await check('overview: activity from the agents service — running only when agent.status=running', async () => {
+  const agentsCtx = {
+    get: name => ({
+      ...overviewServices,
+      agents: {
+        get: id => id === 'live-red'
+          ? { status: 'running' }
+          : id === 'live-green'
+            ? { status: 'idle' }
+            : undefined, // cold-yellow / cold-unknown: no agent at all
+      },
+    })[name],
+  }
+  const rows = await buildOverview(agentsCtx, signal)
+  assert.equal(rows[0].status, 'running')  // agent running → 运行中
+  assert.equal(rows[1].status, 'cold')     // source live:false + no agent → cold
+  assert.equal(rows[2].status, 'loaded')   // agent idle → loaded
+  assert.equal(rows[3].status, 'cold')
+})
+
+await check('overview: activity sort — running > loaded > cold inside a tier', () => {
+  const rows = sortOverviewRows([
+    { id: 'idle', title: null, status: 'loaded', createdAt: 100, health: healthOf('green') },
+    { id: 'running', title: null, status: 'running', createdAt: 300, health: healthOf('green') },
+    { id: 'old-run', title: null, status: 'running', createdAt: 200, health: healthOf('green') },
+    { id: 'cold', title: null, status: 'cold', createdAt: 400, health: healthOf('green') },
+  ])
+  // Running (newest first) → loaded → cold, all same green tier.
+  assert.deepEqual(rows.map(r => r.id), ['running', 'old-run', 'idle', 'cold'])
 })
 
 await check('overview: absent sessionQuery degrades to empty list', async () => {
