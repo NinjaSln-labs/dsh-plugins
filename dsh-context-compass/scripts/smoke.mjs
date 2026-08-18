@@ -269,9 +269,18 @@ await check('assess: minimal skips probes', async () => {
 /* ---------- knowledge linkage (D2, decoupled) ---------- */
 // knowledge.search 依赖 agents.currentInitiator 派生身份；命令上下文无
 // initiator，插件用 agents.withInitiator(agent, op) 包裹——stub 里模拟它。
+// withInitiator 依赖 this（真实服务用 this.activeInitiatorRuns）——stub 也
+// 用 this 状态，回归「插件必须 .call(agents, …) 保留 this」的实机 bug。
 const agentsStub = {
+  _inside: false,
   get: () => ({ id: 'agent-1', session: { id: 'agent-1', header: { cwd: '/tmp/ws' } } }),
-  withInitiator: (_agent, op) => op(),
+  withInitiator(agent, op) {
+    if (this === undefined || this._inside === undefined) {
+      throw new Error('withInitiator called without agents this-binding')
+    }
+    this._inside = true
+    try { return op() } finally { this._inside = false }
+  },
 }
 const knowledgeHitCtx = {
   get: name => name === 'knowledge'
