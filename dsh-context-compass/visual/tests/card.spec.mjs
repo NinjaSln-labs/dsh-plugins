@@ -37,15 +37,15 @@ test('富卡片：头部基线（浅色）+ 展开/收起 DOM 切换', async ({ 
   await expect(card.locator('.sh-ccard-head')).toHaveScreenshot('card-head-light.png', {
     mask: [card.locator('.sh-sev-chip'), card.locator('.sh-ccard-summary')],
   })
-  // 展开（默认）→ 收起 → 再展开：body 显隐 + 钮文案。
+  // 默认收起（v0.7.8）→ 展开 → 再收起：body 显隐 + 钮文案。
   // force click：卡片可能部分在视口外/被滚动容器遮挡，Playwright 的可点击
   // 检查会卡住；toggle 的功能语义（切换 body 显隐）不依赖点击坐标。
-  await expect(card.locator('.sh-ccard-body')).toBeVisible()
-  await card.locator('.sh-ccard-toggle').click({ force: true })
   await expect(card.locator('.sh-ccard-body')).toBeHidden()
   await expect(card.locator('.sh-ccard-toggle')).toHaveText('展开')
   await card.locator('.sh-ccard-toggle').click({ force: true })
   await expect(card.locator('.sh-ccard-body')).toBeVisible()
+  await card.locator('.sh-ccard-toggle').click({ force: true })
+  await expect(card.locator('.sh-ccard-body')).toBeHidden()
 })
 
 test('富卡片：头部基线（暗色）', async ({ page }) => {

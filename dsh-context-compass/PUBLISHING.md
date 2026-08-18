@@ -17,6 +17,12 @@
 
 ## 版本历史
 
+- **0.7.8** — **修复 /compass 偶发「执行失败 aborted」+ 卡片默认收起**：
+  - **失败根源**：面板点击行的 `openSession` 里 `sessions.open`（冷会话异步加载）与 `commands.execute` 同 tick 触发——execute 的 signal 由 UI 请求生命周期管理，面板 `close()` 组件卸载会 abort 进行中的 execute → assess 中途挂 → 「This operation was aborted」失败卡。修复：execute 移到 `setTimeout`（面板卸载后 600ms 发起，signal 重新生成，规避面板生命周期）；冷会话加载窗口也得到缓冲
+  - **卡片默认收起**：`CompassCommandCard` 初始 `expanded=false`——完整报告（pre 正文）默认折叠，头部结论/指标一眼可见；多张卡并排不再整页高度堆叠，需要细节再点「展开」
+  - **多卡解释**：每次 /compass 正常只生成 1 张卡；「连着两个」是同一会话历史累积（每次操作都在目标会话留卡）+ 偶发失败卡并排。失败根源修复后不再新增失败卡
+  - **client 侧改动，硬刷新生效**；visual 卡片测试适配默认收起（初始 body hidden）
+
 - **0.7.7** — **长文本溢出全量排查（举一反三）**：0.7.6 只修了卡片 metric，系统扫描全部展示层后补三处：
   - `.sh-tip`（浮层）加 `max-width:min(420px, calc(100vw - 24px))`——原来只有 min-width:280 无上限，advice/lag 提示超长会撑出视口
   - `.sh-tip-advice` / `.sh-tip-row .sh-v` 加 `overflow-wrap:anywhere`——长 advice/value 折行不溢出
