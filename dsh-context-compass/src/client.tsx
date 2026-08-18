@@ -600,7 +600,9 @@ function CompassCommandCard(props: {
     outcome?: { kind?: string; text?: string } | null
   }
 }): JSX.Element {
-  const [expanded, setExpanded] = React.useState(true)
+  // 默认收起：完整报告（<pre> 正文）默认折叠，头部结论/指标一眼可见，
+  // 需要细节再展开——多张卡并排时不再整页高度堆叠。
+  const [expanded, setExpanded] = React.useState(false)
   const outcome = props.node.outcome
   const text = outcome?.text
   if (outcome === null || outcome === undefined) {
@@ -891,7 +893,12 @@ function OverviewBody(props: {
   const isZh = (props.locale?.snapshot?.active ?? 'zh') === 'zh'
   const openSession = (id: string) => {
     try { props.sessions.open(id) } catch { /* 静默 */ }
-    try { void props.commands.execute(id, '/compass') } catch { /* 静默 */ }
+    // 冷会话：sessions.open 是异步加载（agent 初始化），立即 execute 会在
+    // UI request 的 signal 被 abort（面板 close/组件卸载）时让 assess 中途
+    // 挂掉 → 「执行失败 This operation was aborted」。给加载一点时间再发。
+    window.setTimeout(() => {
+      try { void props.commands.execute(id, '/compass') } catch { /* 静默 */ }
+    }, 600)
     close()
   }
   const redCount = rows === null ? 0 : rows.filter(r => r.health?.severity === 'red').length
