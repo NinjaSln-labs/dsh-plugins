@@ -79,6 +79,24 @@ await check('projection: fold counts (turns/messages/compactions)', () => {
   assert.equal(state.contextWindow, 100_000)
 })
 
+await check('projection: usage report without inputTokens is skipped (no NaN/0 pollution)', () => {
+  const base = { turns: 0, lastTurn: null, userMessages: 0, assistantMessages: 0, compactions: 0, pressureTokens: 360_000 }
+  // Streaming chunk usage often omits inputTokens — must NOT overwrite the
+  // last good pressure with NaN or 0.
+  const chunk = applyHealthEvent(base, { type: 'assistant/chunk', data: { turn: 1, step: 1, chunk: { type: 'usage', usage: { outputTokens: 100 } } } })
+  assert.equal(chunk.pressureTokens, 360_000)
+  assert.equal(chunk.lastUsage, undefined)
+  assert.ok(!Number.isNaN(chunk.pressureTokens))
+  // Same for assistant/message with an incomplete usage report.
+  const msg = applyHealthEvent(base, { type: 'assistant/message', data: { turn: 1, step: 1, usage: { outputTokens: 50 } } })
+  assert.equal(msg.pressureTokens, 360_000)
+  assert.equal(msg.assistantMessages, 1) // message still counts; usage skipped
+  // Complete usage still updates.
+  const ok = applyHealthEvent(base, { type: 'assistant/chunk', data: { turn: 1, step: 1, chunk: { type: 'usage', usage: { inputTokens: 32_000, cacheReadTokens: 0 } } } })
+  assert.equal(ok.pressureTokens, 32_000)
+  assert.deepEqual(ok.lastUsage, { inputTokens: 32_000, cacheReadTokens: 0, cacheWriteTokens: 0 })
+})
+
 await check('projection: compression ratio inferred from pressure snapshots', () => {
   // Pre-compaction pressure was 360K (60K uncached + 300K cacheRead on the
   // first assistant/message); the compaction/end captured it; the first

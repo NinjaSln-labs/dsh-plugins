@@ -50,15 +50,19 @@ function init(): SessionHealthState {
   return { turns: 0, lastTurn: null, userMessages: 0, assistantMessages: 0, compactions: 0 }
 }
 
-/** Prompt-side pressure of one usage report: input plus cache traffic, no output. */
-function pressureOf(usage: { inputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }): number {
-  return usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
+/**
+ * Prompt-side pressure of one usage report: input plus cache traffic, no
+ * output. The caller guards `inputTokens` presence (streaming usage chunks
+ * often omit it); this helper itself stays total-safe.
+ */
+function pressureOf(usage: { inputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }): number {
+  return (usage.inputTokens ?? 0) + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
 }
 
 /** The last-wins bucket record of one usage report. */
-function bucketsOf(usage: { inputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number }): SessionHealthState['lastUsage'] {
+function bucketsOf(usage: { inputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }): SessionHealthState['lastUsage'] {
   return {
-    inputTokens: usage.inputTokens,
+    inputTokens: usage.inputTokens ?? 0,
     cacheReadTokens: usage.cacheReadTokens ?? 0,
     cacheWriteTokens: usage.cacheWriteTokens ?? 0,
   }
@@ -105,18 +109,23 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       return { ...state, userMessages: state.userMessages + 1 }
     case 'assistant/message': {
       const next = { ...state, assistantMessages: state.assistantMessages + 1 }
-      if (event.data.usage === undefined) return next
-      const post = pressureOf(event.data.usage)
+      const u = event.data.usage
+      // 缺 inputTokens 的 usage 报告不完整（流式常只报部分字段）——跳过，
+      // 不覆盖已有压力，也不产生 NaN/0 污染。
+      if (u === undefined || typeof u.inputTokens !== 'number') return next
+      const post = pressureOf(u)
       return foldCompression(
-        { ...next, pressureTokens: post, lastUsage: bucketsOf(event.data.usage) },
+        { ...next, pressureTokens: post, lastUsage: bucketsOf(u) },
         post,
       )
     }
     case 'assistant/chunk': {
       if (event.data.chunk.type !== 'usage') return state
-      const post = pressureOf(event.data.chunk.usage)
+      const u = event.data.chunk.usage
+      if (typeof u.inputTokens !== 'number') return state
+      const post = pressureOf(u)
       return foldCompression(
-        { ...state, pressureTokens: post, lastUsage: bucketsOf(event.data.chunk.usage) },
+        { ...state, pressureTokens: post, lastUsage: bucketsOf(u) },
         post,
       )
     }
