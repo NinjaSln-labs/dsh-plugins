@@ -187,7 +187,12 @@ function compact(n: number | null | undefined): string {
     const v = n / 1_000_000
     return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10) + 'M'
   }
-  if (n >= 1000) return Math.round(n / 1000) + 'K'
+  if (n >= 1000) {
+    // 与 util.ts formatCompact 同款 round-overflow guard：999999 → 1M 而非 1000K。
+    const k = Math.round(n / 1000)
+    if (k >= 1000) return Math.round(k / 100) / 10 + 'M'
+    return k + 'K'
+  }
   return String(n)
 }
 

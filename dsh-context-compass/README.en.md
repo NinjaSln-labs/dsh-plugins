@@ -6,7 +6,7 @@ Context compass for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-h
 
 - **Header badge** — a colored dot + pill (green/blue/yellow/red) next to the session-log button, styled with DSH theme tokens. **Reactive**: driven entirely by the host-computed `sessionHealth` projection (push frames — the only online data path community plugins own; the client Remote list is build-time fixed, so this plugin has no Remote and no polling). Hover shows the advice, a window-occupancy bar, per-round token cost and **cache-hit rate** (a sign of context stability; compaction resets it), compaction-aware **expected next input (cache reads excluded)**, **expected cost (money)** (CNY on zh interfaces, USD otherwise — official peak/valley pricing, marked `忙时价/闲时价`), model window, session scale and compaction count (with the **last compression ratio** — inferred from the pressure-snapshot delta around a fold, labeled "snapshot caliber"). When the verdict lags behind a compaction (severity rides pre-compaction pressure while the occupancy bar already reflects the next request), the tooltip notes "**下次请求后更新**". **Click to run `/compass`** for the full report. Keyboard accessible.
 - **`/compass` command** — a full textual report with optional probes:
-  - `/compass` — everything (git / handoff doc / process probes, configurable)
+  - `/compass` — everything (git / handoff doc probes, configurable; the process probe is off by default, see below)
   - `/compass minimal` — core metrics only (token / window / scale)
   - `/compass no-git` / `/compass no-handoff` — skip one probe family
   - `/compass doc=<your.file>` — check YOUR handoff document (no filename is assumed; the concept is yours, the name is yours)
