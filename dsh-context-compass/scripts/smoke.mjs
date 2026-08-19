@@ -50,6 +50,15 @@ await check('util: money formatting boundaries', () => {
   assert.equal(formatHitRate(0.996), '100%')
 })
 
+await check('util: non-finite numbers render as — (defense in depth, never NaN leaks)', () => {
+  assert.equal(formatUsd(NaN), '—')
+  assert.equal(formatUsd(Infinity), '—')
+  assert.equal(formatCny(NaN), '—')
+  assert.equal(formatCompact(NaN), '—')
+  assert.equal(formatCompact(Infinity), '—')
+  assert.equal(formatHitRate(NaN), '—')
+})
+
 /* ---------- projection fold ---------- */
 const config = resolveConfig({})
 // Economy floor isolated: fold scenarios stay under 50K so ratio tiers show.
@@ -273,6 +282,25 @@ const services = {
   },
 }
 const ctx = { get: name => services[name] }
+
+await check('assess: non-finite tokenMeter / contextWindow readings are rejected', async () => {
+  // tokenMeter 返回 NaN/Infinity（异常适配器）→ total null；llm 返回
+  // Infinity 窗口 → window null——两者都不进 signals（NaN 能通过 typeof
+  // number 检查，且 assess signals 不走 zod schema）。
+  const nanCtx = {
+    get: name => name === 'tokenMeter'
+      ? { measure: () => ({ totalTokens: NaN }) }
+      : name === 'llm'
+        ? { resolveModelInfo: async () => ({ context: { contextWindow: Infinity } }) }
+        : services[name],
+  }
+  const report = await assess(nanCtx, session, 'agent-1', signal, config, {})
+  assert.equal(report.signals.total, null)
+  assert.equal(report.signals.window, null)
+  assert.equal(report.signals.ratio, null)
+  const text = buildCommandText(report, { minimal: false })
+  assert.ok(!text.includes('NaN'), `NaN must never leak: ${text}`)
+})
 
 await check('assess: economy yellow + probes + counts', async () => {
   const report = await assess(ctx, session, 'agent-1', signal, config, { docName: 'HANDOFF.md' })

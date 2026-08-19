@@ -109,7 +109,11 @@ function measureTokens(ctx: Context, session: Session): number | null {
   if (tokenMeter === undefined) return null
   try {
     const m = tokenMeter.measure(session)
-    return typeof m === 'object' && m !== null && typeof m.totalTokens === 'number' ? m.totalTokens : null
+    // Number.isFinite：NaN/Infinity 的测量值会污染 signals/文案（NaN 能通过
+    // typeof number 检查，且 assess 的 signals 不走 zod schema）。
+    return typeof m === 'object' && m !== null && typeof m.totalTokens === 'number' && Number.isFinite(m.totalTokens)
+      ? m.totalTokens
+      : null
   } catch {
     return null
   }
@@ -124,7 +128,7 @@ async function resolveWindow(ctx: Context, session: Session): Promise<number | n
     const sel = agentDefaultModel.currentSelection()
     const info = await llm.resolveModelInfo(sel.provider, sel.model)
     const window = info?.context?.contextWindow
-    return typeof window === 'number' && window > 0 ? window : null
+    return typeof window === 'number' && Number.isFinite(window) && window > 0 ? window : null
   } catch {
     return null
   }
