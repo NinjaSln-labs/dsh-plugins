@@ -638,8 +638,23 @@ function CompassCommandCard(props: {
   if (outcome.kind !== 'success' || text === undefined || text === '') {
     return (
       <div className="sh-ccard" data-error="true">
-        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">执行失败</span>{timeTag}</div>
-        {text !== undefined ? <pre className="sh-ccard-body">{text}</pre> : null}
+        <div className="sh-ccard-head">
+          <span className="sh-ccard-title">/compass</span>
+          <span className="sh-ccard-state">执行失败</span>
+          {timeTag}
+          {text !== undefined ? (
+            <button
+              type="button"
+              className="sh-ccard-toggle"
+              onClick={() => setExpanded(v => !v)}
+              aria-expanded={expanded}
+              aria-label={expanded ? '收起失败详情' : '展开失败详情'}
+            >
+              {expanded ? '收起' : '展开'}
+            </button>
+          ) : null}
+        </div>
+        {expanded && text !== undefined ? <pre className="sh-ccard-body">{text}</pre> : null}
       </div>
     )
   }
