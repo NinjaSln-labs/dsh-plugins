@@ -478,6 +478,10 @@ export async function assess(
     if (processEnabled) {
       runningProcesses = await probeProcesses(ctx, cwd, signal, probes)
       processesChecked = true
+    } else if (!opts.minimal && !config.checks.processes.enabled) {
+      // 与 git/handoff 对称：默认关闭时明确标注「已跳过」，让用户能区分
+      // 「未检查」与「无进程」（复核 P3 建议）。
+      probes.push('进程检测：已跳过（默认关闭；/compass processes 或配置启用）')
     }
   } else {
     probes.push('工作区根目录未知：git / 交接文档 / 进程检查已跳过')

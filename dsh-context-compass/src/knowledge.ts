@@ -19,6 +19,13 @@ import type { HealthReport } from './assess.ts'
 /** 快照段的固定标识（dedupeKey / 检索词都用它）——跨会话回顾的稳定锚点。 */
 export const KNOWLEDGE_SNAPSHOT_KEY = 'context-compass-handoff-snapshot'
 
+/**
+ * 快照段起始分隔行。parseCompassReport（client）在报告正文遇到它即停止
+ * 解析——快照段是机器摄取区，不属于人读卡片。单一常量防两处漂移
+ * （复核 P3 建议）。
+ */
+export const SNAPSHOT_SEPARATOR = '---'
+
 /** 检索历史快照的查询词：FTS trigram 中文子串 ≥3 字符可命中。 */
 const SNAPSHOT_QUERY = '交接快照'
 
@@ -31,7 +38,7 @@ export function buildSnapshotText(report: HealthReport): string {
   const s = report.signals
   const h = report.handoff
   const lines = [
-    '---',
+    SNAPSHOT_SEPARATOR,
     `交接快照（${KNOWLEDGE_SNAPSHOT_KEY}）`,
     `severity: ${report.severity}`,
     `recommendation: ${report.recommendation}`,
@@ -113,7 +120,7 @@ export async function probeCrossSession(
     // 只保留语义键值行：跳过 `---` / 标识行 / timestamp（回顾要简短可读）。
     const keyLines = body.split('\n')
       .map(l => l.trim())
-      .filter(l => l !== '' && l !== '---' && !l.includes(KNOWLEDGE_SNAPSHOT_KEY) && !/^timestamp:/.test(l))
+      .filter(l => l !== '' && l !== SNAPSHOT_SEPARATOR && !l.includes(KNOWLEDGE_SNAPSHOT_KEY) && !/^timestamp:/.test(l))
     const when = typeof hit.createdAt === 'number' && hit.createdAt > 0
       ? new Date(hit.createdAt).toISOString().slice(0, 10)
       : '上次'
