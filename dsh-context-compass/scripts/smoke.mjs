@@ -15,6 +15,7 @@ import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
 import { resolveConfig } from '../lib/config.js'
 import { PriceCache, periodAt, staticPricing } from '../lib/pricing.js'
+import { formatCompact, formatUsd, formatCny, formatHitRate } from '../lib/util.js'
 import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, buildHandoffSummary } from '../lib/overview.js'
 
 let failures = 0
@@ -27,6 +28,27 @@ async function check(name, fn) {
     console.error(`FAIL  ${name}\n      ${err.message}`)
   }
 }
+
+await check('util: formatCompact round-overflow guard + scale boundaries', () => {
+  assert.equal(formatCompact(999), '999')
+  assert.equal(formatCompact(1000), '1K')
+  assert.equal(formatCompact(999_499), '999K')  // rounds down
+  assert.equal(formatCompact(999_500), '1M')  // round-overflow guard: never 1000K
+  assert.equal(formatCompact(999_999), '1M')
+  assert.equal(formatCompact(1_000_000), '1M')
+  assert.equal(formatCompact(1_234_567), '1.2M')
+  assert.equal(formatCompact(10_000_000), '10M')
+})
+
+await check('util: money formatting boundaries', () => {
+  assert.equal(formatUsd(0.02), '$0.02')
+  assert.equal(formatUsd(45), '$45.00')
+  assert.equal(formatUsd(99.99), '$99.99')
+  assert.equal(formatUsd(100), '$100')
+  assert.equal(formatUsd(1234.5), '$1235')
+  assert.equal(formatCny(0.1), '¥0.10')
+  assert.equal(formatHitRate(0.996), '100%')
+})
 
 /* ---------- projection fold ---------- */
 const config = resolveConfig({})
