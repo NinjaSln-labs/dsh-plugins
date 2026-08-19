@@ -76,6 +76,8 @@ const OUTPUT_SCHEMA = {
         clean: { type: 'boolean', description: 'git 工作树是否干净（0 个未提交变更；未知时省略）' },
         uncommittedCount: { type: 'integer', description: '未提交变更数（未知时省略）' },
         lastCommit: { type: 'string', description: '最新 commit 行（未知时省略）' },
+        /** git 分支与远程同步状态（`git status -sb` 首行，如 `## main...origin/main [ahead 2]`）——交接清单的 push 项；未知时省略。 */
+        branchLine: { type: 'string', description: 'git 分支与远程同步状态（未 push 提交在切换前需推送；未知时省略）' },
         hasHandoff: { type: 'boolean', description: '交接文档是否就位（未知时省略）' },
         runningProcesses: { type: 'array', items: { type: 'string' }, description: '工作区相关运行中进程（名称）' },
       },
@@ -165,6 +167,9 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
       if (report.handoff.clean !== null) handoffReady.clean = report.handoff.clean
       if (report.handoff.uncommittedCount !== null) handoffReady.uncommittedCount = report.handoff.uncommittedCount
       if (report.handoff.lastCommit !== null) handoffReady.lastCommit = report.handoff.lastCommit
+      // push 状态（ahead/behind）也是交接清单的真实部分——未 push 的提交在
+      // 切换前需推送。与 buildHandoffSummary 的 branchLine 同源（B3 修复）。
+      if (report.handoff.branchLine !== null) handoffReady.branchLine = report.handoff.branchLine
       if (report.handoff.hasHandoff !== null) handoffReady.hasHandoff = report.handoff.hasHandoff
 
       const cost: Record<string, number | string> = {}

@@ -125,7 +125,8 @@ export const Config: z<Config> = z.object({
       paths: z.array(z.string()).default([]),
     }),
     sessionResume: z.object({ enabled: z.boolean().default(true) }),
-    processes: z.object({ enabled: z.boolean().default(true) }),
+    /** 运行中进程检测（dev server 等）是增量信号——默认关闭（对齐 DESIGN §4.6「关闭时跳过」）；/compass processes 或工具路径显式开启。 */
+    processes: z.object({ enabled: z.boolean().default(false) }),
     knowledge: z.object({ enabled: z.boolean().default(true) }),
   }),
   projection: z.object({ enabled: z.boolean().default(true) }),
@@ -167,7 +168,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
       paths: config.checks?.handoff?.paths ?? [],
     },
     sessionResume: { enabled: config.checks?.sessionResume?.enabled ?? true },
-    processes: { enabled: config.checks?.processes?.enabled ?? true },
+    processes: { enabled: config.checks?.processes?.enabled ?? false },
     knowledge: { enabled: config.checks?.knowledge?.enabled ?? true },
   }
   const projection: ProjectionConfig = { enabled: config.projection?.enabled ?? true }

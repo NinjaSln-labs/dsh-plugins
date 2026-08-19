@@ -56,7 +56,7 @@ checks: {
   git: { enabled: true, workspaceRoot?: string },          // .git 存在性探测
   handoff: { enabled: true, paths: [] },                   // 你的交接文档文件名
   sessionResume: { enabled: true },                        // DSH 持久化说明
-  processes: { enabled: true },                            // 经 ctx.subprocess 的 ps 探测
+  processes: { enabled: false },                           // 运行中进程检测（增量信号，默认关闭；/compass processes 强制开启）
 }
 projection: { enabled: true }                              // 响应式徽章单元
 cost: {

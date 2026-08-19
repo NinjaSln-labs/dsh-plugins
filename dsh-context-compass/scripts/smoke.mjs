@@ -397,6 +397,63 @@ await check('assess: clean worktree marks the commit/push items done', async () 
   assert.ok(report.probes.some(p => p.includes('git 工作树：干净')))
 })
 
+await check('tool: handoffReady surfaces branchLine (push state) from the git probe', async () => {
+  // The tool's assess path reads the same subprocess seam as /compass — the
+  // push state (ahead/behind) must reach the model through handoffReady.
+  const gitTool = sessionHealthTool(gitCtx, config)
+  const value = await gitTool.execute({}, {
+    agent: { id: 'agent-1', session },
+    signal,
+  })
+  assert.equal(value.handoffReady.branchLine, '## main...origin/main [ahead 2]')
+  assert.equal(value.handoffReady.uncommittedCount, 2)
+})
+
+/* ---------- processes probe (default OFF, DESIGN §4.6) ---------- */
+const psOut = { 'status --short': '', 'log --oneline -1': 'x\n', 'status -sb': '## main\n' }
+const psCtx = {
+  get: name => (name === 'subprocess'
+    ? {
+      spawn: ({ argv }) => {
+        const key = argv[0] === 'ps' ? 'ps' : `${argv[1]} ${argv[2] ?? ''}`.trim()
+        if (key === 'ps') return {
+          done: Promise.resolve({ exitCode: 0 }),
+          collected: { stdout: { readFrom: () => ({ text: '  123 vite\n  456 node /usr/bin/dsh\n' }) } },
+        }
+        return {
+          done: Promise.resolve({ exitCode: 0 }),
+          collected: { stdout: { readFrom: () => ({ text: psOut[key] ?? '' }) } },
+        }
+      },
+    }
+    : services[name]),
+}
+
+await check('assess: processes probe default OFF — /compass does not run ps unless enabled or requested', async () => {
+  // DESIGN §4.6: 进程检测默认关闭（config.checks.processes.enabled=false），
+  // 「关闭时跳过」。默认 /compass 不探测；显式 processes 参数才探测。
+  // 默认（enabled=false）：/compass 不跑 ps → 无「进程检测」probe。
+  const report = await assess(psCtx, session, 'agent-1', signal, config, {})
+  assert.ok(!report.probes.some(p => p.includes('进程检测')), `default must skip processes, got: ${JSON.stringify(report.probes)}`)
+  assert.equal(report.handoff.processesChecked, false)
+  // 显式 checkProcesses=true（/compass processes / 工具路径）：探测并回报。
+  const withProcs = await assess(psCtx, session, 'agent-1', signal, config, { checkProcesses: true })
+  assert.equal(withProcs.handoff.processesChecked, true)
+  assert.ok(withProcs.handoff.runningProcesses.length >= 1, `expected a dev-server marker, got: ${JSON.stringify(withProcs.handoff.runningProcesses)}`)
+  assert.ok(withProcs.probes.some(p => p.includes('进程检测：发现')))
+  // 用户配置 enabled=true：/compass 默认也探测（尊重配置）。
+  const enabledCfg = resolveConfig({ checks: { processes: { enabled: true } } })
+  const onByConfig = await assess(psCtx, session, 'agent-1', signal, enabledCfg, {})
+  assert.ok(onByConfig.probes.some(p => p.includes('进程检测')), `config-enabled must probe, got: ${JSON.stringify(onByConfig.probes)}`)
+})
+
+await check('command: explicit processes argument probes even with default OFF', async () => {
+  const cmdDef = healthCommandDefinition(psCtx, config)
+  const result = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: 'processes', signal })
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('进程检测：发现'))
+})
+
 await check('assess: cost expectation from cache-effective per-round', async () => {
   const costCtx = {
     get: name => {

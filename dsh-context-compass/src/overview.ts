@@ -15,8 +15,9 @@
  * - cold projection loads run in parallel and backfill in place
  * - titles come from the live in-memory fold or a short-TTL in-memory
  *   cache; cache misses return null this frame and a BACKGROUND fill
- *   (fresh signal, never the request's abort) populates the cache, so the
- *   panel's 5s refresh shows titles moments later
+ *   (bound to the request's abort scope — once the panel closes the fill
+ *   has no consumer left) populates the cache, so the panel's 5s refresh
+ *   shows titles moments later
  *
  * Transport: same-origin JSON RPC (POST /context-compass-rpc, loopback-only),
  * the same pattern dsh-imgdraw established for bundle clients — a bundle
@@ -122,9 +123,11 @@ export function clearTitleCache(): void {
 }
 
 /**
- * Background title fill: read the batch with a FRESH signal (the request's
- * abort must never kill a fill that outlives the response) and populate the
- * cache. Failures stay silent — the next refresh retries. Fire-and-forget.
+ * Background title fill: read the batch and populate the cache. The fill is
+ * deliberately bound to the REQUEST's signal (not a fresh one): once the
+ * request is aborted (panel closed / component unmounted) the fill has no
+ * consumer left, so cancelling it avoids pointless log reads. Failures stay
+ * silent — the next refresh retries. Fire-and-forget.
  */
 function scheduleTitleFill(ctx: Context, ids: string[], fillSignal: AbortSignal): void {
   if (ids.length === 0) return
