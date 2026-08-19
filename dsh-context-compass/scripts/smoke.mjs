@@ -675,6 +675,12 @@ await check('command: remaining=<illegal> parses to null, never NaN', async () =
     assert.equal(result.kind, 'success')
     assert.ok(!result.text.includes('NaN'), `${raw} must not leak NaN`)
   }
+  // 精确断言：非法 remaining 按未提供处理 → expectedTotal 全 null（不进
+  // 费用预期行），而不是产生 NaN 或错误金额。
+  const nanReport = await assess(ctx, session, 'agent-1', signal, config, { remainingRounds: Number('not-a-number') })
+  assert.equal(nanReport.signals.expectedTotalTokens, null)
+  assert.equal(nanReport.signals.expectedTotalUsd, null)
+  assert.equal(nanReport.signals.expectedTotalCny, null)
 })
 
 await check('command: full report text', async () => {
