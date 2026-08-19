@@ -46,11 +46,14 @@ test('富卡片：头部基线（浅色）+ 展开/收起 DOM 切换', async ({ 
   await normalizeHead(page)
   await settle(page)
   await expect(card.locator('.sh-ccard-head')).toHaveScreenshot('card-head-light.png', {
+    // 头部仅 ~22px 高：掩码边缘抗锯齿占比高，全局 2% 阈值对这么小的图偏严。
+    maxDiffPixelRatio: 0.06,
     mask: [card.locator('.sh-sev-chip'), card.locator('.sh-ccard-summary'), card.locator('.sh-ccard-time')],
   })
   // 默认收起（v0.7.8）→ 展开 → 再收起：body 显隐 + 钮文案。
   // 卡片可能滚出视口（历史卡多时新卡在对话流底部）：先滚到可见，普通
   // click 走 actionability 真实命中（force 在遮挡时可能点到空处）。
+  await page.evaluate(() => document.fonts?.ready)
   await expect(card.locator('.sh-ccard-body')).toBeHidden()
   await expect(card.locator('.sh-ccard-toggle')).toHaveText('展开')
   const toggle = card.locator('.sh-ccard-toggle')
@@ -67,6 +70,7 @@ test('富卡片：头部基线（暗色）', async ({ page }) => {
   await normalizeHead(page)
   await settle(page)
   await expect(card.locator('.sh-ccard-head')).toHaveScreenshot('card-head-dark.png', {
+    maxDiffPixelRatio: 0.06,
     mask: [card.locator('.sh-sev-chip'), card.locator('.sh-ccard-summary'), card.locator('.sh-ccard-time')],
   })
 })
