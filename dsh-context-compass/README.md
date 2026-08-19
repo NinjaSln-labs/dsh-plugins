@@ -101,7 +101,7 @@ harness 不携带价格数据，金额显示通过实时缓存解析，数据源
 | 下次请求占用 | token-meter `contextPressure.projectedTokens`（压缩感知） |
 | git 仓库 + 工作树状态 | `fs` 探测 + 只读 git 子命令 |
 | 交接文档 | 探测**你提供**的文件名 |
-| 运行中进程 | `ctx.subprocess` 只读 `ps` 探测，按工作区过滤 |
+| 运行中进程 | `ctx.subprocess` 只读 `ps` 探测，按工作区过滤（默认关闭——/compass processes 或配置启用） |
 
 ## 安装
 
@@ -115,7 +115,7 @@ dsh plugin add dsh-context-compass
 ```yaml
 # 你的 profile cordis.patch.yml
 - insert:
-    - id: session-health
+    - id: context-compass
       name: 'dsh-context-compass'
 ```
 

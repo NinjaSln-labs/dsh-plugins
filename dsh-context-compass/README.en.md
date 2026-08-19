@@ -94,7 +94,7 @@ Every signal comes from the harness itself — no estimation:
 | Next-request occupancy | token-meter `contextPressure.projectedTokens` (compaction-aware) |
 | Git repo + worktree state | `fs` probe + read-only git subcommands |
 | Handoff doc | probes **the filename you provide** |
-| Running processes | read-only `ps` probe through `ctx.subprocess`, filtered to the workspace |
+| Running processes | read-only `ps` probe through `ctx.subprocess`, filtered to the workspace (off by default — `/compass processes` or config enables it) |
 
 ## Install
 
@@ -108,7 +108,7 @@ Or add it to a profile patch layer:
 ```yaml
 # your profile cordis.patch.yml
 - insert:
-    - id: session-health
+    - id: context-compass
       name: 'dsh-context-compass'
 ```
 
