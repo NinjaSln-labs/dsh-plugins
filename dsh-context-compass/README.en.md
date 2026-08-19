@@ -119,7 +119,7 @@ npm run typecheck  # strict type check
 npm run smoke      # logic smoke tests (stub services)
 npm run mount      # real cordis mount test (command + tool + projection)
 npm run build:client && node scripts/client-mount.mjs  # browser boot-path test
-npm run visual     # Playwright visual regression (needs a running harness: light/dark × four tiers × card matrix + hover-bridge e2e)
+npm run visual     # Playwright visual regression (read-only, never touches sessions: panel RPC-mocked matrix light/dark × four tiers × paging + badge hover-bridge e2e)
 npm run visual:update  # rewrite baselines after an intentional visual change (visual/baselines/)
 ```
 
