@@ -633,6 +633,24 @@ await check('pricing: failure keeps the last good price', async () => {
   } finally { Date.now = origNow }
 })
 
+await check('pricing: onError callback receives each failed URL (observability)', async () => {
+  const cache = new PriceCache(staticPricing(0.28, 0.1))
+  const fail = async () => { throw new Error('down') }
+  const ok = async () => ({ ok: true, json: async () => structuredClone(OFFICIAL_DOC) })
+  const errors = []
+  const onError = (url, err) => errors.push({ url, msg: err instanceof Error ? err.message : String(err) })
+  // 两个 URL 都失败 → onError 各收到一次。
+  assert.equal(await cache.refreshAny(['https://a', 'https://b'], fail, undefined, onError), false)
+  assert.deepEqual(errors.map(e => e.url), ['https://a', 'https://b'])
+  assert.ok(errors.every(e => e.msg === 'down'))
+  // 主失败、回退成功 → onError 只收到主 URL（成功不回调）。
+  errors.length = 0
+  assert.equal(await cache.refreshAny(['https://a', 'https://b'], url => (url === 'https://a' ? fail() : ok()), undefined, onError), true)
+  assert.deepEqual(errors.map(e => e.url), ['https://a'])
+  // 默认无 onError → 静默（向后兼容，不抛）。
+  assert.equal(await cache.refresh('https://x', fail), false)
+})
+
 await check('pricing: refreshAny falls back to the second URL', async () => {
   const cache = new PriceCache(staticPricing(0.28, 0.1))
   const fail = async () => { throw new Error('primary down') }
