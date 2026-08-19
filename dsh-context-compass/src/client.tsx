@@ -639,6 +639,9 @@ export function parseCompassReport(text: string): CompassReport {
   for (const raw of rest) {
     const line = raw.trim()
     if (line === '') continue
+    // 尾部结构化交接快照段（buildCommandText 始终追加）：`---` 起头，
+    // 机器摄取区，不属于人读卡片——遇到即停止解析（快照段之后无用户内容）。
+    if (line === '---') break
     if (line.startsWith('- [x]') || line.startsWith('- [ ]')) {
       inChecklist = true
       checklist.push(line)
