@@ -57,7 +57,7 @@ checks: {
   git: { enabled: true, workspaceRoot?: string },          // .git existence probe
   handoff: { enabled: true, paths: [] },                   // YOUR handoff-doc filenames
   sessionResume: { enabled: true },                        // DSH persistence note
-  processes: { enabled: true },                            // ps probe through ctx.subprocess
+  processes: { enabled: false },                           // running-process probe (incremental signal, off by default; /compass processes forces it on)
 }
 projection: { enabled: true }                              // reactive badge unit
 cost: {

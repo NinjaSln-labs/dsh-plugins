@@ -446,7 +446,10 @@ export async function assess(
   // Probes (skipped in minimal mode / by flags / by config).
   const gitEnabled = config.checks.git.enabled && !opts.noGit && !opts.minimal
   const handoffEnabled = config.checks.handoff.enabled && !opts.noHandoff && !opts.minimal
-  const processEnabled = config.checks.processes.enabled && opts.checkProcesses === true && !opts.minimal
+  // 进程探测（增量信号，默认关闭——DESIGN §4.6「关闭时跳过」）：
+  // config 开关控制默认；checkProcesses（/compass processes 参数 / 工具路径）
+  // 显式强制开启——README「/compass processes — 强制进程探测」的语义。
+  const processEnabled = (config.checks.processes.enabled || opts.checkProcesses === true) && !opts.minimal
 
   let isGitRepo: boolean | null = null
   let hasHandoff: boolean | null = null
