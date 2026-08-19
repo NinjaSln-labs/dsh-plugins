@@ -432,9 +432,11 @@ const psCtx = {
 await check('assess: processes probe default OFF — /compass does not run ps unless enabled or requested', async () => {
   // DESIGN §4.6: 进程检测默认关闭（config.checks.processes.enabled=false），
   // 「关闭时跳过」。默认 /compass 不探测；显式 processes 参数才探测。
-  // 默认（enabled=false）：/compass 不跑 ps → 无「进程检测」probe。
+  // 默认（enabled=false）：/compass 不跑 ps → probe 明确标注「已跳过」
+  // （与 git/handoff 对称），且无「发现」结果行。
   const report = await assess(psCtx, session, 'agent-1', signal, config, {})
-  assert.ok(!report.probes.some(p => p.includes('进程检测')), `default must skip processes, got: ${JSON.stringify(report.probes)}`)
+  assert.ok(report.probes.some(p => p.includes('进程检测：已跳过')), `default must note the skip, got: ${JSON.stringify(report.probes)}`)
+  assert.ok(!report.probes.some(p => p.includes('进程检测：发现')), `default must not probe, got: ${JSON.stringify(report.probes)}`)
   assert.equal(report.handoff.processesChecked, false)
   // 显式 checkProcesses=true（/compass processes / 工具路径）：探测并回报。
   const withProcs = await assess(psCtx, session, 'agent-1', signal, config, { checkProcesses: true })

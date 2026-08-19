@@ -44,6 +44,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 import type { SessionHealthProjection, HealthSeverity } from './types.ts'
 import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
+import { SNAPSHOT_SEPARATOR } from './knowledge.ts'
 
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
@@ -641,7 +642,8 @@ export function parseCompassReport(text: string): CompassReport {
     if (line === '') continue
     // 尾部结构化交接快照段（buildCommandText 始终追加）：`---` 起头，
     // 机器摄取区，不属于人读卡片——遇到即停止解析（快照段之后无用户内容）。
-    if (line === '---') break
+    // 分隔行与 knowledge.ts 共享 SNAPSHOT_SEPARATOR（防两处漂移）。
+    if (line === SNAPSHOT_SEPARATOR) break
     if (line.startsWith('- [x]') || line.startsWith('- [ ]')) {
       inChecklist = true
       checklist.push(line)
