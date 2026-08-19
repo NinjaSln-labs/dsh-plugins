@@ -76,6 +76,42 @@ assert.equal(junk.severity, null)
 assert.equal(junk.summary, '随便一段文本')
 console.log('  ok  parseCompassReport: severity/summary/metrics/checklist extraction')
 
+// 2c) 尾部交接快照段（buildCommandText 始终追加）不得污染卡片 reason。
+const WITH_SNAPSHOT = [
+  '**放心继续**（健康度：**绿**）',
+  '上下文只用了窗口的 2%，空间充足，没有切换的必要。',
+  '',
+  '详情：',
+  '- 会话规模：2 轮 / 3 条消息 / 2 条回复',
+  '',
+  '---',
+  '交接快照（context-compass-handoff-snapshot）',
+  'severity: green',
+  'recommendation: continue',
+  'timestamp: 2026-08-19T10:00:00.000Z',
+].join('\n')
+const snapParsed = plugin.parseCompassReport(WITH_SNAPSHOT)
+assert.equal(snapParsed.reason, '上下文只用了窗口的 2%，空间充足，没有切换的必要。', '快照段不得混入 reason')
+assert.equal(snapParsed.metrics.length, 1)
+// checklist 之后的快照段同样截断，checklist 收集不受影响。
+const WITH_CHECKLIST_SNAP = [
+  '**建议在任务边界收尾**（健康度：**黄**）',
+  'r',
+  '',
+  '切换前检查：',
+  '- [ ] 未提交变更：2 个',
+  '- [ ] 已 push：## main...origin/main [ahead 2]',
+  '',
+  '---',
+  '交接快照（context-compass-handoff-snapshot）',
+  'severity: yellow',
+  'timestamp: 2026-08-19T10:00:00.000Z',
+].join('\n')
+const snapCheck = plugin.parseCompassReport(WITH_CHECKLIST_SNAP)
+assert.equal(snapCheck.checklist.length, 2)
+assert.ok(!snapCheck.reason.includes('交接快照'), '快照段不得混入 reason（有 checklist 时）')
+console.log('  ok  parseCompassReport: trailing handoff-snapshot block does not pollute reason')
+
 // 2c) The compaction-aware merge helper is exported and correct.
 const proj = {
   severity: 'yellow', advice: 'a', ratio: 0.6, total: 600_000, window: 1_000_000,
