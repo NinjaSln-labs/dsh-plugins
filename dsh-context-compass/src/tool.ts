@@ -63,7 +63,7 @@ const OUTPUT_SCHEMA = {
         tokensPerRound: { type: 'number', description: '每轮输入 token 数（未知时省略）' },
         turns: { type: 'number', description: '会话轮次' },
         messageCount: { type: 'number', description: '消息总数（用户 + 助手）' },
-        compactions: { type: 'number', description: '已压缩次数' },
+        compactions: { type: 'number', required: true, description: '已压缩次数（0 表示从未压缩；恒存在）' },
         compactionRatio: { type: 'number', description: '上次压缩比例 0..1（按压缩前后压力快照差值推断——快照口径，非精确统计；未知时省略）' },
       },
     },
@@ -152,14 +152,20 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
         dependsOnEarly: args.dependsOnEarly,
         earlyDecisionRecorded: args.earlyDecisionRecorded,
       })
-      const signals: Record<string, number> = {}
+      const signals: {
+        windowPercent?: number
+        tokensPerRound?: number
+        turns?: number
+        messageCount?: number
+        compactions: number
+        compactionRatio?: number
+      } = { compactions: report.signals.compactions }
       if (report.signals.ratio !== null) signals.windowPercent = Math.round(report.signals.ratio * 100)
       if (report.signals.total !== null) signals.tokensPerRound = report.signals.total
       if (report.signals.turns !== null) signals.turns = report.signals.turns
       if (report.signals.userMessages !== null || report.signals.assistantMessages !== null) {
         signals.messageCount = (report.signals.userMessages ?? 0) + (report.signals.assistantMessages ?? 0)
       }
-      signals.compactions = report.signals.compactions
       if (report.signals.compactionRatio !== null) signals.compactionRatio = report.signals.compactionRatio
 
       const handoffReady: Record<string, unknown> = { runningProcesses: report.handoff.runningProcesses }
