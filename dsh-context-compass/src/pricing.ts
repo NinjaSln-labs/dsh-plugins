@@ -128,6 +128,12 @@ export function staticPricing(inputPricePerM: number, cacheHitDiscount: number):
   }
 }
 
+/**
+ * 定价文档最大可接受字节数（防御大文档 OOM）：正常 deepseek.json 约 2KB，
+ * 1MB 是宽松上限；Content-Length 明确超限直接拒绝，不解析不缓存。
+ */
+const MAX_DOC_BYTES = 1024 * 1024
+
 /** Live pricing cache: static values until a successful fetch replaces them. */
 export class PriceCache {
   private doc: PricingDocument | null = null
@@ -165,6 +171,15 @@ export class PriceCache {
       const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) })
       if (!response.ok) {
         onError?.(url, new Error(`HTTP ${response.status}`))
+        return false
+      }
+      // 防御（大文档）：定价文档正常 ~2KB，Content-Length 明确超 1MB 直接拒绝
+      // ——CDN 被诱导托管超大文件时避免解析阶段 OOM。缺失长度头（或该头存取
+      // 不可用）时退回 10s 超时兜底，不误伤真实小文档。
+      const res = response as { headers?: { get?(k: string): string | null } }
+      const cl = Number(res.headers?.get?.('content-length'))
+      if (Number.isFinite(cl) && cl > MAX_DOC_BYTES) {
+        onError?.(url, new Error('pricing document too large'))
         return false
       }
       const doc = validDocument(await response.json())

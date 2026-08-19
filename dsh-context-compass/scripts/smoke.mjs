@@ -717,6 +717,23 @@ await check('pricing: fetch timeout / network abort degrades to static fallback'
   } finally { Date.now = origNow }
 })
 
+await check('pricing: oversized content-length rejected (OOM defense)', async () => {
+  const cache = new PriceCache(staticPricing(0.28, 0.1))
+  // Content-Length > MAX_DOC_BYTES → rejected before parsing, static stays.
+  const huge = async () => ({
+    ok: true,
+    headers: { get: () => String(5 * 1024 * 1024) }, // 5MB > 1MB cap
+    json: async () => structuredClone(OFFICIAL_DOC), // would-be-valid doc, unreachable
+  })
+  const seen = []
+  assert.equal(await cache.refresh('https://x', huge, 10_000, (u, e) => seen.push(String(e.message))), false)
+  assert.deepEqual(seen, ['pricing document too large'])
+  assert.equal(cache.get().missPerMCny, null) // static fallback intact
+  // Missing content-length header (or non-finite value) → parsed normally.
+  const noLen = async () => ({ ok: true, headers: { get: () => null }, json: async () => structuredClone(OFFICIAL_DOC) })
+  assert.equal(await cache.refresh('https://x', noLen, 10_000), true)
+})
+
 await check('projection: official pricing drives cny/usd money fields', () => {
   const state3 = {
     turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
