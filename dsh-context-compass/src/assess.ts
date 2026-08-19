@@ -569,7 +569,9 @@ export async function assess(
   // Human-readable verdict. Yellow's reason branches on the same driver the
   // projection unit used: capacity (ratio ≥ windowHigh) or economy (billable-
   // equivalent per round, cache-discounted, against the window-scaled floor).
-  const pct = ratio !== null ? Math.round(ratio * 100) : null
+  // 窗口占用显示截断在 100%（Ratio 可因口径差异 >1，但「已占窗口 %」物理
+  // 上限是满窗——>100% 显示会误导）。signals.ratio 保留真实值供分析。
+  const pct = ratio !== null ? Math.min(Math.round(ratio * 100), 100) : null
   const pricePeriod = price?.period ?? pricePeriodFromProjection
   const inputMissPerMCny = price !== null ? price.missPerMCny : null
   const inputHitPerMCny = price !== null ? price.hitPerMCny : null
