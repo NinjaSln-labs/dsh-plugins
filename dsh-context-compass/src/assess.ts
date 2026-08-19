@@ -391,10 +391,14 @@ export async function assess(
   const probes: string[] = []
   const cwd = workspaceCwd(ctx, session)
 
-  // 防御：remainingRounds 非有限数（NaN/Infinity——命令参数解析或工具
-  // schema 宽松传值）按未提供处理；NaN 能通过 `!== null` 检查，若直接参与
-  // 乘法会污染费用预期显示（¥NaN / $NaN）。
+  // 防御：remainingRounds 非有限数（NaN/Infinity）或负数（命令参数解析、
+  // 工具 schema 宽松传值）按未提供处理。NaN 能通过 `!== null` 检查，若直接
+  // 参与乘法会污染费用预期显示（¥NaN / $NaN）；负数则产出负的费用预期
+  // （-¥0.3），同为污染。/compass 命令已在解析层拦截 `>= 0`，但工具路径
+  // （schema 未设 minimum）与任何直调 assess 的调用方都依赖此处兜底，
+  // 故归一化与命令解析保持一致（isFinite && >= 0）——单一权威判断。
   const remainingRounds = Number.isFinite(opts.remainingRounds as number)
+    && (opts.remainingRounds as number) >= 0
     ? (opts.remainingRounds as number)
     : null
 
