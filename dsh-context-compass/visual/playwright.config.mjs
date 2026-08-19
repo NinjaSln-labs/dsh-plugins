@@ -29,5 +29,7 @@ export default defineConfig({
     baseURL: process.env.DSH_WEB_URL || 'http://127.0.0.1:3080',
     viewport: { width: 1440, height: 900 },
     locale: 'zh-CN',
+    // B3 复制交接摘要需要剪贴板写权限（navigator.clipboard.writeText）。
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
 })

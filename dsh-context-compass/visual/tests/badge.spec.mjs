@@ -28,23 +28,27 @@ test('hover 桥接层：进浮层不断、移出才关；键盘聚焦可达', as
   // 移出整个包装 → 250ms 延迟后消失。
   await page.mouse.move(12, 12)
   await expect(tip).toBeHidden({ timeout: 3000 })
-  // 键盘：Tab 聚焦徽章 → 浮层打开；Tab 到浮层内可聚焦项（计费切换）不关；
-  // 再 Tab 移出子树才关。
+  // 键盘：Tab 聚焦徽章 → 浮层打开；Tab 在浮层内可聚焦项间移动不关；
+  // Tab 越过最后一个可聚焦项移出子树才关。
   await page.locator('.sh-badge').focus()
   await expect(tip).toBeVisible()
-  await page.keyboard.press('Tab')
-  await page.waitForTimeout(200)
-  if (await tip.isVisible()) {
+  // 0.7.11+ 浮层含多个可聚焦项（计费切换 / 更多详情 / 复制摘要）——数出
+  // 总数，逐一 Tab 应在浮层内保持，越过最后一个才关闭。
+  const focusables = await tip.locator('button, [tabindex="0"]').count()
+  for (let i = 0; i < focusables; i++) {
     await page.keyboard.press('Tab')
-    await expect(tip).toBeHidden({ timeout: 3000 })
+    await page.waitForTimeout(150)
+    expect(await tip.isVisible(), `Tab #${i + 1} must stay inside the tooltip`).toBe(true)
   }
+  // 越过最后一个可聚焦项 → 移出子树 → 关闭。
+  await page.keyboard.press('Tab')
+  await expect(tip).toBeHidden({ timeout: 3000 })
 })
 
-// B2/B3 浮层交互（更多详情折叠 + 复制按钮）依赖 0.7.11 部署的 client——
-// 当前 harness 跑 0.7.10（无 showMore/copy 控件）时 skip；发布部署后删掉
-// 这行 skip 即启用。全程只读：不触发 /compass、不写会话日志（summary RPC
-// 本身只读）。
-test.skip('浮层 B2/B3：更多详情折叠 + 复制交接摘要按钮（0.7.11 部署后启用）', async ({ page }) => {
+// B2/B3 浮层交互（更多详情折叠 + 复制按钮）——0.7.12 部署后启用（此前
+// harness 跑 0.7.10 无 showMore/copy 控件时 skip）。全程只读：不触发
+// /compass、不写会话日志（summary RPC 本身只读）。
+test('浮层 B2/B3：更多详情折叠 + 复制交接摘要按钮', async ({ page }) => {
   const badge = page.locator('.sh-badge')
   const tip = page.locator('.sh-tip')
   await badge.hover()
