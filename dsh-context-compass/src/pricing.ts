@@ -159,23 +159,36 @@ export class PriceCache {
     url: string,
     fetchImpl: typeof fetch = fetch,
     timeoutMs = 10_000,
+    onError?: (url: string, err: unknown) => void,
   ): Promise<boolean> {
     try {
       const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) })
-      if (!response.ok) return false
+      if (!response.ok) {
+        onError?.(url, new Error(`HTTP ${response.status}`))
+        return false
+      }
       const doc = validDocument(await response.json())
-      if (doc === null) return false
+      if (doc === null) {
+        onError?.(url, new Error('invalid pricing document'))
+        return false
+      }
       this.doc = doc
       return true
-    } catch {
+    } catch (err) {
+      onError?.(url, err)
       return false
     }
   }
 
   /** Try the URLs in order; the first successful fetch wins. */
-  async refreshAny(urls: readonly string[], fetchImpl: typeof fetch = fetch, timeoutMs = 10_000): Promise<boolean> {
+  async refreshAny(
+    urls: readonly string[],
+    fetchImpl: typeof fetch = fetch,
+    timeoutMs = 10_000,
+    onError?: (url: string, err: unknown) => void,
+  ): Promise<boolean> {
     for (const url of urls) {
-      if (await this.refresh(url, fetchImpl, timeoutMs)) return true
+      if (await this.refresh(url, fetchImpl, timeoutMs, onError)) return true
     }
     return false
   }
@@ -206,7 +219,15 @@ export function startPricingRefresh(
 ): () => void {
   if (config.priceSource !== 'auto') return () => {}
   const urls = [...new Set([config.priceUrl, config.priceFallbackUrl].filter(Boolean))]
-  const refresh = () => void cache.refreshAny(urls)
+  // 可观测性：刷新失败（网络/HTTP/文档校验）记录 warn 级——静默降级是设计，
+  // 但日志让部署者知道价格停留在静态兜底。
+  const logger = ctx.logger as { warn(msg: string, ...args: unknown[]): void } | undefined
+  const refresh = () => void cache.refreshAny(
+    urls,
+    undefined,
+    undefined,
+    (url, err) => logger?.warn(`[dsh-context-compass] pricing refresh failed (${url}): ${err instanceof Error ? err.message : String(err)}`),
+  )
   refresh()
   return ctx.effect(() => intervalDisposer(ctx, refresh, config.priceRefreshHours * 3_600_000), 'dsh-context-compass: pricing refresh')
 }

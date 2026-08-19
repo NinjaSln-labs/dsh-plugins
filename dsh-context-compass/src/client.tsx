@@ -45,6 +45,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 import type { SessionHealthProjection, HealthSeverity } from './types.ts'
 import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
 import { SNAPSHOT_SEPARATOR } from './knowledge.ts'
+// 单点格式化：util.ts 是唯一算法位置（host 与 client 同源，防双源漂移）。
+import { formatCompact, formatUsd, formatHitRate } from './util.ts'
 
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
@@ -181,29 +183,10 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-foot-hint{margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `
 
+/** Null-safe compact token display — util.ts formatCompact with the unknown fallback. */
 function compact(n: number | null | undefined): string {
   if (n === null || n === undefined) return '未知'
-  if (n >= 1_000_000) {
-    const v = n / 1_000_000
-    return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10) + 'M'
-  }
-  if (n >= 1000) {
-    // 与 util.ts formatCompact 同款 round-overflow guard：999999 → 1M 而非 1000K。
-    const k = Math.round(n / 1000)
-    if (k >= 1000) return Math.round(k / 100) / 10 + 'M'
-    return k + 'K'
-  }
-  return String(n)
-}
-
-/** Hit rate display: integer percent, Math.round — matches the core input-bar stats line (same figure, same rounding). */
-function pctOf(rate: number): string {
-  return `${Math.round(rate * 100)}%`
-}
-
-/** USD formatting for per-round cost: >= $100 rounded, else 2 decimals ($0.02, $1.25, $45). */
-function formatUsd(v: number): string {
-  return v >= 100 ? `$${Math.round(v)}` : `$${v.toFixed(2)}`
+  return formatCompact(n)
 }
 
 /**
@@ -466,7 +449,7 @@ function HealthBadge(props: {
         </div>
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
-          <span className="sh-v">约 {compact(merged.total)} token{(() => { const rate = cacheHitRateOf(usage); return rate !== null ? `（缓存命中 ${pctOf(rate)}）` : '' })()}</span>
+          <span className="sh-v">约 {compact(merged.total)} token{(() => { const rate = cacheHitRateOf(usage); return rate !== null ? `（缓存命中 ${formatHitRate(rate)}）` : '' })()}</span>
         </div>
         {merged.projected !== null ? (
           <div className="sh-tip-row">
