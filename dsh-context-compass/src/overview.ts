@@ -27,8 +27,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HealthSeverity, SessionActivity, SessionHealthProjection } from './types.ts'
 import type { HealthReport } from './assess.ts'
+import type { Session } from '@deepseek-ai/dsh-session'
 import { assess } from './assess.ts'
-import { resolveConfig } from './config.ts'
+import type { ResolvedConfig } from './config.ts'
 import { formatCompact, formatHitRate } from './util.ts'
 
 /** One session row in the overview panel. */
@@ -373,6 +374,9 @@ export function buildHandoffSummary(report: HealthReport): string {
   if (h.uncommittedCount !== null) lines.push(`未提交变更：${h.uncommittedCount} 个`)
   if (h.hasHandoff !== null) lines.push(`交接文档：${h.hasHandoff ? '已就位' : '未找到'}`)
   if (h.lastCommit !== null) lines.push(`最新 commit：${h.lastCommit}`)
+  // push 状态（ahead/behind）也是交接清单的真实部分——未 push 的提交在切换
+  // 前需推送，B3 规格要求「git 状态」。
+  if (h.branchLine !== null) lines.push(`分支：${h.branchLine}`)
   lines.push(`时间：${new Date().toISOString()}`)
   return lines.join('\n').slice(0, SUMMARY_MAX_LEN)
 }
@@ -388,6 +392,7 @@ export async function handleOverviewRpc(
   req: IncomingMessage,
   res: ServerResponse,
   ctx: Context,
+  config: ResolvedConfig,
 ): Promise<void> {
   if (req.method !== 'POST') {
     sendJson(res, 405, { ok: false, error: 'POST only' })
@@ -420,13 +425,14 @@ export async function handleOverviewRpc(
       }
       const sessions = ctx.get('sessions') as { get(id: string): unknown } | undefined
       const agents = ctx.get('agents') as { get(id: string): { id: string } | undefined } | undefined
-      const session = sessions?.get(sessionId)
+      const session = sessions?.get(sessionId) as Session | undefined
       const agent = agents?.get(sessionId)
       if (session === undefined || agent === undefined) {
         sendJson(res, 404, { ok: false, error: 'session not found' })
         return
       }
-      const report = await assess(ctx, session as never, agent.id, controller.signal, resolveConfig({}))
+      // 用插件挂载时的真实配置（用户可覆盖阈值/检查项），不是默认值。
+      const report = await assess(ctx, session, agent.id, controller.signal, config)
       sendJson(res, 200, { ok: true, result: { text: buildHandoffSummary(report) } })
       return
     }

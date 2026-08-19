@@ -943,7 +943,7 @@ function fakeReq(method, body, remoteAddress) {
 
 await check('overview rpc: POST overview → 200 + sorted sessions', async () => {
   const res = fakeRes()
-  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'overview' }), '127.0.0.1'), res, overviewCtx)
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'overview' }), '127.0.0.1'), res, overviewCtx, config)
   assert.equal(res.out.status, 200)
   const json = JSON.parse(res.out.body)
   assert.equal(json.ok, true)
@@ -952,22 +952,22 @@ await check('overview rpc: POST overview → 200 + sorted sessions', async () =>
 
 await check('overview rpc: non-POST → 405', async () => {
   const res = fakeRes()
-  await handleOverviewRpc(fakeReq('GET', undefined, '127.0.0.1'), res, overviewCtx)
+  await handleOverviewRpc(fakeReq('GET', undefined, '127.0.0.1'), res, overviewCtx, config)
   assert.equal(res.out.status, 405)
 })
 
 await check('overview rpc: non-loopback peer → 403', async () => {
   const res = fakeRes()
-  await handleOverviewRpc(fakeReq('POST', '{}', '10.0.0.5'), res, overviewCtx)
+  await handleOverviewRpc(fakeReq('POST', '{}', '10.0.0.5'), res, overviewCtx, config)
   assert.equal(res.out.status, 403)
 })
 
 await check('overview rpc: malformed json → 400, unknown method → 400', async () => {
   const bad = fakeRes()
-  await handleOverviewRpc(fakeReq('POST', '{nope', '127.0.0.1'), bad, overviewCtx)
+  await handleOverviewRpc(fakeReq('POST', '{nope', '127.0.0.1'), bad, overviewCtx, config)
   assert.equal(bad.out.status, 400)
   const unknown = fakeRes()
-  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'nope' }), '127.0.0.1'), unknown, overviewCtx)
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'nope' }), '127.0.0.1'), unknown, overviewCtx, config)
   assert.equal(unknown.out.status, 400)
 })
 
@@ -991,19 +991,20 @@ await check('summary: buildHandoffSummary — plain text with real checklist sta
   assert.ok(text.includes('未提交变更：3 个'))
   assert.ok(text.includes('交接文档：已就位'))
   assert.ok(text.includes('最新 commit：abc123'))
+  assert.ok(text.includes('分支：## main...origin/main [ahead 2]'))
   assert.ok(/时间：\d{4}-\d{2}-\d{2}T/.test(text))
 })
 
 await check('summary rpc: sessionId missing → 400, unknown session → 404', async () => {
   const noId = fakeRes()
-  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary' }), '127.0.0.1'), noId, overviewCtx)
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary' }), '127.0.0.1'), noId, overviewCtx, config)
   assert.equal(noId.out.status, 400)
   const noSess = fakeRes()
   const bareCtx = {
     get: name => name === 'sessions' ? { get: () => undefined }
       : name === 'agents' ? { get: () => undefined } : undefined,
   }
-  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'nope' }), '127.0.0.1'), noSess, bareCtx)
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'nope' }), '127.0.0.1'), noSess, bareCtx, config)
   assert.equal(noSess.out.status, 404)
 })
 
@@ -1017,7 +1018,7 @@ await check('summary rpc: valid session → 200 + text', async () => {
         : services[name],
   }
   const res = fakeRes()
-  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'agent-1' }), '127.0.0.1'), res, summaryCtx)
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'agent-1' }), '127.0.0.1'), res, summaryCtx, config)
   assert.equal(res.out.status, 200)
   const json = JSON.parse(res.out.body)
   assert.equal(json.ok, true)
