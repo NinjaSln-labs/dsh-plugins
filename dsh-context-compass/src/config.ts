@@ -102,7 +102,10 @@ export interface Config {
   cost?: CostConfig
 }
 
-/** Schemastery schema: documents the shape for the Loader and settings UI. */
+/** Schemastery schema: documents the shape for the Loader and settings UI.
+ *  *** 双源警告 ***：此 schema 的 .default() 值与下方 resolveConfig 的 ?? 回退
+ *  必须保持同步——Loader 路径走 schema 归一化，直接调用路径走 resolveConfig；
+ *  改一处必须改另一处。 */
 export const Config: z<Config> = z.object({
   thresholds: z.object({
     windowMid: z.number().min(0).max(1).default(0.3),
@@ -147,6 +150,9 @@ export interface ResolvedConfig {
   cost: CostConfig
 }
 
+/** 双源警告：此函数手动维护与上方 Config schema .default() 完全相同的默认值。
+ *  Loader 路径走 schema 归一化，直接调用路径（测试/内部）走此处回退；
+ *  改一处必须改另一处。 */
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const thresholds: ThresholdsConfig = {
     windowMid: config.thresholds?.windowMid ?? 0.3,

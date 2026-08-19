@@ -185,7 +185,7 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   const workspaceBySession = new Map<string, { id: string; title: string }>()
   try {
     for (const w of workspaceRegistry?.list?.() ?? []) {
-      const title = (w.title !== undefined && w.title !== null && w.title !== '')
+      const title = (typeof w.title === 'string' && w.title !== '')
         ? w.title
         : (w.path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? w.id
       for (const sid of w.sessionIds ?? []) {

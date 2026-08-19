@@ -100,6 +100,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-tip{animation:sh-tip-in .15s ease-out}
 @keyframes sh-tip-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.sh-tip{animation:none}}
+@media (prefers-reduced-motion: reduce){.sh-rowtip{animation:none}}
 /* Sidebar footer action (multi-session overview opener): styled and sized
    like the New Session button (38px, radius 12, elevated fill + border,
    full column width like the Settings row), entirely on theme tokens so it

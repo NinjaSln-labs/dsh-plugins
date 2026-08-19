@@ -313,7 +313,13 @@ async function probeHandoff(
     return null
   }
   // 不安全路径（绝对 / .. 逃逸）直接跳过并标注——不探测 cwd 之外。
+  // 非字符串（工具/模型传错类型）视为不安全：safeRelativeName 编译时标注
+  // 参数 string，运行时无类型 enforce，typeof 守卫防 TypeError 穿出 filter。
   const candidates = rawCandidates.filter(name => {
+    if (typeof name !== 'string') {
+      probes.push(`交接文档：已跳过非字符串路径（${String(name)}）`)
+      return false
+    }
     if (safeRelativeName(name)) return true
     probes.push(`交接文档：已跳过不安全路径（${name}）`)
     return false
@@ -588,11 +594,13 @@ export async function assess(
       : ''
   const remainingNote = remainingRounds !== null
     && remainingRounds >= config.thresholds.economyRoundFloor
-    ? `（剩余约 ${remainingRounds} 轮：${expectedTotalCny !== null
-      ? `预计输入费用 ≈ ${formatCny(expectedTotalCny)}（≈${formatUsd(expectedTotalUsd ?? 0)}）`
-      : expectedTotalUsd !== null
-        ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
-        : `按 ${formatCompact(effectivePerRound ?? total ?? 0)} token/轮估算，费用累积明显`}）`
+    ? `（剩余约 ${remainingRounds} 轮：${expectedTotalCny !== null && expectedTotalUsd !== null
+      ? `预计输入费用 ≈ ${formatCny(expectedTotalCny)}（≈${formatUsd(expectedTotalUsd)}）`
+      : expectedTotalCny !== null
+        ? `预计输入费用 ≈ ${formatCny(expectedTotalCny)}`
+        : expectedTotalUsd !== null
+          ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
+          : `按 ${formatCompact(effectivePerRound ?? total ?? 0)} token/轮估算，费用累积明显`}）`
     : ''
   let reason: string
   switch (severity) {

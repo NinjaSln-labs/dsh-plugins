@@ -40,13 +40,13 @@ ctx.slots.inject('session.row.trailing', () => ctx.slots.register(
 ) as never)
 ```
 
-`HealthListDot`：复用 header 徽章的数据管线（`faceOf('sessionHealth')` 订阅 + `contextPressure` 合并 + 忙闲时金额），渲染为小色点（绿/蓝/黄/红/灰，与徽章同源），悬停 tooltip，点击打开该会话并运行 `/health`。样式走 `<style data-plugin>` 契约（HMR 可清理）。
+`HealthListDot`：复用 header 徽章的数据管线（`faceOf('sessionHealth')` 订阅 + `contextPressure` 合并 + 忙闲时金额），渲染为小色点（绿/蓝/黄/红/灰，与徽章同源），悬停 tooltip，点击打开该会话并运行 `/compass`。样式走 `<style data-plugin>` 契约（HMR 可清理）。
 
 ### 验收标准
 
 - 列表每行尾部出现健康色点，与头部徽章同数据源（投影帧，零轮询）
 - 冷会话也有值（投影缓存），无值显示灰点
-- 悬停 tooltip 含 severity/占用/计费预期；点击跳转会话并运行 `/health`
+- 悬停 tooltip 含 severity/占用/计费预期；点击跳转会话并运行 `/compass`
 - a11y：色点非纯颜色传达（aria-label 含判定文案）
 - 卸载/HMR：`style[data-plugin="dsh-context-compass"]` 正常清理
 
@@ -74,13 +74,13 @@ Each `session.list` row already carries the full projections block via apiproxy 
 Declare in ui-workspace (or ui-conversation):
 `'session.row.trailing': { kind: 'list', scope: 'session', owner: ConversationHeaderActionOwnerProps }` — rendered at the row tail, next to rename/archive actions.
 
-Plugin side can ship the registration preemptively: `slots.inject` on an undeclared key is silently inert (verified in `runtime/src/client/slots.ts`: `if (spec === undefined) return`), and it reconciles automatically once the declaration appears — no plugin change needed later. `HealthListDot` reuses the header badge's data pipeline (sessionHealth face + contextPressure merge + period-aware money) as a small severity dot with hover tooltip and click-to-open + `/health`.
+Plugin side can ship the registration preemptively: `slots.inject` on an undeclared key is silently inert (verified in `runtime/src/client/slots.ts`: `if (spec === undefined) return`), and it reconciles automatically once the declaration appears — no plugin change needed later. `HealthListDot` reuses the header badge's data pipeline (sessionHealth face + contextPressure merge + period-aware money) as a small severity dot with hover tooltip and click-to-open + `/compass`.
 
 ### Acceptance
 
 - Per-row dots in the session list, same projection frames as the header badge (zero polling)
 - Cold sessions show cached values; gray when absent
-- Tooltip with severity/occupancy/cost; click opens the session and runs `/health`
+- Tooltip with severity/occupancy/cost; click opens the session and runs `/compass`
 - a11y: not color-only (aria-label with the verdict text)
 - HMR/unload cleans `style[data-plugin="dsh-context-compass"]`
 

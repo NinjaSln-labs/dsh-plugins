@@ -751,6 +751,43 @@ await check('projection: official pricing drives cny/usd money fields', () => {
   assert.equal(v.pricePeriod, 'offpeak')
 })
 
+await check('assess: CNY remainingNote — official pricing + remainingRounds ≥ floor', async () => {
+  // V9-4 修复：当 CNY 定价激活且 remainingRounds 足够大时，remainingNote
+  // 走 expectedTotalCny && expectedTotalUsd 分支配方定价金额，不再用 ?? 0 兜底。
+  // assess 从 projection snapshot 读 effectivePerRoundCny——直接塞 stub snapshot。
+  const cnyCtx = {
+    get: name => {
+      if (name === 'sessionProjections') {
+        return {
+          snapshot: () => ({
+            values: {
+              sessionHealth: {
+                severity: 'yellow', advice: 'a', ratio: 0.13, total: 132_000, window: 1_000_000,
+                turns: 2, userMessages: 2, assistantMessages: 1, compactions: 0,
+                uncachedInputTokens: 13_200, cacheReadTokens: 118_800,
+                effectivePerRound: 25_080,
+                effectivePerRoundUsd: 0.007,
+                effectivePerRoundCny: 0.05, // CNY pricing active
+                pricePeriod: 'offpeak',
+              },
+              tokenUsage: { uncachedInputTokens: 13_200, cacheReadTokens: 118_800, cacheWriteTokens: 0 },
+            },
+          }),
+        }
+      }
+      return services[name]
+    },
+  }
+  const report = await assess(cnyCtx, session, 'agent-1', signal, config, { remainingRounds: 10 })
+  assert.ok(report.signals.expectedTotalCny !== null, 'CNY expected total must be non-null')
+  assert.ok(report.signals.expectedTotalUsd !== null, 'USD expected total must be non-null')
+  const text = buildCommandText(report, { minimal: false })
+  // remainingNote：CNY + USD 同时非 null → 走 ¥xxx（≈$xxx）双币展示
+  assert.ok(text.includes('¥'), `CNY remainingNote must show ¥: ${text}`)
+  assert.ok(text.includes('$'), `CNY remainingNote must show $: ${text}`)
+  assert.ok(!text.includes('$0.00'), `CNY remainingNote must not show $0.00 fallback: ${text}`)
+})
+
 
 /* ---------- /compass command handler ---------- */
 const cmdDef = healthCommandDefinition(ctx, config)
