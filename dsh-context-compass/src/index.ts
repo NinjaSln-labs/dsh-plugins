@@ -97,7 +97,7 @@ export default {
       const dispose = webServer.register({
         kind: 'exact',
         path: '/context-compass-rpc',
-        handler: (req: IncomingMessage, res: ServerResponse) => handleOverviewRpc(req, res, wsCtx),
+        handler: (req: IncomingMessage, res: ServerResponse) => handleOverviewRpc(req, res, wsCtx, resolved),
       })
       ctx.effect(() => () => { try { dispose() } catch { /* ignore */ } })
     })

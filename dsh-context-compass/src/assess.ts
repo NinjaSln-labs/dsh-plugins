@@ -412,15 +412,14 @@ export async function assess(
   // 时升一档（yellow→red）：剩得多 + 每轮都付 = 更该切。徽章无轮数信息
   // （投影不携带），维持原档；容量黄（占窗口 ≥50%）不参与（容量本身已
   // 该切，无需经济再加码）。
+  //
+  // healthView 的 yellow 只来自两个来源：capacityHigh 或经济命中——
+  // `yellow && !capacityHigh` ⟺ 经济命中，无需在此重算 economyFloor（避免
+  // 与 projection.ts 的公式分叉，单点权威）。
   const capacityHigh = ratio !== null && ratio >= config.thresholds.windowHigh
-  const economyFloor = window !== null && window > 0
-    ? Math.max(config.thresholds.economyTokenFloor, window * config.thresholds.economyWindowRatio)
-    : config.thresholds.economyTokenFloor
-  const economyHit = view.effectivePerRound !== null && view.effectivePerRound >= economyFloor
   const remainingProvided = opts.remainingRounds !== null && opts.remainingRounds !== undefined
   const economyUpgrade = view.severity === 'yellow'
     && !capacityHigh
-    && economyHit
     && remainingProvided
     && opts.remainingRounds! >= config.thresholds.economyRoundFloor
   const severity: HealthSeverity = economyUpgrade ? 'red' : view.severity

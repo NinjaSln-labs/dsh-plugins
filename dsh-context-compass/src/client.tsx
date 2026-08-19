@@ -311,11 +311,15 @@ function HealthBadge(props: {
   // （窗口/规模/压缩）折叠在「更多详情」。
   const [showMore, setShowMore] = React.useState(false)
   const copiedTimer = React.useRef<number | null>(null)
+  const mountedRef = React.useRef(true)
   const copySummary = () => {
     if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
     const finish = (ok: boolean) => {
+      if (!mountedRef.current) return // 浮层关闭/组件卸载后不再 setState
       setCopied(ok)
-      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
+      copiedTimer.current = window.setTimeout(() => {
+        if (mountedRef.current) setCopied(false)
+      }, 2000)
     }
     try {
       void fetch('/context-compass-rpc', {
@@ -333,6 +337,7 @@ function HealthBadge(props: {
     } catch { finish(false) }
   }
   React.useEffect(() => () => {
+    mountedRef.current = false
     if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
   }, [])
   // 浮层消失延迟：徽章↔浮层的空隙由 .sh-tip::before 桥接，延迟兜底快速抖动；
@@ -500,6 +505,19 @@ function HealthBadge(props: {
             </div>
           )
         })()}
+        {/* 已压缩是核心信号（A1 压缩比例 + 滞后提示的前提），留在默认视图，
+            不进「更多详情」折叠——只折叠纯信息行（窗口/规模）。 */}
+        {proj !== undefined && proj.compactions > 0 ? (
+          <div className="sh-tip-row">
+            <span className="sh-k">已压缩</span>
+            <span className="sh-v">
+              {proj.compactions} 次
+              {proj.compressionRatio !== null && proj.compressionRatio !== undefined
+                ? `（上次压缩比例 ≈ ${Math.round(proj.compressionRatio * 100)}%，快照口径）`
+                : ''}
+            </span>
+          </div>
+        ) : null}
         {showMore ? (
           <>
             <div className="sh-tip-row">
@@ -507,23 +525,10 @@ function HealthBadge(props: {
               <span className="sh-v">{compact(merged.window)}</span>
             </div>
             {proj !== undefined ? (
-              <>
-                <div className="sh-tip-row">
-                  <span className="sh-k">会话规模</span>
-                  <span className="sh-v">{proj.turns} 轮 / {proj.userMessages + proj.assistantMessages} 条消息</span>
-                </div>
-                {proj.compactions > 0 ? (
-                  <div className="sh-tip-row">
-                    <span className="sh-k">已压缩</span>
-                    <span className="sh-v">
-                      {proj.compactions} 次
-                      {proj.compressionRatio !== null && proj.compressionRatio !== undefined
-                        ? `（上次压缩比例 ≈ ${Math.round(proj.compressionRatio * 100)}%，快照口径）`
-                        : ''}
-                    </span>
-                  </div>
-                ) : null}
-              </>
+              <div className="sh-tip-row">
+                <span className="sh-k">会话规模</span>
+                <span className="sh-v">{proj.turns} 轮 / {proj.userMessages + proj.assistantMessages} 条消息</span>
+              </div>
             ) : null}
           </>
         ) : null}
