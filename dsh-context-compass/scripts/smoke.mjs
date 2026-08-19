@@ -215,6 +215,21 @@ await check('projection: message-count proxy escalates green → blue (window-sc
   assert.equal(smallWindow.severity, 'blue')
 })
 
+await check('projection: display pct clamps to 100 for ratio > 1 (caliber gap)', () => {
+  // ratio > 1 (pressure exceeding the known window) must display 100%, never
+  // a misleading >100% "已占窗口" figure; the real ratio is preserved.
+  const base = { turns: 0, lastTurn: null, userMessages: 0, assistantMessages: 0, compactions: 0 }
+  const over = healthView({ ...base, pressureTokens: 1_500_000, contextWindow: 1_000_000 }, config) // ratio 1.5
+  assert.equal(over.ratio, 1.5) // real ratio preserved for analysis
+  assert.ok(over.advice.includes('100%')) // display clamped to 100
+  assert.equal(over.severity, 'red')
+  // window=0 → no ratio tier at all (division-by-window only when window > 0).
+  const zeroW = healthView({ ...base, pressureTokens: 1_000_000, contextWindow: 0 }, config)
+  assert.equal(zeroW.ratio, null)
+  assert.equal(zeroW.severity, 'green') // no window → can't judge occupancy
+  assert.ok(!(zeroW.advice.includes('NaN')))
+})
+
 await check('usage: cacheHitRateOf — single algorithm for every surface', () => {
   // Same formula as the core input-bar stats line (cacheRead / (uncached +
   // cacheRead + cacheWrite)), operating on the core tokenUsage totals.
@@ -1113,6 +1128,23 @@ await check('overview: archived sessions are hidden everywhere', async () => {
   }
   const rows = await buildOverview(archivedCtx, signal)
   assert.deepEqual(rows.map(r => r.id), ['a1'])
+})
+
+await check('overview: workspaceRegistry.list() throwing degrades to ungrouped rows', async () => {
+  // A workspace registry whose list()/archivedSessionIds access throws must NOT
+  // blank the panel — archive cut is skipped and rows stay ungrouped, never throw.
+  const wsbCtx = {
+    get: name => ({
+      ...overviewServices,
+      workspaceRegistry: {
+        archivedSessionIds: new Proxy({}, { get: () => { throw new Error('archived boom') } }),
+        list: () => { throw new Error('list boom') },
+      },
+    })[name],
+  }
+  const rows = await buildOverview(wsbCtx, signal)
+  assert.equal(rows.length, 4) // nothing archived → all rows present
+  assert.ok(rows.every(r => r.workspace === null)) // ungrouped, never thrown
 })
 
 await check('overview: title cache — first frame null, background fill, next hit', async () => {
