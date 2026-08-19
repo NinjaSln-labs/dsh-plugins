@@ -332,9 +332,18 @@ function sendJson(res: ServerResponse, status: number, value: unknown): void {
   res.end(body)
 }
 
+/** RPC body 上限：请求极小（method + sessionId），16KB 防御恶意大 body OOM。 */
+const MAX_BODY_BYTES = 16 * 1024
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
-  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  let total = 0
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    total += buf.length
+    if (total > MAX_BODY_BYTES) throw Object.assign(new Error('request body too large'), { status: 413 })
+    chunks.push(buf)
+  }
   return Buffer.concat(chunks).toString('utf8')
 }
 
@@ -408,8 +417,10 @@ export async function handleOverviewRpc(
   let call: RpcCall
   try {
     call = JSON.parse(await readBody(req)) as RpcCall
-  } catch {
-    sendJson(res, 400, { ok: false, error: 'invalid json' })
+  } catch (e) {
+    // body 超限 → 413；其余（非法 JSON）→ 400。
+    const status = e instanceof Error && (e as { status?: number }).status === 413 ? 413 : 400
+    sendJson(res, status, { ok: false, error: status === 413 ? 'request body too large' : 'invalid json' })
     return
   }
   const controller = new AbortController()

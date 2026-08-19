@@ -632,10 +632,41 @@ await check('command: minimal mode', async () => {
   assert.ok(!result.text.includes('git 仓库'))
 })
 
+await check('command: explicit no-git / no-handoff parameters skip those probes', async () => {
+  const noGit = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: 'no-git', signal })
+  assert.equal(noGit.kind, 'success')
+  assert.ok(noGit.text.includes('git 检查：已跳过'))
+  assert.ok(!noGit.text.includes('git 仓库：'), 'no-git 不得运行 git 探测')
+  const noHandoff = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: 'no-handoff', signal })
+  assert.equal(noHandoff.kind, 'success')
+  assert.ok(noHandoff.text.includes('交接文档检查：已跳过'))
+  assert.ok(noHandoff.text.includes('git 仓库：早期工作可追溯'), 'no-handoff 只跳过 handoff，git 仍探测')
+})
+
+await check('assess: config-disabled git/handoff annotate the skip (symmetric with processes)', async () => {
+  const offCfg = resolveConfig({ checks: { git: { enabled: false }, handoff: { enabled: false } } })
+  const report = await assess(ctx, session, 'agent-1', signal, offCfg, {})
+  assert.ok(report.probes.some(p => p.includes('git 检查：已跳过（配置关闭）')), `got: ${JSON.stringify(report.probes)}`)
+  assert.ok(report.probes.some(p => p.includes('交接文档检查：已跳过（配置关闭）')), `got: ${JSON.stringify(report.probes)}`)
+})
+
 await check('command: doc= parameter probes a user-named handoff file', async () => {
   const result = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: 'doc=HANDOFF.md', signal })
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('交接文档：已就位'))
+})
+
+await check('assess: unsafe handoff paths (absolute / .. escape) are skipped, never probed', async () => {
+  // docName / config.paths 可被提示注入引导到 cwd 之外——白名单拒绝并标注。
+  const unsafe = await assess(ctx, session, 'agent-1', signal, config, { docName: '/etc/passwd' })
+  assert.ok(unsafe.probes.some(p => p.includes('已跳过不安全路径')), `got: ${JSON.stringify(unsafe.probes)}`)
+  assert.equal(unsafe.handoff.hasHandoff, null)
+  const dotdot = await assess(ctx, session, 'agent-1', signal, config, { docName: '../../secret.md' })
+  assert.ok(dotdot.probes.some(p => p.includes('已跳过不安全路径')))
+  // 相对子目录路径（如 docs/HANDOFF.md）仍允许。
+  const relCfg = resolveConfig({ checks: { handoff: { paths: ['docs/HANDOFF.md'] } } })
+  const rel = await assess(ctx, session, 'agent-1', signal, relCfg, {})
+  assert.ok(!rel.probes.some(p => p.includes('已跳过不安全路径')), `got: ${JSON.stringify(rel.probes)}`)
 })
 
 await check('command: no session degrades to error', async () => {
@@ -1030,6 +1061,13 @@ await check('overview rpc: malformed json → 400, unknown method → 400', asyn
   assert.equal(unknown.out.status, 400)
 })
 
+await check('overview rpc: oversized body → 413 (defensive against OOM)', async () => {
+  const big = fakeRes()
+  const huge = JSON.stringify({ method: 'overview', pad: 'x'.repeat(20 * 1024) })
+  await handleOverviewRpc(fakeReq('POST', huge, '127.0.0.1'), big, overviewCtx, config)
+  assert.equal(big.out.status, 413)
+  assert.equal(JSON.parse(big.out.body).error, 'request body too large')
+})
 /* ---------- B3: handoff summary copy (RPC method `summary`) ---------- */
 await check('summary: buildHandoffSummary — plain text with real checklist state', () => {
   const text = buildHandoffSummary({

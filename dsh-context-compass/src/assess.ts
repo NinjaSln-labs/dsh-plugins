@@ -278,6 +278,17 @@ async function probeGitState(
   return { clean: uncommitted === 0, uncommitted, lastCommit, branchLine }
 }
 
+/**
+ * 交接文档探测的路径白名单：拒绝绝对路径与 `..` 逃逸段——探测只应发生在
+ * 工作区内（相对路径含子目录允许，如 docs/HANDOFF.md）。工具参数 handoffDoc
+ * 与 /compass doc= 都可能被提示注入引导到任意路径；虽然探测只回报布尔存在
+ * 性（泄露面极小），白名单是 imgdraw 同款防御（文件名 basename 校验防穿越）。
+ */
+function safeRelativeName(name: string): boolean {
+  if (name === '' || name.startsWith('/') || name.startsWith('\\')) return false
+  return !name.split(/[\\/]/).some(seg => seg === '..')
+}
+
 /** Handoff-document probe: only names the user configured or passed inline. */
 async function probeHandoff(
   ctx: Context,
@@ -292,11 +303,18 @@ async function probeHandoff(
     probes.push('交接文档检查：不可用（未挂载 fs，已跳过）')
     return null
   }
-  const candidates = [...(docName !== null ? [docName] : []), ...config.checks.handoff.paths]
-  if (candidates.length === 0) {
+  const rawCandidates = [...(docName !== null ? [docName] : []), ...config.checks.handoff.paths]
+  if (rawCandidates.length === 0) {
     probes.push('交接文档：未配置检查路径（配置 checks.handoff.paths 或 /compass doc=文件名 指定）')
     return null
   }
+  // 不安全路径（绝对 / .. 逃逸）直接跳过并标注——不探测 cwd 之外。
+  const candidates = rawCandidates.filter(name => {
+    if (safeRelativeName(name)) return true
+    probes.push(`交接文档：已跳过不安全路径（${name}）`)
+    return false
+  })
+  if (candidates.length === 0) return null
   for (const name of candidates) {
     try {
       const t = await fs.resolve(name, { cwd, signal })
@@ -473,8 +491,10 @@ export async function assess(
         }
       }
     } else if (opts.noGit) probes.push('git 检查：已跳过')
+    else if (!opts.minimal && !config.checks.git.enabled) probes.push('git 检查：已跳过（配置关闭）')
     if (handoffEnabled) hasHandoff = await probeHandoff(ctx, cwd, signal, config, opts.docName ?? null, probes)
     else if (opts.noHandoff) probes.push('交接文档检查：已跳过')
+    else if (!opts.minimal && !config.checks.handoff.enabled) probes.push('交接文档检查：已跳过（配置关闭）')
     if (processEnabled) {
       runningProcesses = await probeProcesses(ctx, cwd, signal, probes)
       processesChecked = true
