@@ -126,7 +126,7 @@ npm run typecheck  # 严格类型检查
 npm run smoke      # 逻辑冒烟测试（stub 服务）
 npm run mount      # 真实 cordis 挂载测试（命令 + 工具 + 投影）
 npm run build:client && node scripts/client-mount.mjs  # 浏览器启动路径测试
-npm run visual     # Playwright 视觉回归（需运行中 harness：明/暗 × 四档 × 卡片展开矩阵 + hover 桥接层 e2e）
+npm run visual     # Playwright 视觉回归（只读，不污染会话：panel RPC mock 矩阵 明/暗×四档×分页 + 徽章 hover 桥接层 e2e）
 npm run visual:update  # 有意变更视觉后重写基线（visual/baselines/）
 ```
 

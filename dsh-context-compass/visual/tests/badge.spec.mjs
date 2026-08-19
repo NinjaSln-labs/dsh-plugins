@@ -1,11 +1,12 @@
 /**
- * dsh-context-compass — badge hover bridge + tooltip 可达性 e2e.
+ * dsh-context-compass — badge hover bridge + tooltip 可达性 e2e（只读）。
  *
  * 桥接层回归（0.5.5 的可达性契约）：徽章 ↔ 浮层空隙由隐形桥接层
  * （.sh-tip::before）接通，鼠标路径不断；键盘聚焦打开、移出子树才关。
- * 浮层截图不进基线——其行集随 live 数据变化（已压缩行按 compactions
- * 条件渲染）；视觉矩阵由 panel（明/暗 × 四档）与 card（展开/收起 ×
- * 明/暗）基线承担。
+ *
+ * 只读约定：本套件不触发任何真实 /compass（那会往会话日志写卡片，
+ * 污染用户会话）——卡片功能（折叠/时间标签/失败态）由 smoke 与
+ * client-mount 的单测覆盖，视觉上由 panel 矩阵（RPC mock，只读）承担。
  */
 import { test, expect } from '@playwright/test'
 import { openSession } from '../helpers.mjs'
@@ -37,9 +38,4 @@ test('hover 桥接层：进浮层不断、移出才关；键盘聚焦可达', as
     await page.keyboard.press('Tab')
     await expect(tip).toBeHidden({ timeout: 3000 })
   }
-})
-
-test('点击徽章运行 /compass（直接派发 → 最终卡片）', async ({ page }) => {
-  await page.locator('.sh-badge').click()
-  await expect(page.locator('.sh-ccard-toggle, .sh-ccard[data-error="true"]').first()).toBeVisible({ timeout: 60_000 })
 })
