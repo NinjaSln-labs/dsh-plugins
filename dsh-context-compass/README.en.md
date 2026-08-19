@@ -48,8 +48,9 @@ Per the methodology, the economy dimension (per-round billable, cache-discounted
 thresholds: {
   windowMid: 0.3, windowHigh: 0.5, windowCritical: 0.8,   // window-ratio tiers
   economyTokenFloor: 50000, economyWindowRatio: 0.3,      // economy: billable ≥ max(50K, 30%×window) → yellow
-  economyRoundFloor: 10,                                  // remaining-rounds threshold (cost-expectation copy)
-  messageCountProxy: 800,                                 // context-bloat proxy metric
+  economyRoundFloor: 10,                                  // remaining-rounds threshold: tool/command with remaining ≥10 upgrades economy tier
+  messageCountProxy: 800,                                 // context-bloat proxy metric (window-scaled: max(800, 0.2%×window))
+  messageCountWindowRatio: 0.002,                         // proxy window-scaling ratio (1M window → 2000 messages)
 }
 // checks: probe switches (all read-only)
 checks: {

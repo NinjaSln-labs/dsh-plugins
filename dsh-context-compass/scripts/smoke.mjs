@@ -15,7 +15,7 @@ import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
 import { resolveConfig } from '../lib/config.js'
 import { PriceCache, periodAt, staticPricing } from '../lib/pricing.js'
-import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc } from '../lib/overview.js'
+import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, buildHandoffSummary } from '../lib/overview.js'
 
 let failures = 0
 async function check(name, fn) {
@@ -148,17 +148,22 @@ await check('projection: economy floor scales with the window (no 15%-yellow)', 
   assert.ok(v.advice.includes('已计缓存折扣'))
 })
 
-await check('projection: message-count proxy escalates green → blue', () => {
+await check('projection: message-count proxy escalates green → blue (window-scaled)', () => {
+  // A4：effectiveProxy = max(800, window × 0.002)。1M 窗口 → 2000。
   const base = {
-    turns: 40, lastTurn: null, userMessages: 500, assistantMessages: 500,
+    turns: 40, lastTurn: null, userMessages: 1200, assistantMessages: 1300,
     compactions: 0, pressureTokens: 20_000, contextWindow: 1_000_000,
   }
-  const view = healthView(base, config) // 2% occupancy, 1000 messages ≥ 800 proxy
+  const view = healthView(base, config) // 2% occupancy, 2500 messages ≥ 2000 proxy
   assert.equal(view.severity, 'blue')
   assert.ok(view.advice.includes('代理指标'))
-  assert.ok(view.advice.includes('1000'))
-  const low = healthView({ ...base, userMessages: 400, assistantMessages: 300 }, config)
-  assert.equal(low.severity, 'green') // 700 messages: no proxy, low occupancy
+  assert.ok(view.advice.includes('2500'))
+  // 1M 窗口 1500 消息 < 2000：不触发（旧 800 阈值下会误触发）。
+  const mid = healthView({ ...base, userMessages: 700, assistantMessages: 800 }, config)
+  assert.equal(mid.severity, 'green')
+  // 128K 窗口：effectiveProxy = max(800, 256) = 800 → 1000 消息仍触发。
+  const smallWindow = healthView({ ...base, userMessages: 500, assistantMessages: 500, contextWindow: 128_000 }, config)
+  assert.equal(smallWindow.severity, 'blue')
 })
 
 await check('usage: cacheHitRateOf — single algorithm for every surface', () => {
@@ -591,13 +596,27 @@ await check('tool: execute returns structured verdict + report', async () => {
     agent: { id: 'agent-1', session },
     signal,
   })
-  assert.equal(value.severity, 'yellow')
+  // A3 经济升级：计费当量 300K ≥ max(50K, 0.3×1M)=300K 且剩余 12 ≥ 10 → yellow 升 red。
+  assert.equal(value.severity, 'red')
   assert.equal(value.recommendation, 'suggest-switch')
   assert.equal(value.signals.windowPercent, 30)
   assert.equal(value.signals.tokensPerRound, 300_000)
   assert.equal(value.signals.messageCount, 3) // 2 user + 1 assistant in the stub events
   assert.equal(value.handoffReady.isGitRepo, true)
   assert.ok(typeof value.report === 'string' && value.report.length > 0)
+})
+
+await check('tool: A3 — remaining below floor keeps the economy tier at yellow', async () => {
+  const low = await tool.execute({ reason: '自检', remainingRounds: 5 }, {
+    agent: { id: 'agent-1', session },
+    signal,
+  })
+  assert.equal(low.severity, 'yellow') // 剩余 5 < 10：不升级
+  const none = await tool.execute({ reason: '自检' }, {
+    agent: { id: 'agent-1', session },
+    signal,
+  })
+  assert.equal(none.severity, 'yellow') // 未提供剩余轮数：不升级
 })
 
 await check('tool: danger-zone recommendation surfaces for the model', async () => {
@@ -950,6 +969,61 @@ await check('overview rpc: malformed json → 400, unknown method → 400', asyn
   const unknown = fakeRes()
   await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'nope' }), '127.0.0.1'), unknown, overviewCtx)
   assert.equal(unknown.out.status, 400)
+})
+
+/* ---------- B3: handoff summary copy (RPC method `summary`) ---------- */
+await check('summary: buildHandoffSummary — plain text with real checklist state', () => {
+  const text = buildHandoffSummary({
+    severity: 'yellow',
+    recommendation: 'suggest-switch',
+    summary: '建议在任务边界收尾',
+    reason: 'r',
+    signals: { total: 600_000, window: 1_000_000, ratio: 0.6, turns: 20, userMessages: 30, assistantMessages: 29, compactions: 2, compactionRatio: 0.42, cacheHitRate: 0.9 },
+    probes: [],
+    handoff: { isGitRepo: true, hasHandoff: true, runningProcesses: [], uncommittedCount: 3, lastCommit: 'abc123', branchLine: '## main...origin/main [ahead 2]' },
+  })
+  assert.ok(text.includes('上下文罗盘摘要'))
+  assert.ok(text.includes('健康度：yellow'))
+  assert.ok(text.includes('会话规模：20 轮 / 59 条消息'))
+  assert.ok(text.includes('每轮输入：约 600K token（窗口 60%）'))
+  assert.ok(text.includes('缓存命中：90%'))
+  assert.ok(text.includes('已压缩：2 次（上次压缩比例 ≈ 42%）'))
+  assert.ok(text.includes('未提交变更：3 个'))
+  assert.ok(text.includes('交接文档：已就位'))
+  assert.ok(text.includes('最新 commit：abc123'))
+  assert.ok(/时间：\d{4}-\d{2}-\d{2}T/.test(text))
+})
+
+await check('summary rpc: sessionId missing → 400, unknown session → 404', async () => {
+  const noId = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary' }), '127.0.0.1'), noId, overviewCtx)
+  assert.equal(noId.out.status, 400)
+  const noSess = fakeRes()
+  const bareCtx = {
+    get: name => name === 'sessions' ? { get: () => undefined }
+      : name === 'agents' ? { get: () => undefined } : undefined,
+  }
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'nope' }), '127.0.0.1'), noSess, bareCtx)
+  assert.equal(noSess.out.status, 404)
+})
+
+await check('summary rpc: valid session → 200 + text', async () => {
+  // Reuse the assess-level services so the summary path can run assess().
+  const summaryCtx = {
+    get: name => name === 'sessions'
+      ? { get: id => (id === 'agent-1' ? { header: { cwd: '/tmp/ws', id: 'agent-1' } } : undefined) }
+      : name === 'agents'
+        ? { get: id => (id === 'agent-1' ? { id: 'agent-1' } : undefined) }
+        : services[name],
+  }
+  const res = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'agent-1' }), '127.0.0.1'), res, summaryCtx)
+  assert.equal(res.out.status, 200)
+  const json = JSON.parse(res.out.body)
+  assert.equal(json.ok, true)
+  assert.ok(typeof json.result.text === 'string')
+  assert.ok(json.result.text.includes('上下文罗盘摘要'))
+  assert.ok(json.result.text.includes('健康度：yellow'))
 })
 
 if (failures > 0) {

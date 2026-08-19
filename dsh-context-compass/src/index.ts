@@ -30,7 +30,7 @@ export { assess, type HealthReport, type AssessOptions } from './assess.ts'
 export { healthCommandDefinition, buildCommandText } from './command.ts'
 export { buildSnapshotText, probeCrossSession, KNOWLEDGE_SNAPSHOT_KEY } from './knowledge.ts'
 export { sessionHealthTool } from './tool.ts'
-export { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, type OverviewRow } from './overview.ts'
+export { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, buildHandoffSummary, type OverviewRow } from './overview.ts'
 export type * from './types.ts'
 
 export const name = 'dsh-context-compass'
