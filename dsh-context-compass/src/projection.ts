@@ -210,7 +210,9 @@ export function healthView(
   const proxyHit = messages >= effectiveProxy
   if (severity === 'green' && proxyHit) severity = 'blue'
 
-  const pct = ratio !== null ? Math.round(ratio * 100) : null
+  // 窗口占用显示截断在 100%（ratio 可因口径差 >1，但「已占窗口 %」物理
+  // 上限满窗——与 client 的 badge min(100) 一致）。
+  const pct = ratio !== null ? Math.min(Math.round(ratio * 100), 100) : null
   // Compression ratio annotation (snapshot-delta caliber — see foldCompression).
   const compressionRatio = state.compressionRatio ?? null
   const ratioNote = compressionRatio !== null

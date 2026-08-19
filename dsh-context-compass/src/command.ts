@@ -42,7 +42,7 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
     lines.push(`- 会话规模：${s.turns} 轮 / ${s.userMessages ?? 0} 条消息 / ${s.assistantMessages ?? 0} 条回复`)
   }
   if (typeof s.total === 'number') {
-    lines.push(`- 每轮输入约 ${formatCompact(s.total)} token${s.ratio !== null ? `（窗口 ${Math.round(s.ratio * 100)}%）` : ''}${s.window !== null ? `；窗口 ${formatCompact(s.window)}` : ''}`)
+    lines.push(`- 每轮输入约 ${formatCompact(s.total)} token${s.ratio !== null ? `（窗口 ${Math.min(Math.round(s.ratio * 100), 100)}%）` : ''}${s.window !== null ? `；窗口 ${formatCompact(s.window)}` : ''}`)
   }
   if (typeof s.cacheHitRate === 'number') {
     lines.push(`- 缓存命中率 ${formatHitRate(s.cacheHitRate)}（上次请求——命中高说明上下文稳定且便宜；压缩会重置命中）`)

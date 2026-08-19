@@ -1128,6 +1128,26 @@ await check('overview: one broken record degrades that row only', async () => {
   assert.ok(rows.every(r => r.health === null)) // per-record failures degrade, never throw
 })
 
+await check('overview: title-backend failures (readTitleSnapshots + sessionTitle) degrade silently', async () => {
+  // scheduleTitleFill 的 readTitleSnapshots 抛错 + sessionTitle.get 抛错：
+  // 标题降级 null（下一帧重试），health 也正常降级——绝不向上抛导致面板白屏。
+  clearTitleCache()
+  const titleBoomCtx = {
+    get: name => ({
+      ...overviewServices,
+      sessionQuery: {
+        listSessions: async () => [{ header: { id: 't-boom', createdAt: 1 }, live: false, persisted: true }],
+        readTitleSnapshots: async () => { throw new Error('title read boom') },
+      },
+      sessionTitle: { get: () => { throw new Error('title get boom') } },
+    })[name],
+  }
+  const rows = await buildOverview(titleBoomCtx, signal)
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].title, null) // degraded, never thrown
+  clearTitleCache()
+})
+
 /* ---------- overview RPC handler ---------- */
 function fakeRes() {
   const out = { status: null, headers: null, body: null }
