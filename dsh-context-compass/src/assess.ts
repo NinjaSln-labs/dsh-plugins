@@ -387,6 +387,13 @@ export async function assess(
   const probes: string[] = []
   const cwd = workspaceCwd(ctx, session)
 
+  // 防御：remainingRounds 非有限数（NaN/Infinity——命令参数解析或工具
+  // schema 宽松传值）按未提供处理；NaN 能通过 `!== null` 检查，若直接参与
+  // 乘法会污染费用预期显示（¥NaN / $NaN）。
+  const remainingRounds = Number.isFinite(opts.remainingRounds as number)
+    ? (opts.remainingRounds as number)
+    : null
+
   const total = measureTokens(ctx, session)
   const window = await resolveWindow(ctx, session)
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
@@ -435,11 +442,11 @@ export async function assess(
   // `yellow && !capacityHigh` ⟺ 经济命中，无需在此重算 economyFloor（避免
   // 与 projection.ts 的公式分叉，单点权威）。
   const capacityHigh = ratio !== null && ratio >= config.thresholds.windowHigh
-  const remainingProvided = opts.remainingRounds !== null && opts.remainingRounds !== undefined
+  const remainingProvided = remainingRounds !== null
   const economyUpgrade = view.severity === 'yellow'
     && !capacityHigh
     && remainingProvided
-    && opts.remainingRounds! >= config.thresholds.economyRoundFloor
+    && remainingRounds >= config.thresholds.economyRoundFloor
   const severity: HealthSeverity = economyUpgrade ? 'red' : view.severity
   if (economyUpgrade) {
     probes.push(`经济升级：每轮计费当量 ${formatCompact(view.effectivePerRound ?? 0)} token 且剩余 ≥${config.thresholds.economyRoundFloor} 轮，判定升一档（工具/命令路径）`)
@@ -544,17 +551,15 @@ export async function assess(
   if (compactionRatio !== null) {
     probes.push(`上次压缩比例 ≈ ${Math.round(compactionRatio * 100)}%（按压缩前后压力快照差值推断——快照口径，非精确统计）`)
   }
-  const expectedTotalTokens = effectivePerRound !== null
-    && opts.remainingRounds !== null && opts.remainingRounds !== undefined
-    ? effectivePerRound * opts.remainingRounds
+  // 防御见函数头：remainingRounds 已归一化（NaN/Infinity → null）。
+  const expectedTotalTokens = effectivePerRound !== null && remainingRounds !== null
+    ? effectivePerRound * remainingRounds
     : null
-  const expectedTotalUsd = effectivePerRoundUsd !== null
-    && opts.remainingRounds !== null && opts.remainingRounds !== undefined
-    ? effectivePerRoundUsd * opts.remainingRounds
+  const expectedTotalUsd = effectivePerRoundUsd !== null && remainingRounds !== null
+    ? effectivePerRoundUsd * remainingRounds
     : null
-  const expectedTotalCny = effectivePerRoundCny !== null
-    && opts.remainingRounds !== null && opts.remainingRounds !== undefined
-    ? effectivePerRoundCny * opts.remainingRounds
+  const expectedTotalCny = effectivePerRoundCny !== null && remainingRounds !== null
+    ? effectivePerRoundCny * remainingRounds
     : null
 
   // Human-readable verdict. Yellow's reason branches on the same driver the
@@ -571,9 +576,9 @@ export async function assess(
     : effectivePerRoundUsd !== null
       ? `计费预期约 ${formatUsd(effectivePerRoundUsd)}/轮（输入价 $${config.cost.inputPricePerM}/M，缓存命中按 ${Math.round(config.cost.cacheHitDiscount * 100)}% 计，不含输出）`
       : ''
-  const remainingNote = opts.remainingRounds !== null && opts.remainingRounds !== undefined
-    && opts.remainingRounds >= config.thresholds.economyRoundFloor
-    ? `（剩余约 ${opts.remainingRounds} 轮：${expectedTotalCny !== null
+  const remainingNote = remainingRounds !== null
+    && remainingRounds >= config.thresholds.economyRoundFloor
+    ? `（剩余约 ${remainingRounds} 轮：${expectedTotalCny !== null
       ? `预计输入费用 ≈ ${formatCny(expectedTotalCny)}（≈${formatUsd(expectedTotalUsd ?? 0)}）`
       : expectedTotalUsd !== null
         ? `预计输入费用 ≈ ${formatUsd(expectedTotalUsd)}`
@@ -583,7 +588,7 @@ export async function assess(
   switch (severity) {
     case 'red':
       reason = economyUpgrade
-        ? `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣）且剩余约 ${opts.remainingRounds} 轮——费用将显著累积，建议尽快在任务边界收尾并交接。`
+        ? `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣）且剩余约 ${remainingRounds} 轮——费用将显著累积，建议尽快在任务边界收尾并交接。`
         : `上下文已占窗口 ${pct}%，处于危险区；建议尽快在任务边界收尾，并先补交接（文档 + commit）。`
       break
     case 'yellow':

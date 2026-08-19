@@ -657,6 +657,26 @@ await check('projection: official pricing drives cny/usd money fields', () => {
 
 /* ---------- /compass command handler ---------- */
 const cmdDef = healthCommandDefinition(ctx, config)
+
+await check('assess: non-finite remainingRounds is treated as not provided (no NaN money)', async () => {
+  // NaN 能通过 `!== null` 检查——若直接参与乘法会产出 ¥NaN/$NaN。归一化后
+  // expectedTotal 全 null，文案无 NaN。
+  const report = await assess(ctx, session, 'agent-1', signal, config, { remainingRounds: NaN })
+  assert.equal(report.signals.expectedTotalTokens, null)
+  assert.equal(report.signals.expectedTotalUsd, null)
+  assert.equal(report.signals.expectedTotalCny, null)
+  const text = buildCommandText(report, { minimal: false })
+  assert.ok(!text.includes('NaN'), `NaN must never leak into the report: ${text}`)
+})
+
+await check('command: remaining=<illegal> parses to null, never NaN', async () => {
+  for (const raw of ['remaining=abc', 'remaining=-5', 'remaining=', 'remaining=1e9', 'remaining=0']) {
+    const result = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: raw, signal })
+    assert.equal(result.kind, 'success')
+    assert.ok(!result.text.includes('NaN'), `${raw} must not leak NaN`)
+  }
+})
+
 await check('command: full report text', async () => {
   const result = await cmdDef.handler({ agent: { id: 'agent-1', session }, rawInput: '', signal })
   assert.equal(result.kind, 'success')

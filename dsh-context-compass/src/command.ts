@@ -116,7 +116,10 @@ export function healthCommandDefinition(ctx: Context, config: ResolvedConfig): C
       const noHandoff = minimal || arg.includes('no-handoff')
       const docMatch = arg.match(/doc=(\S+)/)
       const remMatch = arg.match(/remaining=(\d+)/)
-      const remaining = remMatch ? Number(remMatch[1]) : null
+      // 只接受纯数字（含 0）；非法输入（abc / 负数 / 空）→ null 不参与判定，
+      // 避免 Number('abc')=NaN 污染费用预期（NaN 能通过 !== null 检查）。
+      const rem = remMatch ? Number(remMatch[1]) : NaN
+      const remaining = Number.isFinite(rem) && rem >= 0 ? rem : null
 
       const report = await assess(ctx, session, invocation.agent.id, invocation.signal, config, {
         minimal,
