@@ -191,9 +191,14 @@ export function healthView(
 
   // Message-count proxy (dimension-A annotation): a very long message history
   // means early detail is likely summarized even when occupancy looks low —
-  // bottom-tier sessions escalate to "留意" instead of "放心继续".
+  // bottom-tier sessions escalate to "留意" instead of "放心继续". The proxy
+  // scales with the window (A4): max(messageCountProxy, ratio × window) — 800
+  // messages means little on a 1M window.
   const messages = state.userMessages + state.assistantMessages
-  const proxyHit = messages >= t.messageCountProxy
+  const effectiveProxy = window !== null && window > 0
+    ? Math.max(t.messageCountProxy, Math.round(window * t.messageCountWindowRatio))
+    : t.messageCountProxy
+  const proxyHit = messages >= effectiveProxy
   if (severity === 'green' && proxyHit) severity = 'blue'
 
   const pct = ratio !== null ? Math.round(ratio * 100) : null

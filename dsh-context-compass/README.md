@@ -47,8 +47,9 @@
 thresholds: {
   windowMid: 0.3, windowHigh: 0.5, windowCritical: 0.8,   // 窗口占比档位
   economyTokenFloor: 50000, economyWindowRatio: 0.3,      // 经济维度（计费当量 ≥ max(50K, 30%×窗口) 才黄）
-  economyRoundFloor: 10,                                  // 剩余轮数阈值（费用预期文案）
-  messageCountProxy: 800,                                  // 上下文膨胀代理指标
+  economyRoundFloor: 10,                                  // 剩余轮数阈值：工具/命令带剩余 ≥10 轮时经济档升级
+  messageCountProxy: 800,                                  // 上下文膨胀代理指标（随窗口缩放：max(800, 0.2%×窗口)）
+  messageCountWindowRatio: 0.002,                          // 代理指标随窗口缩放比例（1M 窗口 → 2000 条）
 }
 // checks: 探测开关（全部只读）
 checks: {

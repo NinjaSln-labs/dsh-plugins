@@ -78,6 +78,16 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
 .sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
+/* 复制交接摘要（B3）：浮层底部动作行。 */
+.sh-tip-copy-row{margin-top:8px;display:flex}
+.sh-tip-copy{border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;padding:3px 10px;cursor:pointer;flex:none}
+.sh-tip-copy:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.sh-tip-copy:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
+.sh-tip-copy-done{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}
+/* 浮层信息分层（B2）：「更多详情」折叠次要行。 */
+.sh-tip-more{margin-top:6px;border:none;background:none;padding:0;color:var(--dsw-alias-label-tertiary);font-size:11px;cursor:pointer;text-align:left}
+.sh-tip-more:hover{color:var(--dsw-alias-label-primary)}
+.sh-tip-more:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px;border-radius:3px}
 /* 压缩后判定滞后提示：severity 判定基于压缩前压力，占用条已按下次请求重估——
    差异超过阈值时标注「下次请求后更新」（theme-adaptive warn tint）。 */
 .sh-tip-lag{margin-top:8px;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.5;color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,var(--dsw-alias-label-primary));background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent)}
@@ -295,6 +305,36 @@ function HealthBadge(props: {
   const [costAsTokens, setCostAsTokens] = React.useState<boolean>(() => {
     try { return window.localStorage.getItem('dsh-context-compass/costDisplay') === 'tokens' } catch { return false }
   })
+  // 交接摘要复制反馈（B3）：点击 → RPC 取真实摘要 → 剪贴板 → 短暂显示「已复制」。
+  const [copied, setCopied] = React.useState(false)
+  // 浮层信息分层（B2）：核心行（占用/每轮/预计下次/计费）默认，次要行
+  // （窗口/规模/压缩）折叠在「更多详情」。
+  const [showMore, setShowMore] = React.useState(false)
+  const copiedTimer = React.useRef<number | null>(null)
+  const copySummary = () => {
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+    const finish = (ok: boolean) => {
+      setCopied(ok)
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
+    }
+    try {
+      void fetch('/context-compass-rpc', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ method: 'summary', sessionId: props.sessionId }),
+      }).then(res => res.json()).then(async (json: { ok?: boolean; result?: { text?: string } }) => {
+        const text = json.ok === true ? json.result?.text : undefined
+        if (typeof text !== 'string' || text === '') { finish(false); return }
+        try {
+          await navigator.clipboard.writeText(text)
+          finish(true)
+        } catch { finish(false) }
+      }).catch(() => finish(false))
+    } catch { finish(false) }
+  }
+  React.useEffect(() => () => {
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+  }, [])
   // 浮层消失延迟：徽章↔浮层的空隙由 .sh-tip::before 桥接，延迟兜底快速抖动；
   // 键盘聚焦（Tab 进徽章）也打开浮层，blur 移出子树才关闭。
   const hoverTimer = React.useRef<number | null>(null)
@@ -460,34 +500,57 @@ function HealthBadge(props: {
             </div>
           )
         })()}
-        <div className="sh-tip-row">
-          <span className="sh-k">模型窗口</span>
-          <span className="sh-v">{compact(merged.window)}</span>
-        </div>
-        {proj !== undefined ? (
+        {showMore ? (
           <>
             <div className="sh-tip-row">
-              <span className="sh-k">会话规模</span>
-              <span className="sh-v">{proj.turns} 轮 / {proj.userMessages + proj.assistantMessages} 条消息</span>
+              <span className="sh-k">模型窗口</span>
+              <span className="sh-v">{compact(merged.window)}</span>
             </div>
-            {proj.compactions > 0 ? (
-              <div className="sh-tip-row">
-                <span className="sh-k">已压缩</span>
-                <span className="sh-v">
-                  {proj.compactions} 次
-                  {proj.compressionRatio !== null && proj.compressionRatio !== undefined
-                    ? `（上次压缩比例 ≈ ${Math.round(proj.compressionRatio * 100)}%，快照口径）`
-                    : ''}
-                </span>
-              </div>
+            {proj !== undefined ? (
+              <>
+                <div className="sh-tip-row">
+                  <span className="sh-k">会话规模</span>
+                  <span className="sh-v">{proj.turns} 轮 / {proj.userMessages + proj.assistantMessages} 条消息</span>
+                </div>
+                {proj.compactions > 0 ? (
+                  <div className="sh-tip-row">
+                    <span className="sh-k">已压缩</span>
+                    <span className="sh-v">
+                      {proj.compactions} 次
+                      {proj.compressionRatio !== null && proj.compressionRatio !== undefined
+                        ? `（上次压缩比例 ≈ ${Math.round(proj.compressionRatio * 100)}%，快照口径）`
+                        : ''}
+                    </span>
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </>
         ) : null}
+        <button
+          type="button"
+          className="sh-tip-more"
+          onClick={() => setShowMore(v => !v)}
+          aria-expanded={showMore}
+        >
+          {showMore ? '收起详情' : '更多详情'}
+        </button>
         {lag.lag ? (
           <div className="sh-tip-lag" role="note">
             压缩后判定滞后：判定基于压缩前压力（{lag.oldPct}%），预计下次请求后更新（≈ {lag.newPct}%）
           </div>
         ) : null}
+        <div className="sh-tip-copy-row">
+          <button
+            type="button"
+            className={`sh-tip-copy${copied ? ' sh-tip-copy-done' : ''}`}
+            onClick={copySummary}
+            aria-label={copied ? '交接摘要已复制' : '复制交接摘要'}
+            title="复制含真实交接状态的摘要文本"
+          >
+            {copied ? '✓ 已复制交接摘要' : '复制交接摘要'}
+          </button>
+        </div>
         <div className="sh-tip-hint">点击运行 /compass 查看完整报告；点击计费预期切换金额 / token 显示</div>
       </div>
     )

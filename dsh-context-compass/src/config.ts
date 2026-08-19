@@ -35,6 +35,13 @@ export interface ThresholdsConfig {
   economyRoundFloor: number
   /** Message-count proxy for context bloat. Default 800. */
   messageCountProxy: number
+  /**
+   * Window-ratio component of the message-count proxy (A4): the effective
+   * proxy is max(messageCountProxy, messageCountWindowRatio × contextWindow)
+   * — 800 messages on a 128K window is not the same as on a 1M window.
+   * Default 0.002: 128K → max(800, 256)=800, 1M → max(800, 2000)=2000.
+   */
+  messageCountWindowRatio: number
 }
 
 export interface ChecksConfig {
@@ -105,6 +112,7 @@ export const Config: z<Config> = z.object({
     economyWindowRatio: z.number().min(0).max(1).default(0.3),
     economyRoundFloor: z.number().min(0).default(10),
     messageCountProxy: z.number().min(0).default(800),
+    messageCountWindowRatio: z.number().min(0).max(1).default(0.002),
   }),
   checks: z.object({
     git: z.object({
@@ -147,6 +155,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     economyWindowRatio: config.thresholds?.economyWindowRatio ?? 0.3,
     economyRoundFloor: config.thresholds?.economyRoundFloor ?? 10,
     messageCountProxy: config.thresholds?.messageCountProxy ?? 800,
+    messageCountWindowRatio: config.thresholds?.messageCountWindowRatio ?? 0.002,
   }
   const checks: ChecksConfig = {
     git: {

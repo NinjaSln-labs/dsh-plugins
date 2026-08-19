@@ -26,6 +26,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HealthSeverity, SessionActivity, SessionHealthProjection } from './types.ts'
+import type { HealthReport } from './assess.ts'
+import { assess } from './assess.ts'
+import { resolveConfig } from './config.ts'
+import { formatCompact, formatHitRate } from './util.ts'
 
 /** One session row in the overview panel. */
 export interface OverviewRow {
@@ -333,11 +337,50 @@ async function readBody(req: IncomingMessage): Promise<string> {
 /** RPC request shape from the browser panel. */
 interface RpcCall {
   method?: string
+  sessionId?: string
+}
+
+/** 摘要文本的最大长度（防御超长报告）。 */
+const SUMMARY_MAX_LEN = 2000
+
+/**
+ * Build the copy-ready handoff summary for one session — plain text, one
+ * line per fact, no markdown. Consumed by the badge tooltip's 复制交接摘要
+ * action (B3). Uses the same read-only assess() core so the git / handoff
+ * checklist state is real, not invented.
+ */
+export function buildHandoffSummary(report: HealthReport): string {
+  const s = report.signals
+  const h = report.handoff
+  const pct = s.ratio !== null ? Math.round(s.ratio * 100) : null
+  const lines: string[] = ['上下文罗盘摘要', '—']
+  lines.push(`健康度：${report.severity}（${report.summary}）`)
+  if (typeof s.turns === 'number') {
+    lines.push(`会话规模：${s.turns} 轮 / ${(s.userMessages ?? 0) + (s.assistantMessages ?? 0)} 条消息`)
+  }
+  if (s.total !== null) {
+    lines.push(`每轮输入：约 ${formatCompact(s.total)} token${pct !== null ? `（窗口 ${pct}%）` : ''}`)
+  }
+  if (typeof s.cacheHitRate === 'number') {
+    lines.push(`缓存命中：${formatHitRate(s.cacheHitRate)}`)
+  }
+  if (typeof s.compactions === 'number' && s.compactions > 0) {
+    const ratio = typeof s.compactionRatio === 'number' && s.compactionRatio !== null
+      ? `（上次压缩比例 ≈ ${Math.round(s.compactionRatio * 100)}%）`
+      : ''
+    lines.push(`已压缩：${s.compactions} 次${ratio}`)
+  }
+  if (h.uncommittedCount !== null) lines.push(`未提交变更：${h.uncommittedCount} 个`)
+  if (h.hasHandoff !== null) lines.push(`交接文档：${h.hasHandoff ? '已就位' : '未找到'}`)
+  if (h.lastCommit !== null) lines.push(`最新 commit：${h.lastCommit}`)
+  lines.push(`时间：${new Date().toISOString()}`)
+  return lines.join('\n').slice(0, SUMMARY_MAX_LEN)
 }
 
 /**
  * Full HTTP handler for POST /context-compass-rpc. Methods:
  *   { method: 'overview' } → { ok: true, result: { sessions: OverviewRow[] } }
+ *   { method: 'summary', sessionId } → { ok: true, result: { text } }
  * Loopback-only (panel data is private to the machine); 405 on non-POST,
  * 400 on malformed JSON, 403 on non-loopback peers, 500 on service failure.
  */
@@ -361,15 +404,33 @@ export async function handleOverviewRpc(
     sendJson(res, 400, { ok: false, error: 'invalid json' })
     return
   }
-  if (call.method !== 'overview') {
-    sendJson(res, 400, { ok: false, error: `unknown method: ${String(call.method)}` })
-    return
-  }
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const sessions = await buildOverview(ctx, controller.signal)
-    sendJson(res, 200, { ok: true, result: { sessions } })
+    if (call.method === 'overview') {
+      const sessions = await buildOverview(ctx, controller.signal)
+      sendJson(res, 200, { ok: true, result: { sessions } })
+      return
+    }
+    if (call.method === 'summary') {
+      const sessionId = call.sessionId
+      if (typeof sessionId !== 'string' || sessionId === '') {
+        sendJson(res, 400, { ok: false, error: 'sessionId required' })
+        return
+      }
+      const sessions = ctx.get('sessions') as { get(id: string): unknown } | undefined
+      const agents = ctx.get('agents') as { get(id: string): { id: string } | undefined } | undefined
+      const session = sessions?.get(sessionId)
+      const agent = agents?.get(sessionId)
+      if (session === undefined || agent === undefined) {
+        sendJson(res, 404, { ok: false, error: 'session not found' })
+        return
+      }
+      const report = await assess(ctx, session as never, agent.id, controller.signal, resolveConfig({}))
+      sendJson(res, 200, { ok: true, result: { text: buildHandoffSummary(report) } })
+      return
+    }
+    sendJson(res, 400, { ok: false, error: `unknown method: ${String(call.method)}` })
   } catch (e) {
     sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) })
   } finally {

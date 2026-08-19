@@ -407,9 +407,30 @@ export async function assess(
   }
   const view = healthView(state, config, price ?? undefined)
 
+  // A3 (economyRoundFloor 接入判定)：工具/命令路径携带 remainingRounds——
+  // 经济维度命中（计费当量 ≥ 窗口缩放门槛）且剩余轮数 ≥ economyRoundFloor
+  // 时升一档（yellow→red）：剩得多 + 每轮都付 = 更该切。徽章无轮数信息
+  // （投影不携带），维持原档；容量黄（占窗口 ≥50%）不参与（容量本身已
+  // 该切，无需经济再加码）。
+  const capacityHigh = ratio !== null && ratio >= config.thresholds.windowHigh
+  const economyFloor = window !== null && window > 0
+    ? Math.max(config.thresholds.economyTokenFloor, window * config.thresholds.economyWindowRatio)
+    : config.thresholds.economyTokenFloor
+  const economyHit = view.effectivePerRound !== null && view.effectivePerRound >= economyFloor
+  const remainingProvided = opts.remainingRounds !== null && opts.remainingRounds !== undefined
+  const economyUpgrade = view.severity === 'yellow'
+    && !capacityHigh
+    && economyHit
+    && remainingProvided
+    && opts.remainingRounds! >= config.thresholds.economyRoundFloor
+  const severity: HealthSeverity = economyUpgrade ? 'red' : view.severity
+  if (economyUpgrade) {
+    probes.push(`经济升级：每轮计费当量 ${formatCompact(view.effectivePerRound ?? 0)} token 且剩余 ≥${config.thresholds.economyRoundFloor} 轮，判定升一档（工具/命令路径）`)
+  }
+
   // Work-nature (dimension B) folding into the recommendation.
   let recommendation: HealthRecommendation
-  switch (view.severity) {
+  switch (severity) {
     case 'red':
     case 'yellow':
       recommendation = opts.dependsOnEarly === true && opts.earlyDecisionRecorded !== true
@@ -514,7 +535,6 @@ export async function assess(
   // projection unit used: capacity (ratio ≥ windowHigh) or economy (billable-
   // equivalent per round, cache-discounted, against the window-scaled floor).
   const pct = ratio !== null ? Math.round(ratio * 100) : null
-  const capacityHigh = ratio !== null && ratio >= config.thresholds.windowHigh
   const pricePeriod = price?.period ?? pricePeriodFromProjection
   const inputMissPerMCny = price !== null ? price.missPerMCny : null
   const inputHitPerMCny = price !== null ? price.hitPerMCny : null
@@ -534,9 +554,11 @@ export async function assess(
         : `按 ${formatCompact(effectivePerRound ?? total ?? 0)} token/轮估算，费用累积明显`}）`
     : ''
   let reason: string
-  switch (view.severity) {
+  switch (severity) {
     case 'red':
-      reason = `上下文已占窗口 ${pct}%，处于危险区；建议尽快在任务边界收尾，并先补交接（文档 + commit）。`
+      reason = economyUpgrade
+        ? `每轮计费约 ${formatCompact(effectivePerRound ?? 0)} token（已计缓存折扣）且剩余约 ${opts.remainingRounds} 轮——费用将显著累积，建议尽快在任务边界收尾并交接。`
+        : `上下文已占窗口 ${pct}%，处于危险区；建议尽快在任务边界收尾，并先补交接（文档 + commit）。`
       break
     case 'yellow':
       reason = capacityHigh
@@ -554,7 +576,7 @@ export async function assess(
   if (recommendation === 'danger-zone') {
     reason += ' 当前工作依赖早期内容且决策依据未记录——裸切会丢失隐性上下文，必须先补交接。'
   }
-  if (costNote !== '' && view.severity !== 'green') reason += ` ${costNote}`
+  if (costNote !== '' && severity !== 'green') reason += ` ${costNote}`
 
   const summary = ({
     'danger-zone': '危险区：依赖早期内容且无记录——先补交接（文档 + commit）再考虑切换',
@@ -564,7 +586,7 @@ export async function assess(
   } satisfies Record<HealthRecommendation, string>)[recommendation]
 
   return {
-    severity: view.severity,
+    severity,
     recommendation,
     summary,
     reason,
