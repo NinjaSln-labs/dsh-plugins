@@ -140,9 +140,11 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-ccard[data-error="true"]{border-color:var(--dsw-alias-state-error-primary)}
 .sh-ccard-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sh-ccard-title{font-size:12px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}
+/* 触发时间标签：连续多张 /compass 卡时能看出是不同时刻的独立动作。 */
+.sh-ccard-time{font-size:11px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;margin-left:auto;flex:none}
 .sh-ccard-summary{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .sh-ccard-state{font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.sh-ccard-toggle{margin-left:auto;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;padding:2px 8px;cursor:pointer;flex:none}
+.sh-ccard-toggle{border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;padding:2px 8px;cursor:pointer;flex:none}
 .sh-ccard-toggle:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-ccard-toggle:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-ccard-reason{font-size:12px;line-height:1.6}
@@ -594,9 +596,28 @@ export function parseCompassReport(text: string): CompassReport {
  * (the default card's own body is a <pre> too — no markdown renderer
  * involved). Running/error states degrade to the generic text row.
  */
+/** 命令触发时间 → HH:MM:SS（跨天则 MM-DD HH:MM），连续卡片的分隔标识。 */
+function commandTimeLabel(time: number | undefined): string | null {
+  if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0) return null
+  const d = new Date(time)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const now = new Date()
+  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  return sameDay ? hhmm : `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hhmm}`
+}
+
+/**
+ * The /compass rich card: severity chip + conclusion + reason, key metric
+ * rows, the real handoff checklist, and the full report in a <pre> body
+ * (the default card's own body is a <pre> too — no markdown renderer
+ * involved). Running/error states degrade to the generic text row. The head
+ * carries the trigger time so consecutive cards read as separate actions.
+ */
 function CompassCommandCard(props: {
   node: {
     name?: string | null
+    time?: number
     outcome?: { kind?: string; text?: string } | null
   }
 }): JSX.Element {
@@ -605,17 +626,19 @@ function CompassCommandCard(props: {
   const [expanded, setExpanded] = React.useState(false)
   const outcome = props.node.outcome
   const text = outcome?.text
+  const timeLabel = commandTimeLabel(props.node.time)
+  const timeTag = timeLabel !== null ? <span className="sh-ccard-time">{timeLabel}</span> : null
   if (outcome === null || outcome === undefined) {
     return (
       <div className="sh-ccard">
-        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">运行中…</span></div>
+        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">运行中…</span>{timeTag}</div>
       </div>
     )
   }
   if (outcome.kind !== 'success' || text === undefined || text === '') {
     return (
       <div className="sh-ccard" data-error="true">
-        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">执行失败</span></div>
+        <div className="sh-ccard-head"><span className="sh-ccard-title">/compass</span><span className="sh-ccard-state">执行失败</span>{timeTag}</div>
         {text !== undefined ? <pre className="sh-ccard-body">{text}</pre> : null}
       </div>
     )
@@ -628,6 +651,7 @@ function CompassCommandCard(props: {
         <span className="sh-ccard-title">/compass</span>
         {sev !== null ? <span className="sh-sev-chip"><span className="sh-row-dot" />{SEVERITY_LABEL[sev]}</span> : null}
         <span className="sh-ccard-summary">{report.summary}</span>
+        {timeTag}
         <button
           type="button"
           className="sh-ccard-toggle"

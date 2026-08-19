@@ -17,6 +17,8 @@
 
 ## 版本历史
 
+- **0.7.9** — **富卡片头部加触发时间标签**：连续多张 /compass 卡时，每张头部显示触发时刻（HH:MM:SS，跨天 MM-DD HH:MM，取 `CommandNode.time`）——一眼区分两次独立动作，不再「糊在一起」；运行中/失败/成功三态都带。**client 侧改动，硬刷新生效；card-head 视觉基线需重验**
+
 - **0.7.8** — **修复 /compass 偶发「执行失败 aborted」+ 卡片默认收起**：
   - **失败根源**：面板点击行的 `openSession` 里 `sessions.open`（冷会话异步加载）与 `commands.execute` 同 tick 触发——execute 的 signal 由 UI 请求生命周期管理，面板 `close()` 组件卸载会 abort 进行中的 execute → assess 中途挂 → 「This operation was aborted」失败卡。修复：execute 移到 `setTimeout`（面板卸载后 600ms 发起，signal 重新生成，规避面板生命周期）；冷会话加载窗口也得到缓冲
   - **卡片默认收起**：`CompassCommandCard` 初始 `expanded=false`——完整报告（pre 正文）默认折叠，头部结论/指标一眼可见；多张卡并排不再整页高度堆叠，需要细节再点「展开」
