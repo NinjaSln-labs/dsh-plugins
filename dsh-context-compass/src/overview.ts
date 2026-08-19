@@ -365,7 +365,7 @@ const SUMMARY_MAX_LEN = 2000
 export function buildHandoffSummary(report: HealthReport): string {
   const s = report.signals
   const h = report.handoff
-  const pct = s.ratio !== null ? Math.round(s.ratio * 100) : null
+  const pct = s.ratio !== null ? Math.min(Math.round(s.ratio * 100), 100) : null
   const lines: string[] = ['上下文罗盘摘要', '—']
   lines.push(`健康度：${report.severity}（${report.summary}）`)
   if (typeof s.turns === 'number') {

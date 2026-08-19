@@ -160,7 +160,7 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
         compactions: number
         compactionRatio?: number
       } = { compactions: report.signals.compactions }
-      if (report.signals.ratio !== null) signals.windowPercent = Math.round(report.signals.ratio * 100)
+      if (report.signals.ratio !== null) signals.windowPercent = Math.min(Math.round(report.signals.ratio * 100), 100)
       if (report.signals.total !== null) signals.tokensPerRound = report.signals.total
       if (report.signals.turns !== null) signals.turns = report.signals.turns
       if (report.signals.userMessages !== null || report.signals.assistantMessages !== null) {

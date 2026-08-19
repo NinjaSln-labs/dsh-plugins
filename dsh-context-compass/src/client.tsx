@@ -46,7 +46,7 @@ import type { SessionHealthProjection, HealthSeverity } from './types.ts'
 import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
 import { SNAPSHOT_SEPARATOR } from './knowledge.ts'
 // 单点格式化：util.ts 是唯一算法位置（host 与 client 同源，防双源漂移）。
-import { formatCompact, formatUsd, formatHitRate } from './util.ts'
+import { formatCompact, formatUsd, formatHitRate, formatCny } from './util.ts'
 
 const CSS = `
 .sh-wrap{position:relative;display:inline-flex}
@@ -466,7 +466,7 @@ function HealthBadge(props: {
           const cny = proj?.effectivePerRoundCny
           const usd = proj?.effectivePerRoundUsd
           const money = isZh && cny !== null && cny !== undefined
-            ? `¥${cny.toFixed(2)}`
+            ? formatCny(cny)
             : usd !== null && usd !== undefined ? formatUsd(usd) : null
           const effective = proj?.effectivePerRound
           if (money === null && effective === null) return null
@@ -859,7 +859,7 @@ function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | 
   if (proj === null) return null
   const cny = proj.effectivePerRoundCny
   const usd = proj.effectivePerRoundUsd
-  if (isZh && cny !== null && cny !== undefined) return `¥${cny.toFixed(2)}`
+  if (isZh && cny !== null && cny !== undefined) return formatCny(cny)
   if (usd !== null && usd !== undefined) return formatUsd(usd)
   return null
 }

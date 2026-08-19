@@ -821,6 +821,26 @@ await check('tool: A3 — remaining below floor keeps the economy tier at yellow
   assert.equal(none.severity, 'yellow') // 未提供剩余轮数：不升级
 })
 
+await check('tool: windowPercent clamped to 100 when ratio > 1', async () => {
+  // ratio > 1 happens when pressure exceeds the known window (caliber gap).
+  // The tool output must clamp the display percentage to 100 — same as the
+  // assess/projection/command/client surfaces.
+  const wideCtx = {
+    get: name => {
+      if (name === 'tokenMeter') return { measure: () => ({ totalTokens: 1_500_000 }) }
+      if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'p', model: 'm' }) }
+      if (name === 'llm') return { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) }
+      return services[name]
+    },
+  }
+  const wideTool = sessionHealthTool(wideCtx, config)
+  const value = await wideTool.execute({ reason: 'wide' }, {
+    agent: { id: 'agent-1', session },
+    signal,
+  })
+  assert.equal(value.signals.windowPercent, 100) // clamped, never 150
+})
+
 await check('tool: danger-zone recommendation surfaces for the model', async () => {
   const value = await tool.execute({ dependsOnEarly: true }, {
     agent: { id: 'agent-1', session },
@@ -1240,6 +1260,23 @@ await check('summary: buildHandoffSummary — plain text with real checklist sta
   assert.ok(text.includes('最新 commit：abc123'))
   assert.ok(text.includes('分支：## main...origin/main [ahead 2]'))
   assert.ok(/时间：\d{4}-\d{2}-\d{2}T/.test(text))
+})
+
+await check('summary: buildHandoffSummary clamps pct to 100 when ratio > 1', () => {
+  const text = buildHandoffSummary({
+    severity: 'red',
+    recommendation: 'suggest-switch',
+    summary: '尽快收尾',
+    reason: '',
+    signals: {
+      total: 1_500_000, window: 1_000_000, ratio: 1.5, // 150% → must show 100%
+      turns: 20, userMessages: 25, assistantMessages: 24,
+      compactions: 0, compactionRatio: null,
+    },
+    probes: [],
+    handoff: { isGitRepo: null, hasHandoff: null, runningProcesses: [], processesChecked: false, clean: null, uncommittedCount: null, lastCommit: null, branchLine: null },
+  })
+  assert.ok(text.includes('（窗口 100%）')) // clamped, never 150%
 })
 
 await check('summary rpc: sessionId missing → 400, unknown session → 404', async () => {
