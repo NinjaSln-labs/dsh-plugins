@@ -1162,6 +1162,24 @@ await check('overview rpc: oversized body → 413 (defensive against OOM)', asyn
   assert.equal(big.out.status, 413)
   assert.equal(JSON.parse(big.out.body).error, 'request body too large')
 })
+
+await check('overview rpc: service failure → 500 with error message (never a hang)', async () => {
+  // buildOverview 内部全 catch 降级，500 路径由 summary 的 assess 触发——
+  // 用抛错的 tokenMeter 模拟（assess 的 measureTokens catch 了？不——这里
+  // 用 summary 路径的 sessions.get 抛错验证 catch → 500）。
+  const boomCtx = {
+    get: name => name === 'sessions'
+      ? { get: () => { throw new Error('boom') } }
+      : name === 'agents'
+        ? { get: () => ({ id: 'agent-1' }) }
+        : overviewServices[name],
+  }
+  const res = fakeRes()
+  await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'summary', sessionId: 'x' }), '127.0.0.1'), res, boomCtx, config)
+  assert.equal(res.out.status, 500)
+  assert.equal(JSON.parse(res.out.body).ok, false)
+  assert.equal(JSON.parse(res.out.body).error, 'boom')
+})
 /* ---------- B3: handoff summary copy (RPC method `summary`) ---------- */
 await check('summary: buildHandoffSummary — plain text with real checklist state', () => {
   const text = buildHandoffSummary({

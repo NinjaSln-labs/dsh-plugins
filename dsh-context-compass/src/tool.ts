@@ -121,7 +121,7 @@ function renderToolText(value: {
   if (s.turns !== undefined) parts.push(`${s.turns} 轮`)
   if (s.messageCount !== undefined) parts.push(`${s.messageCount} 条消息`)
   if ((s.compactions ?? 0) > 0) {
-    const ratioNote = typeof s.compactionRatio === 'number'
+    const ratioNote = typeof s.compactionRatio === 'number' && Number.isFinite(s.compactionRatio)
       ? `（上次压缩比例约 ${Math.round(s.compactionRatio * 100)}%，快照口径）`
       : ''
     parts.push(`已压缩 ${s.compactions} 次${ratioNote}`)
