@@ -872,6 +872,31 @@ await check('tool: A3 — remaining below floor keeps the economy tier at yellow
   assert.equal(none.severity, 'yellow') // 未提供剩余轮数：不升级
 })
 
+await check('assess + tool: negative remainingRounds treated as not provided (no negative money)', async () => {
+  // 第八轮：/compass 命令解析在入口拦截 `>= 0`，但工具路径直传 args——
+  // assess 归一化必须与命令一致（isFinite && >= 0），否则负数产出负费用
+  // 预期（-¥0.3 / -$0.04 污染工具输出）。直调 assess 与工具路径都必须拦住。
+  const negReport = await assess(ctx, session, 'agent-1', signal, config, { remainingRounds: -3 })
+  assert.equal(negReport.signals.expectedTotalTokens, null)
+  assert.equal(negReport.signals.expectedTotalUsd, null)
+  assert.equal(negReport.signals.expectedTotalCny, null)
+  // 负数不参与经济升级（视同未提供）——黄色保持不进 red。
+  assert.equal(negReport.severity, 'yellow')
+  const negText = buildCommandText(negReport, { minimal: false })
+  // 负货币金额的渲染签名是「货币符紧跟负号」——formatCny/formatUsd 对负值
+  // 产出 ¥-0.30 / $-0.04。`[¥$]-` 精准覆盖它，又不会误伤版本号 "0.6-0"
+  // 之类的 `数字-数字` 串。
+  assert.ok(!/[¥$]-/.test(negText), 'negative money must never leak into the report')
+
+  const negTool = await tool.execute({ reason: '自检', remainingRounds: -3 }, {
+    agent: { id: 'agent-1', session },
+    signal,
+  })
+  assert.equal(negTool.cost.remainingRounds, undefined) // 负数不回显
+  assert.equal(negTool.cost.expectedTotalTokens, undefined)
+  assert.equal(negTool.cost.expectedTotalUsd, undefined)
+})
+
 await check('tool: windowPercent clamped to 100 when ratio > 1', async () => {
   // ratio > 1 happens when pressure exceeds the known window (caliber gap).
   // The tool output must clamp the display percentage to 100 — same as the

@@ -20,7 +20,7 @@ const PARAMETERS = {
   },
   remainingRounds: {
     type: 'integer',
-    description: '预计剩余轮数（可选；用于经济评估：剩余轮数多且每轮输入大时，开新会话更省钱）',
+    description: '预计剩余轮数（可选；用于经济评估：剩余轮数多且每轮输入大时，开新会话更省钱；负值在评估层按未提供处理）',
   },
   dependsOnEarly: {
     type: 'boolean',
@@ -189,7 +189,13 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
       cost.inputMissPerMUsd = report.signals.inputMissPerMUsd
       cost.inputHitPerMUsd = report.signals.inputHitPerMUsd
       if (report.signals.pricePeriod !== null) cost.pricePeriod = report.signals.pricePeriod
-      if (args.remainingRounds !== undefined) cost.remainingRounds = args.remainingRounds
+      // 与 assess 的归一化一致：仅回显非负有限轮数（负数/NaN 已按未提供
+      // 处理，expectedTotal* 为 null——这里不应再出现对应的 cost）。
+      if (typeof args.remainingRounds === 'number'
+        && Number.isFinite(args.remainingRounds)
+        && args.remainingRounds >= 0) {
+        cost.remainingRounds = args.remainingRounds
+      }
       if (report.signals.expectedTotalTokens !== null) cost.expectedTotalTokens = report.signals.expectedTotalTokens
       if (report.signals.expectedTotalUsd !== null) cost.expectedTotalUsd = report.signals.expectedTotalUsd
       if (report.signals.expectedTotalCny !== null) cost.expectedTotalCny = report.signals.expectedTotalCny
