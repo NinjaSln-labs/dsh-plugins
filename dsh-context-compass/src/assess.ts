@@ -11,7 +11,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ResolvedConfig } from './config.ts'
-import { applyHealthEvent, healthView, type SessionHealthState } from './projection.ts'
+import { healthView, type SessionHealthState } from './projection.ts'
 import { cacheHitRateOf, type TokenUsageLike } from './usage.ts'
 import { probeCrossSession } from './knowledge.ts'
 import { formatCompact, formatHitRate, formatUsd } from './util.ts'
@@ -119,8 +119,8 @@ function measureTokens(ctx: Context, session: Session): number | null {
   }
 }
 
-/** Read the current model's context window through the session's route. */
-async function resolveWindow(ctx: Context, session: Session): Promise<number | null> {
+/** Read the current model's context window through the agent's model route. */
+async function resolveWindow(ctx: Context): Promise<number | null> {
   const agentDefaultModel = ctx.get('agentDefaultModel')
   const llm = ctx.get('llm')
   if (agentDefaultModel === undefined || llm === undefined) return null
@@ -399,7 +399,7 @@ export async function assess(
     : null
 
   const total = measureTokens(ctx, session)
-  const window = await resolveWindow(ctx, session)
+  const window = await resolveWindow(ctx)
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
   const { counts, compactions, snapshot, tokenUsage } = await readCounts(ctx, session, agentId, signal)
 
