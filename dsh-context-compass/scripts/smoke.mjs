@@ -698,6 +698,25 @@ await check('pricing: invalid documents are rejected', async () => {
   assert.equal(cache.get().missPerMCny, null) // static fallback intact (USD only)
 })
 
+await check('pricing: fetch timeout / network abort degrades to static fallback', async () => {
+  // refresh() passes AbortSignal.timeout(timeoutMs) to fetch; when the timeout
+  // fires the fetch rejects with AbortError. The catch must turn it into
+  // `false` (static fallback stays) — never a throw, never a partial doc.
+  const cache = new PriceCache(staticPricing(0.28, 0.1))
+  const abort = async () => { throw new DOMException('This operation was aborted', 'AbortError') }
+  assert.equal(await cache.refresh('https://x', abort, 10_000, () => {}), false)
+  assert.equal(cache.get().missPerMCny, null) // never-imported → static fallback (CNY null)
+  // A doc that was already good survives a later timeout (last-good-wins).
+  const ok = async () => ({ ok: true, json: async () => structuredClone(OFFICIAL_DOC) })
+  await cache.refresh('https://x', ok)
+  assert.equal(await cache.refresh('https://x', abort, 10_000, () => {}), false)
+  const origNow = Date.now
+  Date.now = () => Date.parse('2026-08-14T10:00:00Z') // pin Beijing off-peak → 1.5
+  try {
+    assert.equal(cache.get('deepseek-v4-flash').missPerMCny, 1.5) // last good doc intact
+  } finally { Date.now = origNow }
+})
+
 await check('projection: official pricing drives cny/usd money fields', () => {
   const state3 = {
     turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0,
