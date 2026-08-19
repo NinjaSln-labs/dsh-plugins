@@ -58,7 +58,7 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
     lines.push(`- 剩余轮数输入费用预期 ≈ ${formatUsd(s.expectedTotalUsd)}（约 ${formatCompact(s.expectedTotalTokens)} token 计费当量）`)
   }
   if (s.compactions > 0) {
-    const ratioNote = typeof s.compactionRatio === 'number' && s.compactionRatio !== null
+    const ratioNote = typeof s.compactionRatio === 'number' && Number.isFinite(s.compactionRatio)
       ? `（上次压缩比例 ≈ ${Math.round(s.compactionRatio * 100)}%，按压缩前后压力快照差值推断——快照口径，非精确统计）`
       : ''
     lines.push(`- 已压缩 ${s.compactions} 次：早期细节概要化${ratioNote}`)

@@ -378,7 +378,8 @@ export function buildHandoffSummary(report: HealthReport): string {
     lines.push(`缓存命中：${formatHitRate(s.cacheHitRate)}`)
   }
   if (typeof s.compactions === 'number' && s.compactions > 0) {
-    const ratio = typeof s.compactionRatio === 'number' && s.compactionRatio !== null
+    // isFinite：与 tool.ts/command.ts 的 compactionRatio 守卫对齐（纵深防御）。
+    const ratio = typeof s.compactionRatio === 'number' && Number.isFinite(s.compactionRatio)
       ? `（上次压缩比例 ≈ ${Math.round(s.compactionRatio * 100)}%）`
       : ''
     lines.push(`已压缩：${s.compactions} 次${ratio}`)

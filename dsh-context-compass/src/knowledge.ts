@@ -43,7 +43,7 @@ export function buildSnapshotText(report: HealthReport): string {
     `severity: ${report.severity}`,
     `recommendation: ${report.recommendation}`,
     ...(typeof s.compactions === 'number' && s.compactions > 0
-      ? [`compacted: ${s.compactions}`, ...(typeof s.compactionRatio === 'number' && s.compactionRatio !== null
+      ? [`compacted: ${s.compactions}`, ...(typeof s.compactionRatio === 'number' && Number.isFinite(s.compactionRatio)
           ? [`compression_ratio: ${Math.round(s.compactionRatio * 100)}`]
           : [])]
       : []),
