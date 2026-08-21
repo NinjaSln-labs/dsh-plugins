@@ -1,5 +1,8 @@
 packages:
-  - 'dsh-session-health'
+  - 'dsh-context-compass'
   - 'dsh-knowledge-sqlite'
   - 'dsh-subagent-router'
+  - 'dsh-subagent-cursor'
   - 'dsh-imgdraw'
+allowBuilds:
+  esbuild: true
