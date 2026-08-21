@@ -84,19 +84,13 @@
 ## 4. 即时操作
 
 ```bash
-# 全量验证（发布本版前跑）
-npm run build          # tsc strict + esbuild client
-npm run smoke          # 82 项
-node scripts/mount.mjs        # host 挂载
-node scripts/client-mount.mjs # client 挂载
-npm run typecheck      # 无报错
-npx playwright test -c visual/playwright.config.mjs  # 6 项 visual
+# 发布门禁（发布本版前跑，全绿才允许打 tag）
+npm run release-check    # build + typecheck + smoke(83) + mount + client-mount + visual(6)
 ```
 
 **已知坑**（未修，仍会踩）：
 1. `pnpm peers check` 报缺 peer → **正常**（profile peers 经共享层解析）
 2. 视觉测试只读不写卡（不再污染真实会话；`card.spec` 已删，见 pits）
-3. `npm run client-mount` 非 package.json 脚本 → 直接 `node scripts/client-mount.mjs`
 
 **已修并已归档的坑**（详见 `../../HANDOFF-ARCHIVE/pits.md`）：
 - 0.7.11 tag 指向旧提交（纪律已收入 §3.1）
