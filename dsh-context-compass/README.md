@@ -1,6 +1,9 @@
 # dsh-context-compass
 
-[English](README.en.md) | 简体中文
+[English](https://github.com/NinjaSln-labs/dsh-plugins/blob/main/dsh-context-compass/README.en.md) | 简体中文
+
+[![npm version](https://img.shields.io/npm/v/dsh-context-compass)](https://www.npmjs.com/package/dsh-context-compass)
+[![GitHub stars](https://img.shields.io/github/stars/NinjaSln-labs/dsh-plugins?style=social)](https://github.com/NinjaSln-labs/dsh-plugins)
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的上下文罗盘插件：基于真实数据的「继续 vs 新开会话」指示器。
 
@@ -134,6 +137,10 @@ npm run visual:update  # 有意变更视觉后重写基线（visual/baselines/�
 ## 设计
 
 方法论源自社区 session-health 技能（二维继续-vs-切换模型）；harness 版本把数据层从估算升级为精确测量。完整设计笔记（信号映射、判定模型、可配置检查项、phase-2 路线图）位于插件开发工作区的 `research/session-health-plugin/DESIGN.md`。
+
+## ⭐ 支持
+
+如果这个插件对你有帮助，欢迎到 [GitHub 仓库](https://github.com/NinjaSln-labs/dsh-plugins) 点个 ⭐ Star——它是我持续维护的动力。也欢迎提 issue / PR 一起改进。
 
 ## License
 

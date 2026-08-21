@@ -1,6 +1,9 @@
 # dsh-context-compass
 
-[简体中文](README.md) | English
+[简体中文](https://github.com/NinjaSln-labs/dsh-plugins/blob/main/dsh-context-compass/README.md) | English
+
+[![npm version](https://img.shields.io/npm/v/dsh-context-compass)](https://www.npmjs.com/package/dsh-context-compass)
+[![GitHub stars](https://img.shields.io/github/stars/NinjaSln-labs/dsh-plugins?style=social)](https://github.com/NinjaSln-labs/dsh-plugins)
 
 Context compass for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a real-data "continue vs new session" indicator.
 
@@ -127,6 +130,10 @@ npm run visual:update  # rewrite baselines after an intentional visual change (v
 ## Design
 
 Methodology derives from the community session-health skill (the two-dimensional continue-vs-switch model); the harness version upgrades the data layer from estimation to exact measurement. Full design notes (signal mapping, decision model, configurable checks, roadmap) live in the plugin dev workspace at `research/session-health-plugin/DESIGN.md`.
+
+## ⭐ Support
+
+If this plugin helps you, a ⭐ star on the [GitHub repo](https://github.com/NinjaSln-labs/dsh-plugins) means a lot — it's the fuel for ongoing maintenance. Issues and PRs are welcome too.
 
 ## License
 

@@ -1,7 +1,30 @@
 {
   "name": "dsh-context-compass",
-  "description": "Session health for DeepSeek Harness: real token-meter data, configurable continue-vs-new decision model. Reactive header badge (compaction-aware), /health command, context_compass tool.",
+  "description": "Session health for DeepSeek Harness: real token-meter data, configurable continue-vs-new decision model. Reactive header badge (compaction-aware), /compass command, context_compass tool.",
   "version": "0.7.13",
+  "author": {
+    "name": "ninjasln",
+    "url": "https://github.com/NinjaSln-labs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NinjaSln-labs/dsh-plugins.git",
+    "directory": "dsh-context-compass"
+  },
+  "homepage": "https://github.com/NinjaSln-labs/dsh-plugins/tree/main/dsh-context-compass#readme",
+  "bugs": {
+    "url": "https://github.com/NinjaSln-labs/dsh-plugins/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "session",
+    "context",
+    "token-meter",
+    "compaction",
+    "continue-vs-new"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -48,7 +71,6 @@
       "platform": "web"
     }
   },
-  "license": "MIT",
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
     "zod": "^4.4.3"
