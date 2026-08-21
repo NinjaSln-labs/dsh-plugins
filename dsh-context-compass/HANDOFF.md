@@ -7,8 +7,8 @@
 - **日期**：2026-08-19
 - **插件包**：`dsh-context-compass@0.7.13`（npm latest），npm 用户名 `ninjasln`
 - **交接原因**：会话切换（用户将 cd 到本目录继续）
-- **文档入口链**：`README.md`（中英双语）→ `PUBLISHING.md`（发布记录）→ `../dsh-ecosystem/research/session-health-plugin/`（设计/审计）
-- **接收方建议**：先读完本文件 §2–§3；发布 0.7.13 走 git CI（push tag，见 §3.1）；发布前确认 `git rev-parse <tag> == git rev-parse HEAD`（见 pits：0.7.11 事故——tag 指向旧提交，版本守卫只比版本号字符串，放出了未审计代码）
+- **文档入口链**：`README.md`（中英双语）→ `PUBLISHING.md`（发布记录）→ `docs/DESIGN.md`（设计）· `docs/ROADMAP.md`（路线图，唯一权威来源）· `docs/AUDIT-0.7.11.md`（审计）
+- **接收方建议**：先读完本文件 §2–§3；路线图见 `docs/ROADMAP.md`（唯一权威来源）；发布前确认 `git rev-parse <tag> == git rev-parse HEAD`（见 pits：0.7.11 事故——tag 指向旧提交，版本守卫只比版本号字符串，放出了未审计代码）
 
 ## 2. 当前状态快照
 
@@ -29,7 +29,7 @@
 | 域 | 状态 |
 |---|---|
 | 功能 | 完整：头部徽章（severity + 悬停浮层 + 缓存命中/压缩感知/计费预期）+ `/compass` 命令 + `context_compass` 工具 + sidebar 一览面板 + `/context-compass-rpc` 路由 |
-| 审计 | **十二轮完成**：51 fixed + 25 recorded（0 残留），见 `../dsh-ecosystem/research/session-health-plugin/AUDIT-0.7.11.md` + 本会话第九~十二轮 |
+| 审计 | **十二轮完成**：51 fixed + 25 recorded（0 残留），见 `docs/AUDIT-0.7.11.md`（八轮）+ 本会话第九~十二轮 |
 | 占位/未完成 | **无**——功能完整，十二轮审计 0 残留，0.7.13 已发布 |
 
 ### 2.3 测试
@@ -98,7 +98,7 @@ npx playwright test -c visual/playwright.config.mjs  # 6 项 visual
 2. 视觉测试只读不写卡（不再污染真实会话；`card.spec` 已删，见 pits）
 3. `npm run client-mount` 非 package.json 脚本 → 直接 `node scripts/client-mount.mjs`
 
-**已修并已归档的坑**（详见 `HANDOFF-ARCHIVE/pits.md`，位于 `../dsh-ecosystem/`）：
+**已修并已归档的坑**（详见 `../../HANDOFF-ARCHIVE/pits.md`）：
 - 0.7.11 tag 指向旧提交（纪律已收入 §3.1）
 - 服务方法解构丢 this（knowledge/agents `.call()` 保留 this）
 - 面板点击行偶发「执行失败 aborted」（execute 移入 setTimeout）
@@ -111,9 +111,9 @@ npx playwright test -c visual/playwright.config.mjs  # 6 项 visual
 | 主题 | 路径 |
 |---|---|
 | **源码**（13 文件） | `src/`（index / assess / command / config / tool / projection / overview / knowledge / pricing / usage / util / schemas / types / client） |
-| **测试** | `scripts/smoke.mjs`（82 项）· `scripts/mount.mjs` · `scripts/client-mount.mjs` · `visual/tests/{badge,panel}.spec.mjs`（6 项） |
-| **审计** | `../dsh-ecosystem/research/session-health-plugin/AUDIT-0.7.11.md`（八轮，44 fixed + 25 recorded） |
-| **设计/路线** | `../dsh-ecosystem/research/session-health-plugin/DESIGN.md` · `OPTIMIZATION-RESEARCH.md` |
+| **测试** | `scripts/smoke.mjs`（83 项）· `scripts/mount.mjs` · `scripts/client-mount.mjs` · `visual/tests/{badge,panel}.spec.mjs`（6 项） |
+| **审计** | `docs/AUDIT-0.7.11.md`（前八轮 44 fixed + 25 recorded）+ 本会话第九~十二轮（累计 51 fixed + 25 recorded） |
+| **设计/路线** | `docs/DESIGN.md`（设计）· `docs/ROADMAP.md`（路线图，唯一权威来源）· `docs/OPTIMIZATION-RESEARCH.md`（优化调研）· `docs/RESEARCH-COMPETITORS.md`（竞品调研） |
 | **发布记录** | `PUBLISHING.md`（版本历史 + CI 修复记录） |
 | **功能文档** | `README.md` + `README.en.md`（中英双语） |
 | **决策日志** | `docs/SESSION-LIST-DOT.md` |
@@ -126,6 +126,6 @@ npx playwright test -c visual/playwright.config.mjs  # 6 项 visual
 
 - **更新时机**：版本变化、新坑、待办完成时更新 §2–§4；详细设计一律进 README（防双源），本文件只记 delta
 - **防双源**——文档/README/PUBLISHING.md 已有的稳定知识引用路径，不复制；commit message 已有详情只记一行式 `[hash] 一句话标题`
-- **滚动归档**：确认修复的坑迁 `../dsh-ecosystem/HANDOFF-ARCHIVE/pits.md`；完成待办迁 `done.md`
+- **滚动归档**：确认修复的坑迁 `../../HANDOFF-ARCHIVE/pits.md`；完成待办迁 `done.md`
 - **脱敏**：不得写入 token/Key；凭据一律指向位置不写值
 - **发布后来回填**：§2 快照同步（tag/commit/npm version/测试结果）+ 新的未修坑入 §4 + 确认已修迁归档

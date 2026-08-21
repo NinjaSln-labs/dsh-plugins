@@ -64,7 +64,7 @@
   - **冷却**（`cold`）= 仅持久化
   - RPC 契约 `sessions[].live` → `sessions[].status`；排序层级同档内 运行中 > 已加载 > 冷却（旧排序把 idle 顶到正在运行的上面）；headless 无 `agents` 服务时降级 loaded/cold（绝不误报运行中）。**host + client 改动，需重启 dsh web + 刷新浏览器生效**
 
-- **0.7.0** — **路线图第一波收官三项**（0.6.x 路线图，见 `research/session-health-plugin/DESIGN.md` §8）：
+- **0.7.0** — **路线图第一波收官三项**（0.6.x 路线图，见 `docs/ROADMAP.md`）：
   1. **压缩比例量化**：折叠在 `compaction/end` 捕获压缩前压力，首个后续 usage 样本推出 1 − 压缩后/压缩前（不依赖事件载荷；下降才记，压力不降记 null 不虚报）；投影 wire 新增 `compressionRatio`（schema v8，stateVersion 8）；advice / `/compass` 报告 / 工具信号 / 面板 meta 全部带「快照口径」标注
   2. **压缩后判定滞后标注**：占用条改用压缩感知 `projectedTokens`（下次请求成本），`lagOf` 纯函数检测判定（last-wins 压力）与占用条 ≥5pp 分叉且发生过压缩 → 浮层 warn 色提示「压缩后判定滞后：判定基于压缩前压力（x%），预计下次请求后更新（≈ y%）」
   3. **视觉回归**：`visual/` Playwright 套件（`npm run visual` / `visual:update`）——panel 用 `/context-compass-rpc` mock 全确定性（明/暗 × 红黄蓝绿+未知 × 分页/排序/固定 5 行高度）、富卡片真实评估链路（展开/收起 × 明/暗，live 数据掩码）、徽章 hover 桥接层 + 键盘可达 e2e；基线入库 `visual/baselines/`（需运行中 harness，本地发布前门，不进 CI）；新增 devDeps `@playwright/test` + `playwright`（安装时 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`）

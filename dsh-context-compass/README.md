@@ -136,7 +136,7 @@ npm run visual:update  # 有意变更视觉后重写基线（visual/baselines/�
 
 ## 设计
 
-方法论源自社区 session-health 技能（二维继续-vs-切换模型）；harness 版本把数据层从估算升级为精确测量。完整设计笔记（信号映射、判定模型、可配置检查项、phase-2 路线图）位于插件开发工作区的 `research/session-health-plugin/DESIGN.md`。
+方法论源自社区 session-health 技能（二维继续-vs-切换模型）；harness 版本把数据层从估算升级为精确测量。完整设计笔记（信号映射、判定模型、可配置检查项）见 [`docs/DESIGN.md`](docs/DESIGN.md)；后续路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
 ## ⭐ 支持
 
