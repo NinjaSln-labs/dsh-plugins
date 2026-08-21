@@ -31,10 +31,33 @@
 
 ## 待做（按优先级）
 
+> 主线目标：**发布稳定、不影响体验**。顺序原则：稳定性基建 > 零风险功能 > 需兼容测试的功能 > 需先调研设计的大项。
+
+### 稳定性基建（保证发布稳定）
+
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| R1 | **占用趋势 sparkline**（浮层「上下文占用」行下方） | P1 | 竞品空白；一眼看出稳步上升 vs 压缩后回落 | 投影加 `pressureHistory`（stateVersion 8→9）+ 客户端 SVG/CSS 渲染 |
-| R2 | **压缩触发频率**（「已压缩 N 次」补「平均每 X 轮一次」） | P2 | 提前预警任务切太碎 / 上下文膨太快 | 无（`turns / compactions` 已有，纯展示）|
+| S0 | **本地发布门禁** `scripts/release-check.mjs`（一条命令收敛完整验证链 + 真 harness 冒烟） | P0 | CI 只能 stub 级安全网，真 harness 门禁只能本地 | 运行中 harness |
+| S1 | **live 契约一致性测试**（真 harness：inject 服务真 resolve + `/compass` 输出结构 + badge 真挂载） | P0 | 堵 harness API 漂移静默降级（最大风险） | 运行中 harness |
+| S2 | **stateVersion 向后兼容测试**（旧 state 折进当前 view，断言无 crash/NaN） | P1 | 加 sparkline 需 bump stateVersion，防旧缓存踩坑 | — |
+| S3 | **配置生效冒烟**（每个 config 字段改动可观测到行为变化） | P1 | 堵配置静默失效 | — |
+| S4 | **canary 发布通道**（`next` tag → 本地实测 → promote `latest`） | P2 | 新版本先灰度再全量 | — |
+
+### 配置点接入（⚠️ 需深入调研与设计）
+
+> rc.7 新增 `ctx.settings` 插件配置点：Host 注册 settings 命名空间 + Client 在 `settings.plugin.item` 槽注册卡片，设置 UI 直接调参。**本项尚未落到可执行设计——先调研再定稿，未定稿前不动工。**
+
+| # | 项 | 优先级 | 动机 / 价值 | 依赖 |
+|---|---|---|---|---|
+| C1 | **Host 侧接入 `installSettingsSection`**（getter 模式，配置 live 可读 + 消除 V11-1 双源） | P2 | 配置单一权威 + settings 文档驱动；顺带治愈 resolveConfig 双源 | `@deepseek-ai/dsh-settings`（rc.7）；先调研投影/工具/命令三处改 getter 的准确范围、`applies: live/restart` 取舍、peer 升级影响 |
+| C2 | **Client 配置卡片**（`settings.plugin.item` keyed 自建） | P3 | 设置 UI 直接调参 | C1；场外插件不可复用内置控件（bundle 门禁），需自建表单 + 草稿暂存 + revision 设栅；先调研卡片契约与构建要求 |
+
+### 功能项
+
+| # | 项 | 优先级 | 动机 / 价值 | 依赖 |
+|---|---|---|---|---|
+| R1 | **占用趋势 sparkline**（浮层「上下文占用」行下方） | P1 | 竞品空白；一眼看出稳步上升 vs 压缩后回落 | 投影加 `pressureHistory`（stateVersion 8→9）+ 客户端 SVG/CSS 渲染；**需 S2 兼容测试先就绪** |
+| R2 | **压缩触发频率**（「已压缩 N 次」补「平均每 X 轮一次」） | P2 | 提前预警任务切太碎 / 上下文膨太快 | 无（`turns / compactions` 已有，纯展示，零风险）|
 | R3 | **定价同步自动化（C4）** | P2 | `pricing/deepseek.json` 手动同步 → CI 定时对比官方、变更开 PR | GitHub Actions 定时 job |
 | R4 | **session-health 技能阈值回写（D1）** | P2 | 插件阈值与技能默认参数已分叉，需对齐 | 技能侧配合 |
 | R5 | **轮次语义细化（A5）** | P3 | 区分多工具调用的回合：「轮次 X / 步数 Y」 | 投影加 step 计数 |
@@ -51,10 +74,11 @@
 
 | 版本 | 内容 |
 |---|---|
-| **0.7.14** | README 元数据 + star 徽章（已 commit 未发布）|
-| **0.8.0** | R1 占用趋势 sparkline + R2 压缩频率 |
-| **0.9.0** | R3 定价同步 CI + R4 阈值回写 |
-| **远期** | B1 / B2（等依赖就绪）· R5 / R6（渐进增强）|
+| **0.7.14** | README 元数据 + star 徽章（已 commit 未发布）· R2 压缩频率（零风险）|
+| **0.8.0** | S0–S4 稳定性基建（发布门禁 + live 契约测试 + 兼容测试）|
+| **0.9.0** | R1 sparkline（S2 就绪后）· C1 host 配置点接入（调研完成后）|
+| **0.10.x** | C2 client 配置卡片 |
+| **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|
 
 ## 维护规则
 
