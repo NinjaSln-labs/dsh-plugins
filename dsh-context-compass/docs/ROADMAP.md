@@ -29,6 +29,12 @@
 - **十二轮审计**：51 fixed + 25 recorded（0 残留）
 - **100 项自动化测试全绿**：83 smoke + 4 mount + 7 client-mount + 6 visual
 
+### 稳定性基建（0.8.0 先行落地）
+
+- **S0 本地发布门禁** — `scripts/release-check.mjs` 一条命令收敛完整验证链（build/typecheck/smoke/mount/client-mount/visual），任一失败 exit 1 禁发
+- **S1 live 契约检查** — `scripts/contract-check.mjs` 对运行中 harness 断言插件挂载 + 注入链路（RPC 路由判别：404 漂移 / 400 活着 / 200 服务链可用）；已并入 release-check；**rc.8 升级体检通过**
+- **rc.7→rc.8 升级** — 仅实质变化为移除 dead 声明 `dsh-client-ui-primitives`（`client.tsx` 从不 import），已清理；4 硬注入 + 全部可选读取 + 3 client slot 形状无漂移
+
 ## 待做（按优先级）
 
 > 主线目标：**发布稳定、不影响体验**。顺序原则：稳定性基建 > 零风险功能 > 需兼容测试的功能 > 需先调研设计的大项。
@@ -38,7 +44,6 @@
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
 | S0 | **本地发布门禁** `scripts/release-check.mjs`（一条命令收敛完整验证链 + 真 harness 冒烟） | P0 | CI 只能 stub 级安全网，真 harness 门禁只能本地 | 运行中 harness |
-| S1 | **live 契约一致性测试**（真 harness：inject 服务真 resolve + `/compass` 输出结构 + badge 真挂载） | P0 | 堵 harness API 漂移静默降级（最大风险）。**rc.8 升级已手动扫描通过**：4 硬注入 + 全部可选读取 + 3 client slot 形状兼容，无漂移；自动化形态待定（需运行中 harness，只能进 release-check/visual 档，进不了 CI） | 运行中 harness |
 | S2 | **stateVersion 向后兼容测试**（旧 state 折进当前 view，断言无 crash/NaN） | P1 | 加 sparkline 需 bump stateVersion，防旧缓存踩坑 | — |
 | S3 | **配置生效冒烟**（每个 config 字段改动可观测到行为变化） | P1 | 堵配置静默失效 | — |
 | S4 | **canary 发布通道**（`next` tag → 本地实测 → promote `latest`） | P2 | 新版本先灰度再全量 | — |
