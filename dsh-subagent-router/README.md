@@ -1,58 +1,73 @@
 # dsh-subagent-router
 
-Model-routed subagent delegation for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). The shipped `subagent` tool inherits the parent's model route; this plugin adds a sibling tool that lets the delegating model pick the child's LLM **provider**, **model**, and **output cap** per call (or hand the choice to the built-in `model: "auto"` routing policy) — while everything else about the delegation (depth accounting, delegation policy, continuable background children, results) stays exactly on the standard `ctx.subagents` seam.
+[English](https://github.com/NinjaSln-labs/dsh-plugins/blob/main/dsh-subagent-router/README.en.md) | 简体中文
 
-## Tools
+[![npm version](https://img.shields.io/npm/v/dsh-subagent-router)](https://www.npmjs.com/package/dsh-subagent-router)
+[![GitHub stars](https://img.shields.io/github/stars/NinjaSln-labs/dsh-plugins?style=social)](https://github.com/NinjaSln-labs/dsh-plugins)
 
-| Tool | Purpose |
+为 subagent 委派做模型路由的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件。自带的 `subagent` 工具只会继承父级模型路由；本插件新增一个姊妹工具，让委派模型在每次调用时自行挑选子代理的 LLM **provider**、**model** 与 **输出上限**（或把选择交给内置的 `model: "auto"` 路由策略）—— 而委派的其他一切（深度核算、委派策略、continuable 后台子代理、结果收集）仍然完全走标准的 `ctx.subagents` 通道。
+
+## 工具
+
+| 工具 | 用途 |
 |---|---|
-| `subagent_model` | Delegate a task to a subagent with per-call `provider` / `model` / `max_tokens`. Omitted fields inherit the calling agent's route. Pass `model: "auto"` to delegate model choice to the built-in auto policy. |
-| `subagent_models` | Read-only catalog of the live LLM provider routes (`ctx.llm.listProviders()`) and each provider's advertised model listing. |
+| `subagent_model` | 委派任务给子代理，并在本次调用中指定 `provider` / `model` / `max_tokens`。省略的字段继承调用方代理的路由。传 `model: "auto"` 可把模型选择交给内置自动策略。 |
+| `subagent_models` | 只读目录：列出当前 `ctx.llm` 上注册的 provider 路由（`listProviders()`）及每个 provider 广告的模型列表，并标注每个路由的 `health` 状态。 |
 
-### How model selection works
+### 模型选择如何工作
 
-- **`provider`** is hard-validated against the routes registered on `ctx.llm` (e.g. `deepseek-official`, or any pi-ai route your settings declare). An unknown route fails immediately with the list of registered ones.
-- **`model`** is passed through untouched. The harness treats model catalogs as advisory: the DeepSeek adapter accepts arbitrary model ids, while a pi-ai route rejects models its profile does not configure — so the provider itself owns model rejection, exactly as it does for your own session. `subagent_models` exists to make an informed choice possible.
-- **`max_tokens`** caps the child's output (positive integer), forwarded as `agentOptions.maxTokens`.
-- The child is created through `ctx.subagents.start()` / `startContinuable()` with `agentOptions = { provider, model, maxTokens }`. `resolveChildAgentOptions` in the harness merges per-child overrides over the parent's route, so an omitted field inherits.
+- **`provider`** 会与 `ctx.llm` 上注册的路由（如 `deepseek-official`，或你在 settings 里声明的任意 pi-ai 路由）做硬校验；未知路由立即报错并列出已注册路由。
+- **`model`** 原样透传。Harness 把模型目录视为「参考性」信息：DeepSeek 适配器接受任意模型 id，而 pi-ai 路由会拒绝未配置的模型 —— 所以模型有效性由 provider 自己裁决，与你自己会话的行为完全一致。`subagent_models` 的存在就是为了让模型能做出有依据的选择。
+- **`max_tokens`** 限制子代理输出（正整数），透传为 `agentOptions.maxTokens`。
+- 子代理通过 `ctx.subagents.start()` / `startContinuable()` 创建，携带 `agentOptions = { provider, model, maxTokens }`；harness 的 `resolveChildAgentOptions` 会把本次覆盖与父级路由合并，因此省略的字段自动继承。
 
-### Auto selection (`model: "auto"`)
+### 自动选择（`model: "auto"`）
 
-Delegating model choice to a deterministic, auditable policy — no extra LLM calls:
+把模型选择交给一个确定性、可审计的策略 —— 不引入额外 LLM 调用：
 
-1. **Resolve the provider**: the explicit `provider` argument, else the calling agent's own route (`parent.options.provider`). Requires the `llm` service.
-2. **Classify the task** into a tier: `trivial` (short task, ≤160 chars, no heavy markers), `complex` (≥1200 chars, or code fences / structured-output asks / reasoning verbs like analyze, design, debug, refactor, evaluate), else `standard`.
-3. **Anchor to the parent by default**: when the calling agent's options name a model on the resolved provider, that model is the choice — for `trivial`/`standard` tasks always, and for `complex` tasks when it already scores as a strong model (`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`). Only two situations fall back to catalog picks (naming score: strong signals +1, cheap signals `flash`/`mini`/`lite`/`fast`/`small`/`quick`/`nano`/`light` −1; `trivial` takes the lowest, `complex` the highest, `standard` the first neutral): the parent names no model, or the task is `complex` and the parent's model is not a strong one (then the strongest catalog model is picked). An explicit `provider` that differs from the parent's route also drops the anchor (the parent's model no longer belongs to that group).
-4. **Audit**: every auto call records `auto: { provider, model, tier, reason, anchored? }` on the tool result, and the rendered text carries a `[auto]` line (with an `anchored` mark when the parent's own model was kept) — you can always ask why that model.
-5. **Escalate on failure** (`autoEscalate`, foreground calls only): if the run fails, retry once with the next tier up (`trivial → standard → complex`) — but only when that pick scores **strictly stronger** than the current choice, so escalation never downgrades an anchored strong parent model. The retry result reports `escalatedFrom`. Background/continuable calls skip escalation (the failure is not visible to the call site), and a provider whose catalog has no strictly stronger next-tier model escalates to nothing.
+1. **确定 provider**：显式 `provider` 参数优先，否则取调用方代理自己的路由（`parent.options.provider`）。需要 `llm` 服务。
+2. **任务分档**：`trivial`（短任务，≤160 字符且无重标记）、`complex`（≥1200 字符，或含代码块 / 结构化输出诉求 / 推理动词如 analyze、design、debug、refactor、evaluate），其余为 `standard`。
+3. **默认锚定父模型**：调用方代理的 options 在解析出的 provider 上命名了模型时，就用它 —— `trivial`/`standard` 任务无条件使用，`complex` 任务在父模型已算强模型（`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`）时也保留。只有两种情况回退到目录打分选型（强信号 +1、廉价信号 `flash`/`mini`/`lite`/`fast`/`small`/`quick`/`nano`/`light` −1；`trivial` 取最低分、`complex` 取最高分、`standard` 取第一个 0 分）：父没有命名模型，或任务是 `complex` 且父模型不够强（此时取目录最强模型）。显式 `provider` 与父路由不同时同样丢弃锚点（父模型不再属于该分组）。
+4. **可审计**：每次 auto 调用都会在工具结果里记录 `auto: { provider, model, tier, reason, anchored?, escalatedFrom?, reroutedFrom?, rerouteReason? }`，渲染文本带 `[auto]` 行（保留父模型时带 `anchored` 标记）与理由 —— 随时可以问「为什么选它」。
+5. **失败恢复**（仅前台调用）：
+   - **瞬态失败升级**（`autoEscalate` + `autoEscalationTiers`）：`rate-limit` / `server` / `timeout` / `transport` / 未分类失败时，用下一档重试（`trivial → standard → complex`，默认最多 1 次），但仅当该选择**严格更强**于当前模型时才升级 —— 锚定的强父模型永远不会被降级。重试结果记录 `escalatedFrom`。
+   - **终态失败换路**（`autoReroute`）：`quota` / `auth`（配额耗尽 / 凭据失效）重试同一 provider 无意义 —— 直接换到目录里第一个健康的 provider 路由重启（`reroutedFrom` + `rerouteReason`）。升级中若撞上终态失败也会停止继续升级该 provider。
+6. **健康感知（死锚检测）**：插件在会话内记录每个 provider 路由的失败分类。一旦父模型所在路由被判定不健康（`quota` / `auth` 为终态、瞬时类 60 秒 TTL），后续 `model: "auto"` 调用**不再锚定**该父路由，而是直接改挑健康 provider —— 避免把子代理一直钉在坏路由上。`subagent_models` 目录工具也会为每个 provider 标注 `health: healthy/unhealthy` + `failingClass` + `retryAfterSec`。
+7. **失败详情透传**：子代理失败不再只是「subagent run failed」——能观测到的失败（`start` 拒绝、基础设施故障）会被分类（quota / rate-limit / auth / context / server / timeout / transport）并**脱敏**后拼进工具结果（含 HTTP 状态码与 retry-after），调用方直接看到「provider rate-limited (http 429)」而不是误判成执行失败。
 
-The policy is deliberately conservative: it stays on the calling agent's own model by default, upgrades only when the task clearly demands more than a weak parent model can offer, and never hides its reasoning.
+策略刻意保守：默认沿用调用方自己的模型，只有任务明显超出弱父模型能力时才升级，从不隐藏自己的决策理由，并且一旦路由被证实不健康就果断换路而不是盲目重试。
 
-## Install
+## 安装
 
 ```bash
 dsh plugin add dsh-subagent-router
 ```
 
-The bundle inserts one composition row (`subagent-router`). It consumes the host `tools` / `subagents` / `llm` registries and publishes nothing, so it belongs on the host plane (or in a preset's loose rows) and needs no isolate realm.
+bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools` / `subagents` / `llm` 注册表且不发布任何服务，所以属于 host 平面（或 preset 的自由行），不需要 isolate realm。
 
-## Configuration
+## 配置
 
-All fields optional, via the composition row's `config`:
+全部可选，写在组合行的 `config` 里：
 
-| Field | Default | Meaning |
+| 字段 | 默认 | 含义 |
 |---|---|---|
-| `subagentProvider` | `spawn` | The `ctx.subagents` provider that starts children. |
-| `toolName` | `subagent_model` | Model-facing delegation tool name. |
-| `modelsToolName` | `subagent_models` | Model-facing catalog tool name. |
-| `enableRunInBackground` | `true` | Expose `run_in_background` on the delegation tool. |
-| `backgroundMode` | `one-shot` | `one-shot` defaults calls to foreground; `continuable` defaults them to background, returns durable child ids, and requires a provider with the `prepareContinuable` capability. |
-| `enableModelList` | `true` | Register the `subagent_models` catalog tool. |
-| `enableAuto` | `true` | Accept `model: "auto"` on the delegation tool. |
-| `autoEscalate` | `true` | After a failed foreground run, retry once on the next auto tier. |
-| `maxDepth` | `3` | Child depth cap; `'provider-managed'` sends no cap (requires the provider's `depthLimit` capability for numeric values). |
+| `subagentProvider` | `spawn` | 启动子代理的 `ctx.subagents` provider。 |
+| `toolName` | `subagent_model` | 面向模型的委派工具名。 |
+| `modelsToolName` | `subagent_models` | 面向模型的目录工具名。 |
+| `enableRunInBackground` | `true` | 是否暴露 `run_in_background` 参数。 |
+| `backgroundMode` | `one-shot` | `one-shot` 默认前台等待；`continuable` 默认后台执行、返回持久子代理 id，并要求 provider 具备 `prepareContinuable` 能力。 |
+| `enableModelList` | `true` | 是否注册 `subagent_models` 目录工具。 |
+| `enableAuto` | `true` | 是否接受委派工具上的 `model: "auto"`。 |
+| `autoEscalate` | `true` | 前台运行失败后是否用高一档自动重试一次。 |
+| `autoReroute` | `true` | 终态失败（quota/auth）时是否换到健康 provider 路由重试。 |
+| `autoEscalationTiers` | `1` | 同一 provider 上瞬态失败的最大升级次数（`0` 表示不升级）。 |
+| `autoProviderOrder` | — | **provider 优先级**：`model: "auto"` 按此顺序解析 provider（未列出的排在之后）；父路由不健康或缺失时用它兜底。不配则用注册表顺序。 |
+| `autoTierPolicy` | — | **每档选型模式**：`{ trivial|standard|complex: 'anchor'\|'cheapest'\|'strongest' }`。`anchor`=父路由健康时沿用父模型；`cheapest`=目录里命名分最低；`strongest`=最高。未配的档位保持内置启发式。 |
+| `autoTierPicks` | — | **每档显式候选序**：`{ trivial|standard|complex: [modelId, ...] }`，完全覆盖该档选型；候选是全局模型优先级，第一个被任意健康 provider 广告的模型胜出（可跨 provider）。 |
+| `autoCeiling` | — | **预算封顶**：`model: "auto"` 永不超过该模型强度（命名分更高时截断到它）。不在目录时忽略。 |
+| `maxDepth` | `3` | 子代理深度上限；`'provider-managed'` 表示不设上限（数值上限要求 provider 具备 `depthLimit` 能力）。 |
 
-Example row:
+示例行：
 
 ```yaml
 - id: subagent-router
@@ -63,26 +78,42 @@ Example row:
     backgroundMode: one-shot
 ```
 
-## Example model flow
+带模型路由优先级的示例（按你自己的供应商偏好配置）：
 
-1. `subagent_models` → lists `deepseek-official` (with its catalog) and any pi-ai routes.
-2. `subagent_model` with `{ description: "compare pricing", prompt: "...", provider: "deepseek-official", model: "deepseek-r1", max_tokens: 4000 }` → runs the child on that exact route and returns its output.
-3. `subagent_model` with `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → stays on the calling agent's own model when it belongs to that provider (anchored, marked `anchored` in the `[auto]` line); otherwise the auto policy falls back to catalog picks and records `[auto] ...` with its reason.
-4. Omit `provider`/`model` to keep the child on your own route.
+```yaml
+- id: subagent-router
+  name: 'dsh-subagent-router'
+  config:
+    autoProviderOrder: [deepseek-official, pi-ai-cn]   # 供应商优先级
+    autoTierPolicy:
+      trivial: cheapest        # 琐碎任务永远用最便宜的
+      standard: anchor         # 普通任务跟随父模型
+      complex: strongest       # 重任务用最强模型
+    autoTierPicks:
+      complex: [deepseek-v4-pro, pi-3-maxi]  # 可选：重任务显式候选序
+    autoCeiling: deepseek-v4-pro  # 可选：预算封顶
+```
 
-## Development
+## 典型模型流程
+
+1. `subagent_models` → 列出 `deepseek-official`（含其目录）与所有 pi-ai 路由。
+2. `subagent_model` 传 `{ description: "对比定价", prompt: "...", provider: "deepseek-official", model: "deepseek-r1", max_tokens: 4000 }` → 子代理在该路由上运行并返回结果。
+3. `subagent_model` 传 `{ description: "say hi", prompt: "hi", provider: "deepseek-official", model: "auto" }` → 若调用方自己的模型属于该 provider，则沿用父模型（`[auto]` 行带 `anchored` 标记）；否则回退到目录选型并记录 `[auto] ...` 及其理由。
+4. 省略 `provider`/`model` 即让子代理沿用你自己的路由。
+
+## 开发
 
 ```bash
 pnpm install
-pnpm test       # vitest: schema shape, route validation, agentOptions pass-through, catalog tool, auto policy + escalation
+pnpm test       # vitest：schema 形态、路由校验、agentOptions 透传、目录工具、auto 策略与升级、健康换路
 pnpm run build  # tsc -> lib/
 ```
 
-The test suite drives the real plugin body on a real `ToolRuntime` + `SubagentRuntime` with a scripted subagent provider and a faked `llm` route registry; no network or credentials are touched.
+测试套件在真实的 `ToolRuntime` + `SubagentRuntime` 上驱动真实插件体，使用脚本化子代理 provider 与伪造的 `llm` 路由注册表；不触网、不用凭据。
 
-## Roadmap
+## 路线图
 
-Planned work for the auto-routing policy (catalog metadata, recommend tool, feedback loop, budgets): see [docs/ROADMAP.md](./docs/ROADMAP.md). Handoff notes live in [HANDOFF.md](./HANDOFF.md); release history in [PUBLISHING.md](./PUBLISHING.md).
+自动路由策略的后续计划（目录元数据、推荐工具、反馈闭环、预算上限）：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。交接见 [HANDOFF.md](./HANDOFF.md)，发布记录见 [PUBLISHING.md](./PUBLISHING.md)。
 
 ## License
 
