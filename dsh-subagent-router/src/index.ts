@@ -45,7 +45,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import { assertSubagentMaxDepth } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { registerModelPickerTools } from './tools.ts'
+import { Config } from './config.ts'
+export { Config } from './config.ts'
 
 /** Prompt order after bounded delegation policy and before child reporting. */
 const SUBAGENT_SECTION_ORDER = 116.5
@@ -135,7 +138,29 @@ export function resolveConfig(config: ModelPickerConfig): ResolvedModelPickerCon
 }
 
 export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
-  const resolved = resolveConfig(config)
+  // ---- responsive config ----
+  // The composition entry (cordis.patch.yml) is the base layer; when the
+  // settings service mounts, `installSettingsSection` lets the user layer
+  // (设置 → 插件配置) override it. `current` holds the latest authoritative
+  // value and every consumer reads through `getResolved()` so a settings
+  // write takes effect without re-registering tools.
+  let resolved = resolveConfig(config)
+  const getResolved = (): ResolvedModelPickerConfig => resolved
+  // `setSource` hands us a thunk reading the live settings scope; `onChange`
+  // fires on every committed settings write, so we re-resolve from that
+  // thunk — this is what makes a 设置 → 插件配置 edit take effect live.
+  // installSettingsSection wires through `ctx.inject(['settings'], …)`, so it
+  // waits for the settings service to mount (and is inert when it never does).
+  let readScope: (() => ModelPickerConfig) | undefined
+  installSettingsSection(ctx, settingsNamespace('subagent-router'), Config, config, {
+    setSource: (current) => {
+      readScope = current
+      resolved = resolveConfig(current())
+    },
+    onChange: () => {
+      if (readScope !== undefined) resolved = resolveConfig(readScope())
+    },
+  })
   // Direct apply() bypasses any schema defaults; validate here like the
   // shipped tool does.
   if (resolved.maxDepth !== 'provider-managed') assertSubagentMaxDepth(resolved.maxDepth)
@@ -161,7 +186,7 @@ export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
         + '`backgroundMode: continuable`',
       )
     }
-    disposeTools = registerModelPickerTools(ctx, resolved)
+    disposeTools = registerModelPickerTools(ctx, getResolved)
   }
 
   ctx.on('subagent/provider-added', (provider) => {
@@ -198,5 +223,6 @@ export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
 export default {
   name,
   inject,
+  Config,
   apply,
 }

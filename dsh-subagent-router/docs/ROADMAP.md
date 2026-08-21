@@ -23,7 +23,7 @@
 
 ### 质量
 
-- **61 项自动化测试全绿**（30 项既有 + 31 项新增：失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置）
+- **64 项自动化测试全绿**（30 项既有 + 34 项新增：失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置）
 - **CI 双坑修复**（已归档 `../../HANDOFF-ARCHIVE/pits.md`）：workflow step name 冒号 invalid YAML；setup-node `cache: npm` 无 lockfile
 
 ## 待做（按优先级）
@@ -35,7 +35,7 @@
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
 | 1a | **`backgroundMode: continuable` 运行时实测**（spawn 具备 `prepareContinuable`） | P0 | 后台委派是主力场景，不能只靠单测；验证 startContinuable 路径 + 工具描述 | — |
-| 1b | **profile 级 config 覆盖实测**（`enableAuto` / `autoEscalate` / `autoReroute` / `toolName` 等真实生效验证） | P1 | 配置面闭环，堵静默失效 | — |
+| 1b | ~~profile 级 config 覆盖实测~~ → **✅ 已完成**：设置页 UI（设置 → 插件配置）实现并验证（host settings 命名空间 + client 卡片 + 实时生效，见 PLAN-settings-ui.md） | P1 | 配置面闭环，堵静默失效 | — |
 | 1c | **目录元数据**：`subagent_models` 输出加 cost 档 / 速度 / 特长 / 上下文窗口标注 | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
 | 1d | **auto 策略参数化（余项）**：档位阈值（字符数/markers）、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数上限已交付（`autoEscalationTiers`） | — |
 | 1e | **真实环境健康感知验证**：clinepass 配额耗尽场景下 auto 换路 / 目录标注实跑 | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
@@ -69,7 +69,7 @@
 
 | 版本 | 内容 |
 |---|---|
-| **0.2.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· 1a continuable 实测 · 1b config 覆盖实测 · 1c 目录元数据 · 1d 余项（阈值/预算）· 1e 真实环境验证 |
+| **0.2.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· ✅ 1b 设置页配置 UI（host+client 化）· 1a continuable 实测 · 1c 目录元数据 · 1d 余项（阈值/预算）· 1e 真实环境验证 |
 | **0.3.x** | 2a subagent_recommend（1c 就绪后）· 2b 反馈闭环 · 2c 多 route 感知 · 2d 决策历史 |
 | **后续** | 3a–3d · B1/B2（等依赖就绪） |
 

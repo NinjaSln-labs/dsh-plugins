@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-subagent-router 工作交接
 
-> 最后更新：2026-08-21 · 交接方：dsh web 会话（deepseek-v4-flash）· 一句话：**v0.1.1 已发布（git CI 管道跑通），健康感知（失败分类脱敏透传 + 死锚检测 + 终态换路 + 升级参数化 + 目录健康标注）+ 模型路由优先级配置化（四层组合）已落地，61/61 测试全绿（含审计修复：other 瞬态信号、换路沿用配置），README 对齐 compass（中文主版 + 徽章 + 元数据），0 待办（源码改动未发布）**
+> 最后更新：2026-08-21 · 交接方：dsh web 会话（deepseek-v4-flash）· 一句话：**v0.1.1 已发布（git CI 管道跑通），健康感知 + 配置化四层 + 设置页配置 UI（host+client 化）全部落地并实测通过，66/66 测试全绿，0 待办（源码改动未发布）**
 
 ## 1. 交接元信息
 
@@ -36,7 +36,7 @@
 
 | 套件 | 结果 |
 |---|---|
-| vitest | **61/61 全绿**（`tests/tools.spec.ts`，真实 ToolRuntime+SubagentRuntime + 脚本化 provider + fake llm 路由；含 auto 策略、锚定、升级、防降级、失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置用例） |
+| vitest | **66/66 全绿**（`tests/tools.spec.ts`，真实 ToolRuntime+SubagentRuntime + 脚本化 provider + fake llm 路由；含 auto 策略、锚定、升级、防降级、失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置用例） |
 | typecheck | ✅（`tsc -p tsconfig.json --noEmit` 严格通过） |
 | build | ✅（`tsc -p tsconfig.build.json` → `lib/`；新增 `failure.js`/`health.js` 已入 `files`） |
 | CI 实跑 | ✅ 0.1.1 发布 run completed success（Guard → Install → Verify → Publish 全过） |
@@ -46,6 +46,7 @@
 - `5212562` docs: 插件本地文档（HANDOFF + ROADMAP + PUBLISHING，context-compass 格式）
 - **健康感知 + 配置化（未提交，工作树）**：src/failure.ts + src/health.ts 新增；tools.ts/index.ts 增强；package.json files 补 failure/health
 - **审计修复（未提交，工作树）**：`record('other')` 改为瞬态信号（死锚检测对模型层 stopReason:'error' 生效）· `rerouteToHealthy` 换路沿用 autoTierPicks/autoTierPolicy + signal 中止检查 + 失败详情透传不再吞 · 死代码清理（anchorScore/SubagentStartRequest/pickByMode anchor 分支）· 重复代码抽 helper（buildFailureAggregate/unhealthyReason）· 跨 provider picks 目录失败时 models 置空防旧目录污染 ladder
+- **设置页配置 UI（未提交，工作树）**：插件 host+client 化——host `installSettingsSection` 注册 `subagent-router` 命名空间（响应式 config getter）+ client `settings.plugin.item` 卡片（settingsScope bind + 20 字段表单）；`src/client.tsx` + `scripts/build-client.mjs`（esbuild → lib/client.js）+ `package.json` exports/client 段；实测：设置 → 插件配置 显示卡片、编辑写入 settings.yaml、下次调用实时生效（policy=cheapest→anchor 验证）
 - `85deb80` docs: 新增 ROADMAP.md（三阶段计划）
 - `1402b97` ci: 去掉 setup-node `cache: npm`（无 lockfile 报错，见 pits）
 - `85dcb70` ci: step name 冒号加引号（invalid YAML，见 pits；顺带修好 context-compass 的 publish.yml）
@@ -101,8 +102,8 @@ git push && git push --tags    # → CI 验证 → GitHub 审批（environment n
 
 | 主题 | 路径 |
 |---|---|
-| **源码** | `src/index.ts`（入口/生命周期/config）· `src/tools.ts`（两个工具 + auto 策略 + 失败恢复）· `src/failure.ts`（失败分类/脱敏）· `src/health.ts`（路由健康存储） |
-| **测试** | `tests/tools.spec.ts`（61 项） |
+| **源码** | `src/index.ts`（入口/生命周期/config）· `src/tools.ts`（两个工具 + auto 策略 + 失败恢复）· `src/failure.ts`（失败分类/脱敏）· `src/health.ts`（路由健康存储）· `src/client.tsx`（设置页卡片）· `src/config.ts`（Config schema） |
+| **测试** | `tests/tools.spec.ts`（66 项） |
 | **路线图** | `docs/ROADMAP.md`（唯一权威来源） |
 | **发布记录** | `PUBLISHING.md` |
 | **功能文档** | `README.md` + `README.en.md`（中英双语，中文主版） |
