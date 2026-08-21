@@ -55,6 +55,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit || true",
     "smoke": "node scripts/smoke.mjs",
     "mount": "node scripts/mount.mjs",
+    "release-check": "node scripts/release-check.mjs",
     "visual": "playwright test -c visual/playwright.config.mjs",
     "visual:update": "playwright test -c visual/playwright.config.mjs --update-snapshots"
   },
