@@ -12,9 +12,18 @@
 - **CI 自动发布** — tag `subagent-router-v*` 触发 → 版本守卫 → 验证链（strict typecheck/30 测试/build）→ environment `npm-publish` 人工审批 → `npm publish`
 - **更名** — `dsh-subagent-model-picker` → `dsh-subagent-router`（旧包已 deprecate 指向新包）
 
+### 第二波（v0.2.x 先行项，健康感知）
+
+- **失败分类与脱敏透传** — 可观测失败（start 拒绝 / 基础设施故障）分类为 quota / rate-limit / auth / context / server / timeout / transport，脱敏拼进工具结果（含 HTTP 状态与 retry-after），不再只是「subagent run failed」
+- **死锚检测（健康感知）** — 会话内 per-route 失败分类（`RouteHealthStore`，quota/auth 终态、瞬时类 60s TTL）；父路由不健康时 auto 不再锚定，改挑健康 provider
+- **终态失败换路** — `quota`/`auth` 失败时换到健康 provider 路由重试（`autoReroute`，默认开），不再傻等同一路由
+- **升级次数参数化** — `autoEscalationTiers`（默认 1，保持历史行为；可调大），`autoEscalate` 仍控制开关
+- **目录健康标注** — `subagent_models` 输出每个 provider 的 `health` + `failingClass` + `retryAfterSec`
+- **模型路由优先级配置化（四层组合）** — `autoProviderOrder`（供应商优先级）+ `autoTierPolicy`（每档模式：anchor/cheapest/strongest）+ `autoTierPicks`（每档显式候选序，可跨 provider）+ `autoCeiling`（预算封顶）；都不配 = 现状不变
+
 ### 质量
 
-- **30 项自动化测试全绿**（真实 ToolRuntime + SubagentRuntime + 脚本化 provider）
+- **61 项自动化测试全绿**（30 项既有 + 31 项新增：失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置）
 - **CI 双坑修复**（已归档 `../../HANDOFF-ARCHIVE/pits.md`）：workflow step name 冒号 invalid YAML；setup-node `cache: npm` 无 lockfile
 
 ## 待做（按优先级）
@@ -26,9 +35,10 @@
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
 | 1a | **`backgroundMode: continuable` 运行时实测**（spawn 具备 `prepareContinuable`） | P0 | 后台委派是主力场景，不能只靠单测；验证 startContinuable 路径 + 工具描述 | — |
-| 1b | **profile 级 config 覆盖实测**（`enableAuto` / `autoEscalate` / `toolName` 等真实生效验证） | P1 | 配置面闭环，堵静默失效 | — |
+| 1b | **profile 级 config 覆盖实测**（`enableAuto` / `autoEscalate` / `autoReroute` / `toolName` 等真实生效验证） | P1 | 配置面闭环，堵静默失效 | — |
 | 1c | **目录元数据**：`subagent_models` 输出加 cost 档 / 速度 / 特长 / 上下文窗口标注 | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
-| 1d | **auto 策略参数化**：档位阈值（字符数/markers）、升级次数上限、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数现在硬编码 1 | — |
+| 1d | **auto 策略参数化（余项）**：档位阈值（字符数/markers）、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数上限已交付（`autoEscalationTiers`） | — |
+| 1e | **真实环境健康感知验证**：clinepass 配额耗尽场景下 auto 换路 / 目录标注实跑 | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
 
 ### Phase 2 — 智能推荐（v0.3.x，中期）
 
@@ -59,7 +69,7 @@
 
 | 版本 | 内容 |
 |---|---|
-| **0.2.x** | 1a continuable 实测 + 1b config 覆盖实测 + 1c 目录元数据 + 1d 策略参数化/预算 |
+| **0.2.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· 1a continuable 实测 · 1b config 覆盖实测 · 1c 目录元数据 · 1d 余项（阈值/预算）· 1e 真实环境验证 |
 | **0.3.x** | 2a subagent_recommend（1c 就绪后）· 2b 反馈闭环 · 2c 多 route 感知 · 2d 决策历史 |
 | **后续** | 3a–3d · B1/B2（等依赖就绪） |
 

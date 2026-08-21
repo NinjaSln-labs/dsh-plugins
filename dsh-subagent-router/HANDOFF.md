@@ -1,13 +1,13 @@
 # HANDOFF.md — dsh-subagent-router 工作交接
 
-> 最后更新：2026-08-15 · 交接方：dsh web 会话（deepseek-v4-flash）· 一句话：**v0.1.1 已发布（git CI 管道跑通），auto 路由策略完整（锚定父模型 + 任务分档 + 失败升级 + 可审计），30/30 测试全绿，发布全自动（tag → 审批 → publish），0 待办**
+> 最后更新：2026-08-21 · 交接方：dsh web 会话（deepseek-v4-flash）· 一句话：**v0.1.1 已发布（git CI 管道跑通），健康感知（失败分类脱敏透传 + 死锚检测 + 终态换路 + 升级参数化 + 目录健康标注）+ 模型路由优先级配置化（四层组合）已落地，61/61 测试全绿（含审计修复：other 瞬态信号、换路沿用配置），README 对齐 compass（中文主版 + 徽章 + 元数据），0 待办（源码改动未发布）**
 
 ## 1. 交接元信息
 
 - **日期**：2026-08-15
 - **插件包**：`dsh-subagent-router@0.1.1`（npm latest），npm 用户名 `ninjasln`
 - **交接原因**：会话切换（用户将 cd 到本目录继续）
-- **文档入口链**：`README.md` + `README.zh.md`（中英双语）→ `PUBLISHING.md`（发布记录）→ `docs/ROADMAP.md`（路线图，唯一权威来源）
+- **文档入口链**：`README.md`（中文主版）+ `README.en.md`（英文）→ `PUBLISHING.md`（发布记录）→ `docs/ROADMAP.md`（路线图，唯一权威来源）
 - **接收方建议**：先读完本文件 §2–§3；路线图见 `docs/ROADMAP.md`（唯一权威来源）；发布流程见本文件 §4 与工作流头部注释；本文件位于插件目录（与 context-compass 同款），工作区根 `HANDOFF.md` 只记 delta 并引用本文件
 
 ## 2. 当前状态快照
@@ -27,20 +27,25 @@
 | 域 | 状态 |
 |---|---|
 | 功能 | 完整：`subagent_model` 工具（每次委派显式 provider/model/max_tokens + `model: "auto"` 内置路由策略）+ `subagent_models` 目录工具 |
-| auto 策略 | 锚定父模型（默认，`anchored` 标记）→ 任务分档（trivial/standard/complex）→ 重任务弱父升强（目录最强）→ 失败升级（只升不降，`autoEscalate`）→ 全程可审计（`[auto]` 行 + reason） |
+| auto 策略 | 锚定父模型（默认，`anchored` 标记）→ 任务分档（trivial/standard/complex）→ 重任务弱父升强（目录最强）→ 失败升级（只升不降，`autoEscalate` + `autoEscalationTiers`）→ 全程可审计（`[auto]` 行 + reason） |
+| 健康感知（新增，未发布） | 失败分类脱敏透传（quota/rate-limit/auth/context/server/timeout/transport + HTTP status/retry-after）· 死锚检测（父路由不健康不再锚定，`RouteHealthStore` 60s TTL）· 终态失败换路（`autoReroute`，quota/auth 换健康 provider）· 目录健康标注（`health`/`failingClass`/`retryAfterSec`） |
+| 路由优先级配置化（新增，未发布） | `autoProviderOrder`（供应商优先级）+ `autoTierPolicy`（每档 anchor/cheapest/strongest）+ `autoTierPicks`（每档显式候选序，可跨 provider）+ `autoCeiling`（预算封顶）——用户可按自己对供应商的性价比认知配置，插件不再替用户做主 |
 | 占位/未完成 | **无**——功能完整，0 待办（见 §3） |
 
 ### 2.3 测试
 
 | 套件 | 结果 |
 |---|---|
-| vitest | **30/30 全绿**（`tests/tools.spec.ts`，真实 ToolRuntime+SubagentRuntime + 脚本化 provider + fake llm 路由；含 auto 策略、锚定、升级、防降级用例） |
+| vitest | **61/61 全绿**（`tests/tools.spec.ts`，真实 ToolRuntime+SubagentRuntime + 脚本化 provider + fake llm 路由；含 auto 策略、锚定、升级、防降级、失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置用例） |
 | typecheck | ✅（`tsc -p tsconfig.json --noEmit` 严格通过） |
-| build | ✅（`tsc -p tsconfig.build.json` → `lib/`；prepublishOnly 自动构建） |
+| build | ✅（`tsc -p tsconfig.build.json` → `lib/`；新增 `failure.js`/`health.js` 已入 `files`） |
 | CI 实跑 | ✅ 0.1.1 发布 run completed success（Guard → Install → Verify → Publish 全过） |
 
 ### 2.4 最近完成（摘要——详情在 commit message）
 
+- `5212562` docs: 插件本地文档（HANDOFF + ROADMAP + PUBLISHING，context-compass 格式）
+- **健康感知 + 配置化（未提交，工作树）**：src/failure.ts + src/health.ts 新增；tools.ts/index.ts 增强；package.json files 补 failure/health
+- **审计修复（未提交，工作树）**：`record('other')` 改为瞬态信号（死锚检测对模型层 stopReason:'error' 生效）· `rerouteToHealthy` 换路沿用 autoTierPicks/autoTierPolicy + signal 中止检查 + 失败详情透传不再吞 · 死代码清理（anchorScore/SubagentStartRequest/pickByMode anchor 分支）· 重复代码抽 helper（buildFailureAggregate/unhealthyReason）· 跨 provider picks 目录失败时 models 置空防旧目录污染 ladder
 - `85deb80` docs: 新增 ROADMAP.md（三阶段计划）
 - `1402b97` ci: 去掉 setup-node `cache: npm`（无 lockfile 报错，见 pits）
 - `85dcb70` ci: step name 冒号加引号（invalid YAML，见 pits；顺带修好 context-compass 的 publish.yml）
@@ -57,9 +62,11 @@
 
 ### 3.2 重启验证（`dsh web` 重启 + 硬刷新）
 
-- [ ] `subagent_model` 工具可见（描述含 `model: "auto"` 说明）
+- [ ] `subagent_model` 工具可见（描述含 `model: "auto"` 说明与健康感知）
 - [ ] `model: "auto"` 实测：琐碎任务锚定父模型（`[auto] ... anchored`）、重任务弱父升强、失败自动升档
-- [ ] `subagent_models` 目录工具可见
+- [ ] `model: "auto"` 健康感知实测：父路由被标记不健康（quota/auth 失败）后不再锚定、换到健康 provider；失败详情带分类与 HTTP 状态（如 `provider rate-limited (http 429)`）
+- [ ] `subagent_models` 目录工具可见，且输出每个 provider 带 `health`/`failingClass`/`retryAfterSec`
+- [ ] 配置化实测：profile 里配 `autoProviderOrder`/`autoTierPolicy`/`autoTierPicks`/`autoCeiling` 后重启，auto 决策按配置生效（`[auto]` 行 reason 带 `policy=` 标注）；不配时行为与旧版一致
 
 ### 3.3 风险提醒
 
@@ -94,11 +101,11 @@ git push && git push --tags    # → CI 验证 → GitHub 审批（environment n
 
 | 主题 | 路径 |
 |---|---|
-| **源码** | `src/index.ts`（入口/生命周期/config）· `src/tools.ts`（两个工具 + auto 策略） |
-| **测试** | `tests/tools.spec.ts`（30 项） |
+| **源码** | `src/index.ts`（入口/生命周期/config）· `src/tools.ts`（两个工具 + auto 策略 + 失败恢复）· `src/failure.ts`（失败分类/脱敏）· `src/health.ts`（路由健康存储） |
+| **测试** | `tests/tools.spec.ts`（61 项） |
 | **路线图** | `docs/ROADMAP.md`（唯一权威来源） |
 | **发布记录** | `PUBLISHING.md` |
-| **功能文档** | `README.md` + `README.zh.md`（中英双语） |
+| **功能文档** | `README.md` + `README.en.md`（中英双语，中文主版） |
 | **发布管道** | `../.github/workflows/publish-subagent-router.yml` |
 | **插件集总览** | `../README.md`（插件表） |
 | **本机部署** | `~/.dsh/profiles/web/package.json`（依赖+bundles）· `~/.dsh/settings.yaml` |
