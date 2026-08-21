@@ -1143,3 +1143,129 @@ describe('dsh-subagent-router configurable auto routing (edge cases)', () => {
     expect(text(result)).toContain('anchored')
   })
 })
+
+describe('dsh-subagent-router config schema', () => {
+  it('schema defaults match resolveConfig defaults (dual-source sync)', async () => {
+    const { Config } = await import('../src/config.ts')
+    const { resolveConfig, defaultConfig } = await import('../src/index.ts')
+    const fromSchema = Config(undefined)
+    const fromResolve = resolveConfig({})
+    expect(fromSchema.subagentProvider).toBe(fromResolve.subagentProvider)
+    expect(fromSchema.toolName).toBe(fromResolve.toolName)
+    expect(fromSchema.modelsToolName).toBe(fromResolve.modelsToolName)
+    expect(fromSchema.enableRunInBackground).toBe(fromResolve.enableRunInBackground)
+    expect(fromSchema.backgroundMode).toBe(fromResolve.backgroundMode)
+    expect(fromSchema.enableModelList).toBe(fromResolve.enableModelList)
+    expect(fromSchema.enableAuto).toBe(fromResolve.enableAuto)
+    expect(fromSchema.autoEscalate).toBe(fromResolve.autoEscalate)
+    expect(fromSchema.autoReroute).toBe(fromResolve.autoReroute)
+    expect(fromSchema.autoEscalationTiers).toBe(fromResolve.autoEscalationTiers)
+    expect(fromSchema.maxDepth).toBe(fromResolve.maxDepth)
+    // autoProviderOrder defaults: schema gives [], resolve gives undefined —
+    // both mean "registry order", but keep them consistent as empty/undefined.
+    expect(fromSchema.autoProviderOrder ?? []).toEqual([])
+    expect(defaultConfig.maxDepth).toBe(3)
+  })
+
+  it('schema accepts partial tier config', async () => {
+    const { Config } = await import('../src/config.ts')
+    const partial = Config({ autoTierPolicy: { trivial: 'cheapest' } })
+    expect(partial.autoTierPolicy).toEqual({ trivial: 'cheapest' })
+    expect(partial.autoProviderOrder).toEqual([])
+  })
+
+  it('schema accepts full config', async () => {
+    const { Config } = await import('../src/config.ts')
+    const full = Config({
+      autoProviderOrder: ['a', 'b'],
+      autoTierPolicy: { trivial: 'cheapest', standard: 'anchor', complex: 'strongest' },
+      autoTierPicks: { complex: ['x'] },
+      autoCeiling: 'pro',
+      autoEscalationTiers: 2,
+      maxDepth: 5,
+    })
+    expect(full.autoProviderOrder).toEqual(['a', 'b'])
+    expect(full.autoTierPolicy).toEqual({ trivial: 'cheapest', standard: 'anchor', complex: 'strongest' })
+    expect(full.autoTierPicks.complex).toEqual(['x'])
+    expect(full.autoCeiling).toBe('pro')
+    expect(full.autoEscalationTiers).toBe(2)
+    expect(full.maxDepth).toBe(5)
+  })
+})
+
+describe('dsh-subagent-router host settings integration', () => {
+  /** Minimal settings service: register returns a scope whose `get` reads a
+   *  mutable section merged over the schema defaults; external `setSection`
+   *  updates it and fires watchers (the settings user-layer write path). */
+  function fakeSettingsService() {
+    let section: Record<string, unknown> = {}
+    const watchers = new Set<() => void>()
+    const schemas = new Map<string, { defaults: Record<string, unknown> }>()
+    const service = {
+      register(ns: string, schema: { defaults?: Record<string, unknown> }, options: { base?: object } = {}) {
+        schemas.set(ns, { defaults: (schema as { defaults?: Record<string, unknown> }).defaults ?? {} })
+        const scope = {
+          get() {
+            return { ...schemas.get(ns)!.defaults, ...options.base, ...section }
+          },
+          watch(cb: () => void) {
+            watchers.add(cb)
+            return () => watchers.delete(cb)
+          },
+          update(patch: object) {
+            section = { ...section, ...patch }
+            for (const cb of watchers) cb()
+          },
+        }
+        return scope
+      },
+      describe() { return [] },
+      get(_ns: string) { return undefined },
+    }
+    return { service, setSection: (patch: object) => { section = { ...section, ...patch }; for (const cb of watchers) cb() } }
+  }
+
+  it('reads configuration from the settings scope when the service is present', async () => {
+    const { service, setSection } = fakeSettingsService()
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SubagentRuntime)
+    ctx.provide('llm', fakeLlm(AUTO_ROUTES))
+    const provider = new ScriptedProvider('mock')
+    ctx.subagents.registerProvider(provider)
+    ctx.provide('settings', service as never)
+    await ctx.plugin(plugin, { subagentProvider: 'mock' })
+    // Default (no user layer): trivial → heuristic pick (cheapest flash).
+    let result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect((provider.starts[0]!.agentOptions as { model?: string }).model).toBe('deepseek-v4-flash')
+    // Settings write: force trivial → strongest. The tool must pick v4-pro
+    // WITHOUT re-registration (responsive config).
+    setSection({ autoTierPolicy: { trivial: 'strongest' } })
+    result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect((provider.starts[provider.starts.length - 1]!.agentOptions as { model?: string }).model).toBe('deepseek-v4-pro')
+    expect(text(result)).toContain('policy=strongest')
+  })
+
+  it('falls back to the composition entry when no settings service exists', async () => {
+    const { ctx, provider } = await setup({ autoTierPolicy: { trivial: 'strongest' } }, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect((provider.starts[0]!.agentOptions as { model?: string }).model).toBe('deepseek-v4-pro')
+    expect(text(result)).toContain('policy=strongest')
+  })
+})

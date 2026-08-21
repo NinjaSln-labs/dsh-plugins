@@ -47,7 +47,15 @@ The bundle inserts one composition row (`subagent-router`). It consumes the host
 
 ## Configuration
 
-All fields optional, via the composition row's `config`:
+**Settings UI**: the plugin ships a client half, so its configuration can be
+edited directly under **Settings → Plugins** (the `subagent-router` card).
+Edits write to the user settings layer (`subagent-router` section of
+`~/.dsh/settings.yaml`) immediately — the next `subagent_model` call picks
+them up **without a restart**; clearing a field falls back to the
+composition-row value below.
+
+Alternatively, configure via the composition row's `config` (the base layer,
+overridden by the settings UI user layer):
 
 | Field | Default | Meaning |
 |---|---|---|

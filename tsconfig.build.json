@@ -4,8 +4,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": [
-      "ES2024"
+      "ES2024",
+      "DOM"
     ],
+    "jsx": "react-jsx",
     "outDir": "lib",
     "rootDir": "src",
     "declaration": true,

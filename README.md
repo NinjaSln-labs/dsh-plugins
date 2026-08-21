@@ -47,7 +47,9 @@ bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools`
 
 ## 配置
 
-全部可选，写在组合行的 `config` 里：
+**设置页 UI**：插件提供 client half，配置可在 **设置 → 插件配置** 里直接编辑（`subagent-router` 卡片）。编辑即时写入用户设置层（`~/.dsh/settings.yaml` 的 `subagent-router` 段），**无需重启**即对下一次 `subagent_model` 调用生效；清除字段回退到下方组合行配置。
+
+也可以写在组合行的 `config` 里（作为 base 层，被设置页 user 层覆盖）：
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
