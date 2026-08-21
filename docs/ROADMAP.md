@@ -1,0 +1,78 @@
+# dsh-subagent-router — Roadmap
+
+状态基准：**v0.1.1**（2026-08-15 发布，git CI 管道跑通）。本文件是路线图的**唯一权威来源（单源）**；`HANDOFF.md` / `PUBLISHING.md` / `README.md` 只记录 delta 并引用本文件，不复制路线内容。
+
+## 已交付（到 v0.1.1）
+
+### 第一波（v0.1.x，含旧名 dsh-subagent-model-picker）
+
+- **显式模型路由** — `subagent_model` 工具：每次委派可指定 `provider` / `model` / `max_tokens`；省略字段继承父级路由
+- **目录工具** — `subagent_models`：实时 provider 路由 + 模型目录（advisory）
+- **`model: "auto"` 自动路由** — 锚定父模型（默认，`anchored` 标记）→ 任务分档（trivial/standard/complex）→ 重任务弱父升强（目录最强）→ 失败升级（`autoEscalate`，只升不降）→ 全程可审计（`[auto]` 行 + reason + escalatedFrom）
+- **CI 自动发布** — tag `subagent-router-v*` 触发 → 版本守卫 → 验证链（strict typecheck/30 测试/build）→ environment `npm-publish` 人工审批 → `npm publish`
+- **更名** — `dsh-subagent-model-picker` → `dsh-subagent-router`（旧包已 deprecate 指向新包）
+
+### 质量
+
+- **30 项自动化测试全绿**（真实 ToolRuntime + SubagentRuntime + 脚本化 provider）
+- **CI 双坑修复**（已归档 `../../HANDOFF-ARCHIVE/pits.md`）：workflow step name 冒号 invalid YAML；setup-node `cache: npm` 无 lockfile
+
+## 待做（按优先级）
+
+> 主线目标：**自动路由从「启发式可用」走向「智能、可控、可量化」**。顺序原则：实测补齐 > 数据地基 > 推荐引擎 > 生态。
+
+### Phase 1 — 打磨与实测（v0.2.x，近期）
+
+| # | 项 | 优先级 | 动机 / 价值 | 依赖 |
+|---|---|---|---|---|
+| 1a | **`backgroundMode: continuable` 运行时实测**（spawn 具备 `prepareContinuable`） | P0 | 后台委派是主力场景，不能只靠单测；验证 startContinuable 路径 + 工具描述 | — |
+| 1b | **profile 级 config 覆盖实测**（`enableAuto` / `autoEscalate` / `toolName` 等真实生效验证） | P1 | 配置面闭环，堵静默失效 | — |
+| 1c | **目录元数据**：`subagent_models` 输出加 cost 档 / 速度 / 特长 / 上下文窗口标注 | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
+| 1d | **auto 策略参数化**：档位阈值（字符数/markers）、升级次数上限、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数现在硬编码 1 | — |
+
+### Phase 2 — 智能推荐（v0.3.x，中期）
+
+| # | 项 | 优先级 | 动机 / 价值 | 依赖 |
+|---|---|---|---|---|
+| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason | P1 | 比命名启发式准一个量级；复用 knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级） | 1c |
+| 2b | **失败反馈闭环**：按 任务类型×模型 记录成功/失败/耗时，反哺策略与推荐 | P1 | 长期差异化；轻量自存或对接 dsh-knowledge-sqlite | 2a |
+| 2c | **同模型多 route 感知**：同一 model id 在多个 provider 注册时按成本/延迟选 route | P2 | 自动选择不应忽略路由维度（如 deepseek-v4-pro 在 deepseek-official 与 opencode-go 都有） | 1c |
+| 2d | **预算仪表**：auto 决策历史（每任务选了谁、花了多少、升级几次）可查 | P2 | 可审计性从单次升级到全局 | 1d |
+
+### Phase 3 — 生态（远期）
+
+| # | 项 | 优先级 | 动机 / 价值 | 依赖 |
+|---|---|---|---|---|
+| 3a | **子代理自主升级**：任务中途自调 `subagent_model` 换强模型继续 | P2 | 启动便宜、中途发现变难场景 | — |
+| 3b | **会话级策略**：per-session 默认策略（如「一律锚定父模型、不升级」） | P3 | 按会话场景定制 | 1d |
+| 3c | **与 context-compass / session-health 打通**：选型直接吃真实计价数据（CNY/USD），替代命名启发式 | P3 | 成本感知选型 | 1c |
+| 3d | **preset 化**：沉淀为 preset 行，其他 profile 一行启用 | P3 | 推广安装 | — |
+
+## 被阻塞（需 harness 或跨仓库配合）
+
+| # | 项 | 卡点 |
+|---|---|---|
+| B1 | 知识库自动写回（2b 强联动） | dsh-knowledge-sqlite 需开放公开、带门控的写入服务（跨仓库协作） |
+| B2 | 推荐引擎调用小模型分类器 | 需确认 harness 允许插件内发起轻量 LLM 调用（或复用 L1 扩展的服务化通道） |
+
+## 排期建议
+
+| 版本 | 内容 |
+|---|---|
+| **0.2.x** | 1a continuable 实测 + 1b config 覆盖实测 + 1c 目录元数据 + 1d 策略参数化/预算 |
+| **0.3.x** | 2a subagent_recommend（1c 就绪后）· 2b 反馈闭环 · 2c 多 route 感知 · 2d 决策历史 |
+| **后续** | 3a–3d · B1/B2（等依赖就绪） |
+
+## 明确不做
+
+- 无审计的黑盒自动选型（任何 auto 决策必须带 reason）
+- 硬编码模型名单的策略（目录是活的，策略必须数据驱动）
+- 替用户省钱作为唯一目标（任务匹配优先，省钱次之）
+
+## 维护规则
+
+- 本文件是路线图的**唯一权威来源**；完成一项 → 从「待做」移到「已交付」并标注落地版本
+- 被阻塞项保留在「被阻塞」并写明卡点；卡点解除后移回「待做」
+- 优先级/排期变化只改这里；`HANDOFF.md` / `PUBLISHING.md` / `README.md` 引用本文件、不复制路线内容
+- **peer 基线策略**：`peerDependencies` 声明"最低要求的服务版本"，保持宽松、不随 harness 每次升级而升；仅当接入依赖更高版本独有 API 时局部升对应服务
+- **发布一律走 git 管道**（tag → 审批 → publish），见 `HANDOFF.md` §4
