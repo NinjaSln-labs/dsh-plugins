@@ -26,6 +26,7 @@ const steps = [
   ['smoke', 'node scripts/smoke.mjs', '逻辑冒烟（83 项）'],
   ['mount', 'node scripts/mount.mjs', '真实 cordis 挂载'],
   ['client-mount', 'node scripts/client-mount.mjs', '浏览器启动路径'],
+  ['contract', 'node scripts/contract-check.mjs', 'live 契约：插件挂载 + 注入链路（需运行中 harness）'],
   ['visual', 'npx playwright test -c visual/playwright.config.mjs', '视觉回归（需运行中 harness）'],
 ]
 
@@ -36,12 +37,18 @@ for (let i = 0; i < steps.length; i++) {
   const [name, cmd, desc] = steps[i]
   console.log(`▶ [${i + 1}/${steps.length}] ${name} — ${desc}`)
   const r = spawnSync(cmd, { cwd: root, shell: true, stdio: 'inherit' })
-  results.push({ name, ok: r.status === 0 })
+  // contract-check 在 harness 未运行时以 exit 2 返回「跳过」——release-check 本就
+  // 预期在运行 harness 下跑（visual 同样依赖），故将其计为成功（打印 SKIP）。
+  const skip = name === 'contract' && r.status === 2
+  results.push({ name, ok: r.status === 0 || skip, skip })
   console.log('')
 }
 
 console.log('=== 汇总 ===')
-for (const { name, ok } of results) console.log(`${ok ? '✅' : '❌'} ${name}`)
+for (const { name, ok, skip } of results) {
+  if (skip) console.log(`⏭️  ${name} (跳过 — harness 未运行)`)
+  else console.log(`${ok ? '✅' : '❌'} ${name}`)
+}
 const failed = results.filter(r => !r.ok).length
 if (failed === 0) {
   console.log('\n✅ 全部通过 —— 可以打 tag 发布\n')
