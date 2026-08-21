@@ -82,7 +82,7 @@ The test suite drives the real plugin body on a real `ToolRuntime` + `SubagentRu
 
 ## Roadmap
 
-Planned work for the auto-routing policy (catalog metadata, recommend tool, feedback loop, budgets): see [ROADMAP.md](./ROADMAP.md).
+Planned work for the auto-routing policy (catalog metadata, recommend tool, feedback loop, budgets): see [docs/ROADMAP.md](./docs/ROADMAP.md). Handoff notes live in [HANDOFF.md](./HANDOFF.md); release history in [PUBLISHING.md](./PUBLISHING.md).
 
 ## License
 
