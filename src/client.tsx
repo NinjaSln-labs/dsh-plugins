@@ -67,6 +67,12 @@ const CSS = `
 .sr-check{accent-color:var(--dsw-alias-state-primary,#4c8dff)}
 .sr-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sr-note{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
+.sr-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.sr-btn{display:inline-flex;align-items:center;justify-content:center;padding:6px 16px;border:1px solid var(--dsw-alias-border-l2,#333);border-radius:6px;background:var(--dsw-alias-bg-raised,#1e1e1e);color:var(--dsw-alias-label-primary,#f9fafb);font-size:12px;cursor:pointer;transition:background .12s ease}
+.sr-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2a2a2a)}
+.sr-btn:disabled{opacity:.45;cursor:not-allowed}
+.sr-btn-primary{border-color:var(--dsw-alias-state-primary,#4c8dff);color:var(--dsw-alias-state-primary,#4c8dff);font-weight:600}
+.sr-btn-primary:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-primary,#4c8dff) 12%,transparent)}
 .sr-unavailable{font-size:12px;color:var(--dsw-alias-label-tertiary,#999);padding:14px 16px}
 `
 
@@ -80,46 +86,41 @@ type Field =
 
 /** Declarative field list — single source for the form (mirrors src/config.ts). */
 const FIELDS: Field[] = [
-  { id: 'subagentProvider', label: 'Subagent provider', hint: 'ctx.subagents provider that starts children (default spawn).', kind: 'text', get: s => s.subagentProvider, set: (s, v) => ({ ...s, subagentProvider: v }) },
-  { id: 'toolName', label: 'Delegation tool name', hint: 'Model-facing tool (default subagent_model).', kind: 'text', get: s => s.toolName, set: (s, v) => ({ ...s, toolName: v }) },
-  { id: 'modelsToolName', label: 'Catalog tool name', hint: 'Model-facing catalog (default subagent_models).', kind: 'text', get: s => s.modelsToolName, set: (s, v) => ({ ...s, modelsToolName: v }) },
-  { id: 'enableRunInBackground', label: 'Enable run_in_background', hint: 'Expose the run_in_background argument.', kind: 'boolean', get: s => s.enableRunInBackground, set: (s, v) => ({ ...s, enableRunInBackground: v }) },
-  { id: 'backgroundMode', label: 'Background mode', hint: 'one-shot waits; continuable returns a durable child id.', kind: 'enum', options: ['one-shot', 'continuable'], get: s => s.backgroundMode, set: (s, v) => ({ ...s, backgroundMode: v as 'one-shot' | 'continuable' }) },
-  { id: 'enableModelList', label: 'Enable catalog tool', hint: 'Register subagent_models.', kind: 'boolean', get: s => s.enableModelList, set: (s, v) => ({ ...s, enableModelList: v }) },
-  { id: 'enableAuto', label: 'Enable model: "auto"', hint: 'Accept model: "auto" on the delegation tool.', kind: 'boolean', get: s => s.enableAuto, set: (s, v) => ({ ...s, enableAuto: v }) },
-  { id: 'autoEscalate', label: 'Escalate on failure', hint: 'Retry on the next auto tier after a failed run.', kind: 'boolean', get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
-  { id: 'autoReroute', label: 'Reroute on terminal failure', hint: 'Switch provider on quota/auth failures.', kind: 'boolean', get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
-  { id: 'autoEscalationTiers', label: 'Escalation tiers', hint: 'Max upgrade steps on one provider (0 disables).', kind: 'number', get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
-  { id: 'autoProviderOrder', label: 'Provider priority', hint: 'Comma-separated provider route ids, highest priority first.', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
-  { id: 'autoCeiling', label: 'Budget ceiling', hint: 'Never pick a model stronger than this id.', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
-  { id: 'maxDepth', label: 'Max depth', hint: 'Child depth cap; provider-managed for no cap.', kind: 'enum', options: ['3', '4', '5', 'provider-managed'], get: s => s.maxDepth === undefined ? undefined : String(s.maxDepth), set: (s, v) => ({ ...s, maxDepth: v === 'provider-managed' ? 'provider-managed' : Number(v) }) },
+  { id: 'subagentProvider', label: '子代理提供方', hint: '启动子代理的 ctx.subagents 提供方（默认 spawn）。', kind: 'text', get: s => s.subagentProvider, set: (s, v) => ({ ...s, subagentProvider: v }) },
+  { id: 'toolName', label: '委派工具名', hint: '面向模型的委派工具（默认 subagent_model）。', kind: 'text', get: s => s.toolName, set: (s, v) => ({ ...s, toolName: v }) },
+  { id: 'modelsToolName', label: '目录工具名', hint: '面向模型的目录工具（默认 subagent_models）。', kind: 'text', get: s => s.modelsToolName, set: (s, v) => ({ ...s, modelsToolName: v }) },
+  { id: 'enableRunInBackground', label: '启用 run_in_background', hint: '暴露 run_in_background 参数。', kind: 'boolean', get: s => s.enableRunInBackground, set: (s, v) => ({ ...s, enableRunInBackground: v }) },
+  { id: 'backgroundMode', label: '后台模式', hint: 'one-shot 前台等待；continuable 返回持久子代理 id。', kind: 'enum', options: ['one-shot', 'continuable'], get: s => s.backgroundMode, set: (s, v) => ({ ...s, backgroundMode: v as 'one-shot' | 'continuable' }) },
+  { id: 'enableModelList', label: '启用目录工具', hint: '注册 subagent_models。', kind: 'boolean', get: s => s.enableModelList, set: (s, v) => ({ ...s, enableModelList: v }) },
+  { id: 'enableAuto', label: '启用 model: "auto"', hint: '委派工具接受 model: "auto"。', kind: 'boolean', get: s => s.enableAuto, set: (s, v) => ({ ...s, enableAuto: v }) },
+  { id: 'autoEscalate', label: '失败时升级', hint: '运行失败后沿下一档自动重试。', kind: 'boolean', get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
+  { id: 'autoReroute', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
+  { id: 'autoEscalationTiers', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
+  { id: 'autoProviderOrder', label: '提供方优先级', hint: '逗号分隔的提供方路由 id，优先的在前。', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
+  { id: 'autoCeiling', label: '预算封顶', hint: '绝不选择比该模型更强的模型。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
+  { id: 'maxDepth', label: '最大深度', hint: '子代理深度上限；provider-managed 表示不设限。', kind: 'enum', options: ['3', '4', '5', 'provider-managed'], get: s => s.maxDepth === undefined ? undefined : String(s.maxDepth), set: (s, v) => ({ ...s, maxDepth: v === 'provider-managed' ? 'provider-managed' : Number(v) }) },
 ]
 
 const TIER_LABELS: Array<['trivial' | 'standard' | 'complex', string]> = [
-  ['trivial', 'Trivial'],
-  ['standard', 'Standard'],
-  ['complex', 'Complex'],
+  ['trivial', '琐碎'],
+  ['standard', '普通'],
+  ['complex', '复杂'],
 ]
 const MODE_OPTIONS = ['anchor', 'cheapest', 'strongest']
+const MODE_LABELS: Record<string, string> = {
+  anchor: '锚定父模型',
+  cheapest: '最便宜',
+  strongest: '最强',
+}
 
-/** Render one control for a field, wired to the scope write path. */
+/** Render one control for a field; edits flow to the parent via `onEdit`. */
 function FieldControl(props: {
   field: Field
   value: Section
-  scope: SettingsScope<Section>
   disabled: boolean
+  onEdit: (patch: Section) => void
 }): React.ReactElement {
-  const { field, value, scope, disabled } = props
-  const commit = (patch: Section): void => {
-    for (const key of Object.keys(patch) as Array<keyof Section>) {
-      const next = patch[key]
-      if (next === undefined || next === '') {
-        void scope.unset(key as string)
-      } else {
-        void scope.set(key as string, next as unknown)
-      }
-    }
-  }
+  const { field, value, disabled, onEdit } = props
   const hint = field.hint === undefined ? null : React.createElement('div', { className: 'sr-hint' }, field.hint)
   switch (field.kind) {
     case 'text': {
@@ -132,7 +133,7 @@ function FieldControl(props: {
             className: 'sr-input',
             value: current,
             disabled,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => commit(field.set(value, e.target.value)),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => onEdit(field.set(value, e.target.value)),
           }),
         ),
         hint,
@@ -151,7 +152,7 @@ function FieldControl(props: {
             disabled,
             onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
               const n = Number(e.target.value)
-              if (!Number.isNaN(n)) commit(field.set(value, n))
+              if (!Number.isNaN(n)) onEdit(field.set(value, n))
             },
           }),
         ),
@@ -169,7 +170,7 @@ function FieldControl(props: {
             type: 'checkbox',
             checked: current,
             disabled,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => commit(field.set(value, e.target.checked)),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => onEdit(field.set(value, e.target.checked)),
           }),
           hint,
         ),
@@ -185,7 +186,7 @@ function FieldControl(props: {
             className: 'sr-input',
             value: current,
             disabled,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => commit(field.set(value, e.target.value)),
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onEdit(field.set(value, e.target.value)),
           }, field.options.map(option =>
             React.createElement('option', { key: option, value: option }, option))),
         ),
@@ -203,7 +204,7 @@ function FieldControl(props: {
             value: current,
             disabled,
             placeholder: 'a, b, c',
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => commit(
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => onEdit(
               field.set(value, e.target.value.split(',').map(part => part.trim()).filter(Boolean)),
             ),
           }),
@@ -219,16 +220,41 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
   const { scope } = props
   const [snapshot, setSnapshot] = React.useState<SettingsScopeSnapshot<Section>>(scope.getSnapshot())
   const [open, setOpen] = React.useState(false)
+  const [draft, setDraft] = React.useState<Section | null>(null)
   React.useEffect(() => scope.subscribe(() => setSnapshot(scope.getSnapshot())), [scope])
-  const value = snapshot.value ?? ({} as Section)
+  const committed = snapshot.value ?? ({} as Section)
+  // Editing view = draft when present (unsaved edits), else the committed value.
+  const value = draft ?? committed
+  const dirty = draft !== null
   const disabled = !snapshot.writable || snapshot.status !== 'ready'
   if (snapshot.status === 'unavailable') {
     return React.createElement('div', { className: 'sr-card' },
       React.createElement('style', null, CSS),
       React.createElement('div', { className: 'sr-unavailable' },
-        'subagent-router: settings namespace unavailable on this deployment.'),
+        'subagent-router：此部署不可用该设置命名空间。'),
     )
   }
+  const onEdit = (patch: Section): void => {
+    setDraft(prev => ({ ...(prev ?? committed), ...patch }))
+  }
+  const onTierEdit = (tier: 'trivial' | 'standard' | 'complex', mode: string): void => {
+    const base = draft ?? committed
+    const next = { ...(base.autoTierPolicy ?? {}), [tier]: mode }
+    setDraft({ ...base, autoTierPolicy: next })
+  }
+  const onSave = (): void => {
+    if (draft === null) return
+    for (const key of Object.keys(draft) as Array<keyof Section>) {
+      const next = draft[key]
+      if (next === undefined || next === '' || (Array.isArray(next) && next.length === 0)) {
+        void scope.unset(key as string)
+      } else {
+        void scope.set(key as string, next as unknown)
+      }
+    }
+    setDraft(null)
+  }
+  const onCancel = (): void => setDraft(null)
   const chevron = React.createElement('svg', {
     className: 'sr-chevron',
     viewBox: '0 0 16 16',
@@ -256,37 +282,52 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
       React.createElement('span', { className: 'sr-headText' },
         React.createElement('span', { className: 'sr-name' }, 'dsh-subagent-router'),
         React.createElement('span', { className: 'sr-description' },
-          'Model-routed subagent delegation. Model choice per call (auto policy, health-aware rerouting).'),
+          '子任务模型路由：每次委派选择 provider / model（auto 策略，健康感知换路）。'),
       ),
       chevron,
     ),
     React.createElement('div', { className: 'sr-body' },
       React.createElement('div', { className: 'sr-note' },
-        'Edits take effect on the next subagent_model call (no restart).'),
-      ...FIELDS.map(field => React.createElement(FieldControl, { key: String(field.id), field, value, scope, disabled })),
+        dirty ? '有未保存的修改。' : '修改保存后，下一次 subagent_model 调用即生效（无需重启）。'),
+      ...FIELDS.map(field => React.createElement(FieldControl, {
+        key: String(field.id),
+        field,
+        value,
+        disabled,
+        onEdit,
+      })),
       ...TIER_LABELS.map(([tier, label]) => {
         const current = value.autoTierPolicy?.[tier] ?? ''
         return React.createElement('div', { className: 'sr-field', key: `tier-${tier}` },
-          React.createElement('label', { className: 'sr-label', htmlFor: `sr-tier-${tier}` }, `Tier ${label} policy`),
+          React.createElement('label', { className: 'sr-label', htmlFor: `sr-tier-${tier}` }, `${label}任务选型模式`),
           React.createElement('div', { className: 'sr-control' },
             React.createElement('select', {
               id: `sr-tier-${tier}`,
               className: 'sr-input',
               value: current,
               disabled,
-              onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-                // `set` writes whole top-level fields; merge the tier edit into
-                // the existing autoTierPolicy object and write it as one value.
-                const next = { ...(value.autoTierPolicy ?? {}), [tier]: e.target.value }
-                void scope.set('autoTierPolicy', next)
-              },
+              onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onTierEdit(tier, e.target.value),
             }, MODE_OPTIONS.map(option =>
-              React.createElement('option', { key: option, value: option }, option))),
+              React.createElement('option', { key: option, value: option }, MODE_LABELS[option] ?? option))),
           ),
           React.createElement('div', { className: 'sr-hint' },
-            `${label} task selection mode (empty = built-in heuristic).`),
+            `${label}任务的选型模式（空 = 内置启发式）。`),
         )
       }),
+      React.createElement('div', { className: 'sr-actions' },
+        React.createElement('button', {
+          className: 'sr-btn sr-btn-primary',
+          type: 'button',
+          disabled: !dirty || disabled,
+          onClick: onSave,
+        }, '保存'),
+        React.createElement('button', {
+          className: 'sr-btn',
+          type: 'button',
+          disabled: !dirty,
+          onClick: onCancel,
+        }, '取消'),
+      ),
     ),
   )
 }
