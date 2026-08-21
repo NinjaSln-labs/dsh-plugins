@@ -33,6 +33,7 @@
 
 - **S0 本地发布门禁** — `scripts/release-check.mjs` 一条命令收敛完整验证链（build/typecheck/smoke/mount/client-mount/visual），任一失败 exit 1 禁发
 - **S1 live 契约检查** — `scripts/contract-check.mjs` 对运行中 harness 断言插件挂载 + 注入链路（RPC 路由判别：404 漂移 / 400 活着 / 200 服务链可用）；已并入 release-check；**rc.8 升级体检通过**
+- **R2 压缩触发频率** — 「已压缩 N 次」补「平均每 X 轮一次」（`compactIntervalRounds` 纯函数，防除零；投影 view advice 全档位追加）
 - **rc.7→rc.8 升级** — 仅实质变化为移除 dead 声明 `dsh-client-ui-primitives`（`client.tsx` 从不 import），已清理；4 硬注入 + 全部可选读取 + 3 client slot 形状无漂移
 
 ## 待做（按优先级）
@@ -62,7 +63,6 @@
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
 | R1 | **占用趋势 sparkline**（浮层「上下文占用」行下方） | P1 | 竞品空白；一眼看出稳步上升 vs 压缩后回落 | 投影加 `pressureHistory`（stateVersion 8→9）+ 客户端 SVG/CSS 渲染；**需 S2 兼容测试先就绪** |
-| R2 | **压缩触发频率**（「已压缩 N 次」补「平均每 X 轮一次」） | P2 | 提前预警任务切太碎 / 上下文膨太快 | 无（`turns / compactions` 已有，纯展示，零风险）|
 | R3 | **定价同步自动化（C4）** | P2 | `pricing/deepseek.json` 手动同步 → CI 定时对比官方、变更开 PR | GitHub Actions 定时 job |
 | R4 | **session-health 技能阈值回写（D1）** | P2 | 插件阈值与技能默认参数已分叉，需对齐 | 技能侧配合 |
 | R5 | **轮次语义细化（A5）** | P3 | 区分多工具调用的回合：「轮次 X / 步数 Y」 | 投影加 step 计数 |
@@ -79,7 +79,7 @@
 
 | 版本 | 内容 |
 |---|---|
-| **0.7.14** | README 元数据 + star 徽章（已 commit 未发布）· R2 压缩频率（零风险）|
+| **0.7.14** | README 元数据 + star 徽章（已 commit 未发布）· **R2 压缩频率（已交付，随本版发）**|
 | **0.8.0** | S0–S4 稳定性基建（发布门禁 + live 契约测试 + 兼容测试）|
 | **0.9.0** | R1 sparkline（S2 就绪后）· C1 host 配置点接入（调研完成后）|
 | **0.10.x** | C2 client 配置卡片 |
