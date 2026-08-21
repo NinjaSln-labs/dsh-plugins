@@ -82,7 +82,7 @@ pnpm run build  # tsc -> lib/
 
 ## 路线图
 
-自动路由策略的后续计划（目录元数据、推荐工具、反馈闭环、预算上限）：见 [ROADMAP.md](./ROADMAP.md)。
+自动路由策略的后续计划（目录元数据、推荐工具、反馈闭环、预算上限）：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。交接见 [HANDOFF.md](./HANDOFF.md)，发布记录见 [PUBLISHING.md](./PUBLISHING.md)。
 
 ## License
 
