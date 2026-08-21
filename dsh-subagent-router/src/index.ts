@@ -20,6 +20,15 @@
  *                   reason on the result, and retries once on the next tier
  *                   after a failed foreground run (`enableAuto` /
  *                   `autoEscalate`; escalation never downgrades).
+ *                   Health-aware: an observed quota/auth failure marks the
+ *                   route unhealthy, the auto policy then treats the parent
+ *                   anchor as DEAD and reroutes to a healthy provider route
+ *                   (`autoReroute`), and failed-run recovery reroutes on
+ *                   terminal failures instead of blindly escalating on a
+ *                   broken route. Failure details are classified and
+ *                   sanitized into the tool result (rate-limit / quota /
+ *                   auth / context / server / timeout / transport) instead of
+ *                   a bare "subagent run failed".
  *
  * The child still runs through the ordinary `ctx.subagents` seam
  * (`resolveChildAgentOptions` merges per-child overrides over the parent's
@@ -41,7 +50,15 @@ import { registerModelPickerTools } from './tools.ts'
 /** Prompt order after bounded delegation policy and before child reporting. */
 const SUBAGENT_SECTION_ORDER = 116.5
 
-/** Plugin config; every field optional with a sane default. */
+/** Per-tier auto selection mode. */
+export type AutoTierPolicyMode = 'anchor' | 'cheapest' | 'strongest'
+
+/** Per-tier auto selection configuration. */
+export type AutoTierPolicy = Partial<Record<'trivial' | 'standard' | 'complex', AutoTierPolicyMode>>
+
+/**
+ * Plugin config; every field optional with a sane default.
+ */
 export interface ModelPickerConfig {
   /** The `ctx.subagents` provider name to start runs on (default `spawn`). */
   subagentProvider?: string
@@ -59,6 +76,18 @@ export interface ModelPickerConfig {
   enableAuto?: boolean
   /** After a failed foreground run, retry once on the next auto tier (default true). */
   autoEscalate?: boolean
+  /** Reroute to a healthy provider route when the auto-chosen route fails terminally (quota/auth) (default true). */
+  autoReroute?: boolean
+  /** Max escalation steps on the same provider after repeated transient failures (default 1 — matches the historical single-step escalation). */
+  autoEscalationTiers?: number
+  /** Provider priority order for `model: "auto"` provider resolution (default: registry order). Unlisted providers sort after listed ones. */
+  autoProviderOrder?: string[]
+  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic (trivial→cheapest, standard→anchor, complex→strongest). */
+  autoTierPolicy?: AutoTierPolicy
+  /** Per-tier explicit candidate list, in priority order; when present, fully overrides the tier policy for that tier. */
+  autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
+  /** Hard ceiling: `model: "auto"` never picks a model stronger than this id (budget cap). */
+  autoCeiling?: string
   /** Child depth cap (default 3; `'provider-managed'` sends no cap). */
   maxDepth?: number | 'provider-managed'
 }
@@ -75,10 +104,17 @@ export const defaultConfig = {
   enableModelList: true,
   enableAuto: true,
   autoEscalate: true,
+  autoReroute: true,
+  autoEscalationTiers: 1,
   maxDepth: 3,
-} satisfies Required<ModelPickerConfig>
+} as const satisfies Omit<Required<ModelPickerConfig>, 'autoProviderOrder' | 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>
 
-export function resolveConfig(config: ModelPickerConfig): Required<ModelPickerConfig> {
+/** The fully resolved config after defaults: the four priority fields stay optional, everything else required. */
+export type ResolvedModelPickerConfig =
+  Required<Omit<ModelPickerConfig, 'autoProviderOrder' | 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>>
+  & Pick<ModelPickerConfig, 'autoProviderOrder' | 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>
+
+export function resolveConfig(config: ModelPickerConfig): ResolvedModelPickerConfig {
   return {
     subagentProvider: config.subagentProvider ?? defaultConfig.subagentProvider,
     toolName: config.toolName ?? defaultConfig.toolName,
@@ -88,6 +124,12 @@ export function resolveConfig(config: ModelPickerConfig): Required<ModelPickerCo
     enableModelList: config.enableModelList ?? defaultConfig.enableModelList,
     enableAuto: config.enableAuto ?? defaultConfig.enableAuto,
     autoEscalate: config.autoEscalate ?? defaultConfig.autoEscalate,
+    autoReroute: config.autoReroute ?? defaultConfig.autoReroute,
+    autoEscalationTiers: config.autoEscalationTiers ?? defaultConfig.autoEscalationTiers,
+    autoProviderOrder: config.autoProviderOrder,
+    autoTierPolicy: config.autoTierPolicy,
+    autoTierPicks: config.autoTierPicks,
+    autoCeiling: config.autoCeiling,
     maxDepth: config.maxDepth ?? defaultConfig.maxDepth,
   }
 }
