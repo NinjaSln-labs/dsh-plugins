@@ -21,6 +21,21 @@ import type { ResolvedConfig } from './config.ts'
 import type { PricePeriod, ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
 
+/**
+ * 平均每 X 轮压缩一次 —— turns / compactions 取整，供「已压缩 N 次」补
+ * 「约每 X 轮一次」。防御：compactions ≤ 0 / turns 非有限或 ≤ 0 / 商非有限
+ * 均返回 null（不展示频率，仅保留原有文案）；商 < 1 取 1（每轮都不足一次，
+ * 表示压缩频繁）。
+ */
+export function compactIntervalRounds(turns: number, compactions: number): number | null {
+  if (!(compactions > 0)) return null
+  if (!Number.isFinite(turns) || turns <= 0) return null
+  const per = turns / compactions
+  if (!Number.isFinite(per)) return null
+  const rounded = Math.round(per)
+  return rounded < 1 ? 1 : rounded
+}
+
 /** Fold state (plain JSON per the unit contract — persisted-cache precondition). */
 export interface SessionHealthState {
   turns: number
@@ -218,7 +233,11 @@ export function healthView(
   const ratioNote = compressionRatio !== null
     ? `；上次压缩比例 ≈ ${Math.round(compressionRatio * 100)}%，快照口径`
     : ''
-  const compacted = state.compactions > 0 ? `（已压缩 ${state.compactions} 次${ratioNote}）` : ''
+  const compacted = (() => {
+    if (!(state.compactions > 0)) return ``
+    const freqNote = compactIntervalRounds(state.turns, state.compactions)
+    return `（已压缩 ${state.compactions} 次${freqNote !== null ? `，约每 ${freqNote} 轮一次` : ''}${ratioNote}）`
+  })()
 
   let advice: string
   switch (severity) {

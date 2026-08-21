@@ -8,7 +8,7 @@
  *   npm run build && npm run smoke
  */
 import assert from 'node:assert/strict'
-import { sessionHealthProjectionDefinition, applyHealthEvent, healthView } from '../lib/projection.js'
+import { sessionHealthProjectionDefinition, applyHealthEvent, healthView, compactIntervalRounds } from '../lib/projection.js'
 import { cacheHitRateOf } from '../lib/usage.js'
 import { assess } from '../lib/assess.js'
 import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
@@ -86,6 +86,40 @@ await check('projection: fold counts (turns/messages/compactions)', () => {
   assert.equal(state.compactions, 1)
   assert.equal(state.pressureTokens, 32_000) // last usage sample wins
   assert.equal(state.contextWindow, 100_000)
+})
+
+await check('projection: compactIntervalRounds — turns/compactions 取整', () => {
+  assert.equal(compactIntervalRounds(2, 1), 2)
+  assert.equal(compactIntervalRounds(10, 3), 3) // 3.33 → 3
+  assert.equal(compactIntervalRounds(9, 3), 3)
+})
+
+await check('projection: compactIntervalRounds — 防御降级返回 null', () => {
+  assert.equal(compactIntervalRounds(0, 0), null) // 无压缩
+  assert.equal(compactIntervalRounds(5, 0), null) // compactions 0
+  assert.equal(compactIntervalRounds(0, 2), null) // turns 0
+  assert.equal(compactIntervalRounds(Number.NaN, 2), null) // turns 非有限
+  assert.equal(compactIntervalRounds(Infinity, 2), null)
+  assert.equal(compactIntervalRounds(2, Number.NaN), null)
+})
+
+await check('projection: compactIntervalRounds — 商 < 1 取 1（压缩频繁）', () => {
+  assert.equal(compactIntervalRounds(1, 3), 1)
+  assert.equal(compactIntervalRounds(2, 5), 1)
+})
+
+await check('projection: 压缩频率补进 view advice（约每 X 轮一次）', () => {
+  const v = healthView(state, ratioConfig)
+  // fold 后 turns=2, compactions=1 → 约每 2 轮一次，且不破坏原有「已压缩 N 次」。
+  assert.ok(v.advice.includes('已压缩 1 次'), `got: ${v.advice}`)
+  assert.ok(v.advice.includes('约每 2 轮一次'), `got: ${v.advice}`)
+})
+
+await check('projection: 无压缩时不补频率文案', () => {
+  const st = { turns: 5, lastTurn: 1, userMessages: 3, assistantMessages: 2, compactions: 0, pressureTokens: 30_000, contextWindow: 100_000 }
+  const v = healthView(st, ratioConfig)
+  assert.ok(!v.advice.includes('约每'), `got: ${v.advice}`)
+  assert.ok(!v.advice.includes('已压缩'), `got: ${v.advice}`)
 })
 
 await check('projection: usage report without inputTokens is skipped (no NaN/0 pollution)', () => {
