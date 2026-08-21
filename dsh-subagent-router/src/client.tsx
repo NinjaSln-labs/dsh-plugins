@@ -47,20 +47,27 @@ type Section = {
 }
 
 const CSS = `
-.sr-card{display:flex;flex-direction:column;gap:10px;padding:4px 0}
+.sr-card{display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-3,#353638);border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:12px;box-sizing:border-box;width:100%;overflow:hidden}
+.sr-card.sr-open{background:var(--dsw-alias-bg-layer-3,#353638)}
+.sr-header{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--dsw-alias-label-primary,#f9fafb);text-align:left;font:inherit}
+.sr-header:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.06))}
+.sr-headText{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sr-name{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#f9fafb)}
+.sr-description{font-size:12px;color:var(--dsw-alias-label-secondary,#bbb)}
+.sr-chevron{flex:none;width:14px;height:14px;color:var(--dsw-alias-label-tertiary,#999);transition:transform .15s ease;transform:rotate(0deg)}
+.sr-open .sr-chevron{transform:rotate(90deg)}
+.sr-body{display:none;padding:12px 16px 16px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.sr-open .sr-body{display:flex;flex-direction:column;gap:12px}
 .sr-field{display:flex;flex-direction:column;gap:4px}
-.sr-label{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#e8e8e8)}
+.sr-label{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#f9fafb)}
 .sr-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
 .sr-control{display:flex;align-items:center;gap:8px}
-.sr-input{flex:1;min-width:0;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2,#333);border-radius:6px;background:var(--dsw-alias-bg-raised,#1e1e1e);color:var(--dsw-alias-label-primary,#e8e8e8);font-size:12px}
+.sr-input{flex:1;min-width:0;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2,#333);border-radius:6px;background:var(--dsw-alias-bg-raised,#1e1e1e);color:var(--dsw-alias-label-primary,#f9fafb);font-size:12px}
 .sr-input:focus{outline:2px solid var(--dsw-alias-state-primary,#4c8dff);outline-offset:1px}
 .sr-check{accent-color:var(--dsw-alias-state-primary,#4c8dff)}
 .sr-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.sr-save{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--dsw-alias-border-l2,#333);border-radius:6px;background:var(--dsw-alias-bg-raised,#1e1e1e);color:var(--dsw-alias-label-primary,#e8e8e8);font-size:12px;cursor:pointer}
-.sr-save:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2a2a)}
-.sr-save:disabled{opacity:.5;cursor:not-allowed}
 .sr-note{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
-.sr-unavailable{font-size:12px;color:var(--dsw-alias-label-tertiary,#999);padding:8px 0}
+.sr-unavailable{font-size:12px;color:var(--dsw-alias-label-tertiary,#999);padding:14px 16px}
 `
 
 /** One typed field: id, label, kind, and the render control's value type. */
@@ -211,46 +218,76 @@ function FieldControl(props: {
 function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElement {
   const { scope } = props
   const [snapshot, setSnapshot] = React.useState<SettingsScopeSnapshot<Section>>(scope.getSnapshot())
+  const [open, setOpen] = React.useState(false)
   React.useEffect(() => scope.subscribe(() => setSnapshot(scope.getSnapshot())), [scope])
   const value = snapshot.value ?? ({} as Section)
   const disabled = !snapshot.writable || snapshot.status !== 'ready'
   if (snapshot.status === 'unavailable') {
-    return React.createElement('div', { className: 'sr-unavailable' },
-      'subagent-router: settings namespace unavailable on this deployment.')
+    return React.createElement('div', { className: 'sr-card' },
+      React.createElement('style', null, CSS),
+      React.createElement('div', { className: 'sr-unavailable' },
+        'subagent-router: settings namespace unavailable on this deployment.'),
+    )
   }
-  return React.createElement('div', { className: 'sr-card' },
-    React.createElement('style', null, CSS),
-    React.createElement('div', { className: 'sr-row' },
-      React.createElement('div', { className: 'sr-label' }, 'dsh-subagent-router'),
-      React.createElement('div', { className: 'sr-note' },
-        snapshot.status === 'loading' ? 'loading…' : disabled ? 'read-only' : 'editable'),
-    ),
-    React.createElement('div', { className: 'sr-note' },
-      'Model-routed subagent delegation. Editing takes effect on the next subagent_model call (no restart).'),
-    ...FIELDS.map(field => React.createElement(FieldControl, { key: String(field.id), field, value, scope, disabled })),
-    ...TIER_LABELS.map(([tier, label]) => {
-      const current = value.autoTierPolicy?.[tier] ?? ''
-      return React.createElement('div', { className: 'sr-field', key: `tier-${tier}` },
-        React.createElement('label', { className: 'sr-label', htmlFor: `sr-tier-${tier}` }, `Tier ${label} policy`),
-        React.createElement('div', { className: 'sr-control' },
-          React.createElement('select', {
-            id: `sr-tier-${tier}`,
-            className: 'sr-input',
-            value: current,
-            disabled,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-              // `set` writes whole top-level fields; merge the tier edit into
-              // the existing autoTierPolicy object and write it as one value.
-              const next = { ...(value.autoTierPolicy ?? {}), [tier]: e.target.value }
-              void scope.set('autoTierPolicy', next)
-            },
-          }, MODE_OPTIONS.map(option =>
-            React.createElement('option', { key: option, value: option }, option))),
-        ),
-        React.createElement('div', { className: 'sr-hint' },
-          `${label} task selection mode (empty = built-in heuristic).`),
-      )
+  const chevron = React.createElement('svg', {
+    className: 'sr-chevron',
+    viewBox: '0 0 16 16',
+    fill: 'none',
+    'aria-hidden': true,
+  },
+    React.createElement('path', {
+      d: 'M6 4l4 4-4 4',
+      stroke: 'currentColor',
+      strokeWidth: '1.5',
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
     }),
+  )
+  return React.createElement('div', {
+    className: open ? 'sr-card sr-open' : 'sr-card',
+  },
+    React.createElement('style', null, CSS),
+    React.createElement('button', {
+      className: 'sr-header',
+      type: 'button',
+      'aria-expanded': open,
+      onClick: () => setOpen(!open),
+    },
+      React.createElement('span', { className: 'sr-headText' },
+        React.createElement('span', { className: 'sr-name' }, 'dsh-subagent-router'),
+        React.createElement('span', { className: 'sr-description' },
+          'Model-routed subagent delegation. Model choice per call (auto policy, health-aware rerouting).'),
+      ),
+      chevron,
+    ),
+    React.createElement('div', { className: 'sr-body' },
+      React.createElement('div', { className: 'sr-note' },
+        'Edits take effect on the next subagent_model call (no restart).'),
+      ...FIELDS.map(field => React.createElement(FieldControl, { key: String(field.id), field, value, scope, disabled })),
+      ...TIER_LABELS.map(([tier, label]) => {
+        const current = value.autoTierPolicy?.[tier] ?? ''
+        return React.createElement('div', { className: 'sr-field', key: `tier-${tier}` },
+          React.createElement('label', { className: 'sr-label', htmlFor: `sr-tier-${tier}` }, `Tier ${label} policy`),
+          React.createElement('div', { className: 'sr-control' },
+            React.createElement('select', {
+              id: `sr-tier-${tier}`,
+              className: 'sr-input',
+              value: current,
+              disabled,
+              onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+                // `set` writes whole top-level fields; merge the tier edit into
+                // the existing autoTierPolicy object and write it as one value.
+                const next = { ...(value.autoTierPolicy ?? {}), [tier]: e.target.value }
+                void scope.set('autoTierPolicy', next)
+              },
+            }, MODE_OPTIONS.map(option =>
+              React.createElement('option', { key: option, value: option }, option))),
+          ),
+          React.createElement('div', { className: 'sr-hint' },
+            `${label} task selection mode (empty = built-in heuristic).`),
+        )
+      }),
+    ),
   )
 }
 
