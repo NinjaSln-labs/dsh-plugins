@@ -38,7 +38,7 @@
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
 | S0 | **本地发布门禁** `scripts/release-check.mjs`（一条命令收敛完整验证链 + 真 harness 冒烟） | P0 | CI 只能 stub 级安全网，真 harness 门禁只能本地 | 运行中 harness |
-| S1 | **live 契约一致性测试**（真 harness：inject 服务真 resolve + `/compass` 输出结构 + badge 真挂载） | P0 | 堵 harness API 漂移静默降级（最大风险） | 运行中 harness |
+| S1 | **live 契约一致性测试**（真 harness：inject 服务真 resolve + `/compass` 输出结构 + badge 真挂载） | P0 | 堵 harness API 漂移静默降级（最大风险）。**rc.8 升级已手动扫描通过**：4 硬注入 + 全部可选读取 + 3 client slot 形状兼容，无漂移；自动化形态待定（需运行中 harness，只能进 release-check/visual 档，进不了 CI） | 运行中 harness |
 | S2 | **stateVersion 向后兼容测试**（旧 state 折进当前 view，断言无 crash/NaN） | P1 | 加 sparkline 需 bump stateVersion，防旧缓存踩坑 | — |
 | S3 | **配置生效冒烟**（每个 config 字段改动可观测到行为变化） | P1 | 堵配置静默失效 | — |
 | S4 | **canary 发布通道**（`next` tag → 本地实测 → promote `latest`） | P2 | 新版本先灰度再全量 | — |
@@ -85,3 +85,5 @@
 - 本文件是路线图的**唯一权威来源**；完成一项 → 从「待做」移到「已交付」并标注落地版本
 - 被阻塞项保留在「被阻塞」并写明卡点；卡点解除后移回「待做」
 - 优先级/排期变化只改这里；`HANDOFF.md` / `DESIGN.md` / `OPTIMIZATION-RESEARCH.md` 引用本文件、不复制路线内容
+- **peer 基线策略**：`peerDependencies` 声明"最低要求的服务版本"，保持宽松、不随 harness 每次升级而升。caret `^0.1.0-rc.6` 语义自动覆盖 rc.6→rc.8（`>=0.1.0-rc.6 <0.2.0`，下限是 prerelease 故匹配 prerelease；semver 已验 `rc.8 satisfies ^0.1.0-rc.6`）。仅当接入依赖更高版本独有 API 时**局部**升对应服务（例：C1 接入 `@deepseek-ai/dsh-settings`，需 rc.7+），不全局升
+- **升级体检基线（S1 依据）**：每次 harness 升级，对照 live 契约校验插件硬注入（commands / tools / sessionProjections / webServer）+ 全部 `ctx.get` 可选读取 + client slot（sidebar.footer.action / shell.overlay / conversation.chat.commandview）是否仍存在、形状是否兼容。rc.8 本次校验通过（见 commit `9b98c07` 前后）
