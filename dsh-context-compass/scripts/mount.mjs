@@ -126,7 +126,9 @@ try {
   assert.equal(registrations.projections.key, 'sessionHealth')
   assert.equal(typeof registrations.projections.init, 'function')
   assert.equal(typeof registrations.projections.apply, 'function')
-  assert.equal(typeof registrations.projections.view, 'function')
+  // 0.1.1+ wire 契约：client-visible unit 用 wire.view（旧独立 view 字段已移除）。
+  assert.ok(registrations.projections.wire, 'projection wire present (client-visible)')
+  assert.equal(typeof registrations.projections.wire.view, 'function')
   const state = registrations.projections.init()
   const after = registrations.projections.apply(state, { type: 'step/end', data: { turn: 1 } })
   assert.equal(after.turns, 1)

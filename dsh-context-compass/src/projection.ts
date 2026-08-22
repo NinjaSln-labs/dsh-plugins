@@ -286,14 +286,26 @@ export function sessionHealthProjectionDefinition(
   pricing?: { get(model?: string): ResolvedPricing },
   modelOf?: () => string,
 ): ProjectionDefinition<'sessionHealth', SessionHealthState> {
-  return {
+  // 0.1.1+ wire 契约（破坏性变化，见 ROADMAP「升级体检基线」）：snapshot /
+  // cachedSnapshot / coldSnapshot 的 values 只收集 client-visible（带 wire）
+  // 的 unit；不带 wire 的 unit 是 host-only，其值从所有快照省略（health 全
+  // null = 「没有基础数据」）。sessionHealth 不在 harness 核心
+  // SessionProjectionMap（TS 上 wire 类型为 never），但运行时 register 只看
+  // def.wire 是否存在——补上即进入所有快照。viewSchema 复用 wire payload
+  // schema；view 与旧 view 同源（healthView）——payload 形状不变，stateVersion
+  // 无需 bump。
+  const wireView = (state: SessionHealthState) => healthView(state, config, pricing?.get(modelOf?.() ?? ''))
+  // sessionHealth 不在 harness 核心 SessionProjectionMap → TS 上 wire 为 never，
+  // 需整体断言（运行时 register 只看 def.wire 是否存在，与类型无关）。
+  const unit = {
     key: 'sessionHealth',
     schema: sessionHealthProjectionSchema,
     init,
     apply: applyHealthEvent,
-    // The fold stays event-pure; only the money view reads the live price
-    // cache (falls back to the static config when no cache is mounted).
-    view: state => healthView(state, config, pricing?.get(modelOf?.() ?? '')),
+    wire: {
+      viewSchema: sessionHealthProjectionSchema,
+      view: wireView,
+    },
     // v7: cache-hit rate removed from this unit — it now reads the core
     // tokenUsage projection via src/usage.ts (single data source, single
     // algorithm location shared with the input-bar stats line).
@@ -301,4 +313,5 @@ export function sessionHealthProjectionDefinition(
     // compressionRatio fold fields, wire field compressionRatio).
     stateVersion: 8,
   }
+  return unit as unknown as ProjectionDefinition<'sessionHealth', SessionHealthState>
 }
