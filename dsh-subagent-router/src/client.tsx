@@ -48,32 +48,32 @@ type Section = {
 
 const CSS = `
 .sr-card{display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-3,#353638);border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:12px;box-sizing:border-box;width:100%;overflow:hidden}
-.sr-card.sr-open{background:var(--dsw-alias-bg-layer-3,#353638)}
-.sr-header{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--dsw-alias-label-primary,#f9fafb);text-align:left;font:inherit}
+.sr-header{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--dsw-alias-label-primary,#f9fafb);text-align:left;font:inherit}
 .sr-header:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.06))}
 .sr-headText{display:flex;flex-direction:column;gap:2px;min-width:0}
-.sr-name{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#f9fafb)}
-.sr-description{font-size:12px;color:var(--dsw-alias-label-secondary,#bbb)}
+.sr-name{font-size:15px;font-weight:600;line-height:21px;color:var(--dsw-alias-label-primary,#f9fafb)}
+.sr-description{font-size:13px;font-weight:400;line-height:19.5px;color:var(--dsw-alias-label-secondary,#adb2b8)}
 .sr-chevron{flex:none;width:14px;height:14px;color:var(--dsw-alias-label-tertiary,#999);transition:transform .15s ease;transform:rotate(0deg)}
 .sr-open .sr-chevron{transform:rotate(90deg)}
-.sr-body{display:none;padding:12px 16px 16px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
-.sr-open .sr-body{display:flex;flex-direction:column;gap:12px}
+.sr-body{display:none;padding:0 0 8px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.sr-open .sr-body{display:flex;flex-direction:column;padding:12px 16px 8px}
 .sr-field{display:flex;flex-direction:column;gap:4px}
-.sr-label{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#f9fafb)}
-.sr-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
+.sr-label{font-size:13px;font-weight:500;line-height:19.5px;color:var(--dsw-alias-label-primary,#f9fafb)}
+.sr-hint{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8)}
 .sr-control{display:flex;align-items:center;gap:8px}
-.sr-input{flex:1;min-width:0;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2,#333);border-radius:6px;background:var(--dsw-alias-bg-raised,#1e1e1e);color:var(--dsw-alias-label-primary,#f9fafb);font-size:12px}
+.sr-input{flex:1;min-width:0;height:32px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:8px;background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#f9fafb);font-size:13px;font-weight:400;box-sizing:border-box}
 .sr-input:focus{outline:2px solid var(--dsw-alias-state-primary,#4c8dff);outline-offset:1px}
 .sr-check{accent-color:var(--dsw-alias-state-primary,#4c8dff)}
 .sr-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.sr-note{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
-.sr-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
-.sr-btn{display:inline-flex;align-items:center;justify-content:center;padding:6px 16px;border:1px solid var(--dsw-alias-border-l2,#333);border-radius:6px;background:var(--dsw-alias-bg-raised,#1e1e1e);color:var(--dsw-alias-label-primary,#f9fafb);font-size:12px;cursor:pointer;transition:background .12s ease}
-.sr-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2a2a2a)}
+.sr-note{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8)}
+.sr-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.sr-btn{display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:400;line-height:19.5px;cursor:pointer;box-sizing:border-box;transition:background .12s ease}
 .sr-btn:disabled{opacity:.45;cursor:not-allowed}
-.sr-btn-primary{border-color:var(--dsw-alias-state-primary,#4c8dff);color:var(--dsw-alias-state-primary,#4c8dff);font-weight:600}
-.sr-btn-primary:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-primary,#4c8dff) 12%,transparent)}
-.sr-unavailable{font-size:12px;color:var(--dsw-alias-label-tertiary,#999);padding:14px 16px}
+.sr-btn-default{background:transparent;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);color:var(--dsw-alias-label-secondary,#cfd3d6)}
+.sr-btn-default:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.06))}
+.sr-btn-primary{background:var(--dsw-alias-label-primary,#f9fafb);border:1px solid transparent;color:var(--dsw-alias-bg-layer-3,#353638)}
+.sr-btn-primary:hover:not(:disabled){filter:brightness(0.92)}
+.sr-unavailable{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8);padding:14px 16px}
 `
 
 /** One typed field: id, label, kind, and the render control's value type. */
@@ -316,17 +316,17 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
       }),
       React.createElement('div', { className: 'sr-actions' },
         React.createElement('button', {
+          className: 'sr-btn sr-btn-default',
+          type: 'button',
+          disabled: !dirty,
+          onClick: onCancel,
+        }, '放弃修改'),
+        React.createElement('button', {
           className: 'sr-btn sr-btn-primary',
           type: 'button',
           disabled: !dirty || disabled,
           onClick: onSave,
         }, '保存'),
-        React.createElement('button', {
-          className: 'sr-btn',
-          type: 'button',
-          disabled: !dirty,
-          onClick: onCancel,
-        }, '取消'),
       ),
     ),
   )
