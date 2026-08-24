@@ -126,17 +126,18 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-panel-close:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 /* The list keeps the height of exactly 5 rows whether or not there are 5 —
    the panel never resizes (no visual jump when sessions come and go). */
-.sh-panel-list{overflow-y:auto;padding:8px;flex:none;overscroll-behavior:contain;height:calc(41px * 5 + 16px);box-sizing:border-box}
+.sh-panel-list{overflow-y:auto;padding:8px 0;flex:none;overscroll-behavior:contain;height:calc(41px * 5 + 16px);box-sizing:border-box}
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:minmax(88px,1.35fr) 44px minmax(46px,.7fr) minmax(58px,.85fr) minmax(60px,.9fr) minmax(62px,.95fr) minmax(50px,.75fr)}
-.sh-panel-head-row{display:grid;gap:10px;align-items:center;padding:9px 16px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;font-weight:500;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
+.sh-grid-cols{grid-template-columns:80px 46px 46px 50px 54px 76px 56px;justify-content:start}
+.sh-panel-head-row{display:grid;gap:14px;align-items:center;box-sizing:border-box;width:100%;padding:9px 16px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;font-weight:500;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
+.sh-panel-head-row .sh-row-num.sh-col-head{justify-content:flex-end;width:100%}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
 .sh-col-head:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-col-head.sh-sort-active{color:var(--dsw-alias-label-primary);font-weight:600}
-.sh-panel-row{display:grid;gap:10px;align-items:center;width:100%;height:41px;padding:0 16px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
+.sh-panel-row{display:grid;gap:14px;align-items:center;width:100%;height:41px;padding:0 16px;border:none;border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);text-align:left;cursor:pointer;box-sizing:border-box;font-size:12px;line-height:1.4}
 .sh-panel-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .sh-panel-row:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 /* Severity as a tinted chip (theme-adaptive tint/ink from the palette). */
@@ -147,6 +148,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-row-cold{color:var(--dsw-alias-label-tertiary)}
 .sh-row-cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .sh-row-num{text-align:right;font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sh-dim{color:var(--dsw-alias-label-tertiary)}
 .sh-rowtip{position:fixed;transform:translate(-50%,-100%);z-index:80;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.22);pointer-events:none;white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis;animation:sh-tip-in .12s ease-out}
 .sh-rowtip-below{transform:translate(-50%,0)}
 /* /compass rich card in the chat flow (commandview seat). */
@@ -1074,8 +1076,8 @@ function OverviewBody(props: {
           <button type="button" className={`sh-col-head${sortMode === 'severity' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('severity')} aria-label="按健康状态排序">健康{sortMode === 'severity' ? '↓' : ''}</button>
           <span title="运行中=智能体正在处理回回合；已加载=内存驻留待命；冷却=仅持久化">状态</span>
           <span className="sh-row-num" title="上下文占用（窗口百分比）">占用</span>
-          <span className="sh-row-num" title="每轮输入计费当量（含缓存折扣）">输入</span>
-          <span className="sh-row-num" title="每轮输入费用（含缓存折扣，忙闲时价）">费用</span>
+          <span className="sh-row-num sh-dim" title="每轮输入计费当量（含缓存折扣）">输入</span>
+          <span className="sh-row-num sh-dim" title="每轮输入费用（含缓存折扣，忙闲时价）">费用</span>
           <span className="sh-row-num" title="轮次 / 消息数">规模</span>
           <button type="button" className={`sh-col-head sh-row-num${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')} aria-label="按上次使用排序">活动{sortMode === 'time' ? '↓' : ''}</button>
         </div>
@@ -1139,10 +1141,10 @@ function OverviewBody(props: {
                   <span className="sh-sev-chip"><span className="sh-row-dot" />{severity === 'unknown' ? '暂无数据' : SEVERITY_LABEL[severity]}</span>
                   <span className={`sh-row-${row.status ?? 'cold'}`} title={ACTIVITY_LABEL[row.status]?.tip ?? '仅持久化（未加载）'}>{ACTIVITY_LABEL[row.status]?.label ?? '冷却'}</span>
                   <span className="sh-row-num" title={pct !== null ? `上下文占用 ${pct}%` : undefined}>{occ}</span>
-                  <span className="sh-row-num" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
-                  <span className="sh-row-num" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
+                  <span className="sh-row-num sh-dim" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
+                  <span className="sh-row-num sh-dim" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
                   <span className="sh-row-num">{scale}</span>
-                  <span className="sh-row-num" title={updatedById[row.id]?.updatedAt !== undefined
+                  <span className="sh-row-num sh-dim" title={updatedById[row.id]?.updatedAt !== undefined
                     ? `上次使用 ${dateFull(updatedById[row.id]!.updatedAt!)}；创建于 ${row.createdAt > 0 ? dateFull(row.createdAt) : '—'}`
                     : row.createdAt > 0 ? `创建于 ${dateFull(row.createdAt)}` : undefined}>{agoShort(updatedById[row.id]?.updatedAt, nowMs)}</span>
                 </button>
