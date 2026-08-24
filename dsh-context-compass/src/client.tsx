@@ -889,10 +889,12 @@ function sortRows(
   const updated = (r: OverviewRowLike): number => updatedById[r.id]?.updatedAt ?? r.createdAt ?? 0
   return [...rows].sort((a, b) => {
     if (mode === 'time') return updated(b) - updated(a)
-    // 运行中永远置顶（跨 severity tier，与 host sortOverviewRows 同规则）：
-    // 正在烧 token 的会话是用户正盯着的；其余行保持 红→黄→蓝→绿→未知。
-    const ra = a.status === 'running' ? -1 : a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
-    const rb = b.status === 'running' ? -1 : b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
+    // 运行中永远置顶（跨 severity tier，与 host sortOverviewRows 同规则），
+    // 且运行中组内也按 红→黄→蓝→绿 排——正在跑的黄比正在跑的绿更急。
+    const arn = a.status === 'running', brn = b.status === 'running'
+    if (arn !== brn) return arn ? -1 : 1
+    const ra = a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
+    const rb = b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
     if (ra !== rb) return ra - rb
     const aa = activityRankOf(a.status)
     const ab = activityRankOf(b.status)

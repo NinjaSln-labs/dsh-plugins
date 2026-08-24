@@ -75,12 +75,11 @@ function activityRank(status: SessionActivity | null | undefined): number {
  */
 export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
   return [...rows].sort((a, b) => {
-    // Running agents first regardless of severity tier: the session burning
-    // tokens right now is the one the user is watching (2026-08-22 反馈——
-    // 「已加载/冷却排在运行中上面」观感错误)。其余行保持 severity 优先。
-    const aa = a.status === 'running' ? 0 : 1
-    const ab = b.status === 'running' ? 0 : 1
-    if (aa !== ab) return aa - ab
+    // Running agents first regardless of severity tier (2026-08-22 反馈),
+    // and within the running group severity still orders — a running yellow
+    // outranks a running green. Non-running rows keep the severity ladder.
+    const arn = a.status === 'running', brn = b.status === 'running'
+    if (arn !== brn) return arn ? -1 : 1
     const ra = rankOf(a.health)
     const rb = rankOf(b.health)
     if (ra !== rb) return ra - rb
