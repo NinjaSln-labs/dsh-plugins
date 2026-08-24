@@ -130,7 +130,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 /* Table-like layout: one grid per header/row, identical columns — title,
    workspace and numbers never misalign. Columns: sev | session | ws | occ |
    round | scale | created. */
-.sh-grid-cols{grid-template-columns:96px 48px 52px 76px 78px 86px 48px}
+.sh-grid-cols{grid-template-columns:minmax(88px,1.35fr) 44px minmax(46px,.7fr) minmax(58px,.85fr) minmax(60px,.9fr) minmax(62px,.95fr) minmax(50px,.75fr)}
 .sh-panel-head-row{display:grid;gap:10px;align-items:center;padding:9px 16px 8px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:11px;font-weight:500;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em;font-variant-numeric:tabular-nums}
 .sh-col-head{border:none;background:transparent;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;border-radius:4px;display:inline-flex;align-items:center;gap:3px}
 .sh-col-head:hover{color:var(--dsw-alias-label-primary)}
@@ -826,12 +826,24 @@ function ageOf(ts: number): string {
   return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Compact creation DATE for the created column: MM-DD (the year lives in
-    the hover title — a bare relative "7h" was less scannable). */
-function ageShort(ts: number): string {
-  if (ts <= 0) return '—'
-  const d = new Date(ts)
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/**
+ * 相对时间（上次使用）：与侧边栏行尾同风格的紧凑桶（刚刚 / N分前 / N时前 /
+ * N天前 / N月前）。`now` 由调用方传入，便于轮询帧统一刷新。
+ */
+function agoShort(updatedAt: number | undefined, now: number): string {
+  if (updatedAt === undefined || !(updatedAt > 0)) return '—'
+  const s = Math.max(0, Math.floor((now - updatedAt) / 1000))
+  if (s < 60) return '刚刚'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}分前`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}时前`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}天前`
+  const mo = Math.floor(d / 30)
+  if (mo < 12) return `${mo}月前`
+  return `${Math.floor(mo / 12)}年前`
 }
 
 /** Full date for hover titles: YYYY-MM-DD. */
@@ -867,11 +879,18 @@ function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | 
 
 /** Rows arrive host-sorted (severity mode); the client re-sorts locally for
     the selected mode and refreshes. */
-function sortRows(rows: OverviewRowLike[], mode: SortMode): OverviewRowLike[] {
+function sortRows(
+  rows: OverviewRowLike[],
+  mode: SortMode,
+  updatedById: Record<string, { updatedAt?: number }> = {},
+): OverviewRowLike[] {
+  const updated = (r: OverviewRowLike): number => updatedById[r.id]?.updatedAt ?? r.createdAt ?? 0
   return [...rows].sort((a, b) => {
-    if (mode === 'time') return (b.createdAt ?? 0) - (a.createdAt ?? 0)
-    const ra = a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
-    const rb = b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
+    if (mode === 'time') return updated(b) - updated(a)
+    // 运行中永远置顶（跨 severity tier，与 host sortOverviewRows 同规则）：
+    // 正在烧 token 的会话是用户正盯着的；其余行保持 红→黄→蓝→绿→未知。
+    const ra = a.status === 'running' ? -1 : a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
+    const rb = b.status === 'running' ? -1 : b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
     if (ra !== rb) return ra - rb
     const aa = activityRankOf(a.status)
     const ab = activityRankOf(b.status)
@@ -905,7 +924,7 @@ function OverviewAction(props: {
 /** Full-screen overview panel; renders null while closed. */
 function OverviewPanel(props: {
   store: OverviewStore
-  sessions: { open(id: string): void }
+  sessions: { open(id: string): void; list: { getSnapshot(): { byId: Record<string, { updatedAt?: number }> } } }
   commands: CommandsRemote
   locale: { snapshot: { active: string } }
 }): JSX.Element | null {
@@ -916,7 +935,7 @@ function OverviewPanel(props: {
 
 function OverviewBody(props: {
   store: OverviewStore
-  sessions: { open(id: string): void }
+  sessions: { open(id: string): void; list: { getSnapshot(): { byId: Record<string, { updatedAt?: number }> } } }
   commands: CommandsRemote
   locale: { snapshot: { active: string } }
 }): JSX.Element {
@@ -935,6 +954,10 @@ function OverviewBody(props: {
   // The refresh interval's load() closure must see the current sort mode.
   const sortModeRef = React.useRef<SortMode>(sortMode)
   sortModeRef.current = sortMode
+  // 上次使用时间（sessions store 的 byId）：同步读 + ref，供 load()/changeSort
+  // 闭包与渲染共同使用；store 未就绪时为空表（全部显示 —）。
+  const updatedByIdRef = React.useRef<Record<string, { updatedAt?: number }>>({})
+  try { updatedByIdRef.current = props.sessions.list.getSnapshot().byId ?? {} } catch { /* store 未就绪 */ }
 
   // Fetch on mount + refresh while open; component unmounts when closed, so
   // the effect cleans up with it (no leak across panel sessions). The current
@@ -952,7 +975,7 @@ function OverviewBody(props: {
         const json = (await res.json()) as { ok?: boolean; error?: string; result?: { sessions?: OverviewRowLike[] } }
         if (!alive) return
         if (json.ok === true && Array.isArray(json.result?.sessions)) {
-          const next = sortRows(json.result.sessions, sortModeRef.current)
+          const next = sortRows(json.result.sessions, sortModeRef.current, updatedByIdRef.current)
           // Refresh keeps the current page (a 5s poll must not kick the user
           // back to page one); clamp when sessions shrank below the page.
           const pages = Math.max(1, Math.ceil(next.length / PAGE_SIZE))
@@ -1009,7 +1032,7 @@ function OverviewBody(props: {
   const changeSort = (mode: SortMode) => {
     setSortMode(mode)
     try { window.localStorage.setItem('dsh-context-compass/overviewSort', mode) } catch { /* 静默 */ }
-    if (rows !== null) setRows(sortRows(rows, mode))
+    if (rows !== null) setRows(sortRows(rows, mode, updatedByIdRef.current))
     setPage(0)
     listRef.current?.scrollTo({ top: 0 })
   }
@@ -1020,6 +1043,10 @@ function OverviewBody(props: {
   const sub = rows === null
     ? '加载中…'
     : `${rows.length} 个会话${redCount > 0 ? ` · 红 ${redCount}` : ''}${yellowCount > 0 ? ` · 黄 ${yellowCount}` : ''}`
+  // 上次使用时间：sessions store 的 byId 行（与侧边栏同源），每次渲染同步读——
+  // 5s 轮询帧自然刷新相对时间。store 缺行（冷会话未入列表）时显示 —。
+  const nowMs = Date.now()
+  const updatedById = updatedByIdRef.current
 
   return (
     <div className="sh-scrim" onClick={close}>
@@ -1050,7 +1077,7 @@ function OverviewBody(props: {
           <span className="sh-row-num" title="每轮输入计费当量（含缓存折扣）">输入</span>
           <span className="sh-row-num" title="每轮输入费用（含缓存折扣，忙闲时价）">费用</span>
           <span className="sh-row-num" title="轮次 / 消息数">规模</span>
-          <button type="button" className={`sh-col-head sh-row-num${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')} aria-label="按创建时间排序">创建{sortMode === 'time' ? '↓' : ''}</button>
+          <button type="button" className={`sh-col-head sh-row-num${sortMode === 'time' ? ' sh-sort-active' : ''}`} onClick={() => changeSort('time')} aria-label="按上次使用排序">活动{sortMode === 'time' ? '↓' : ''}</button>
         </div>
         <div className="sh-panel-list" ref={listRef}>
           {rows === null && loadError === null ? (
@@ -1115,7 +1142,9 @@ function OverviewBody(props: {
                   <span className="sh-row-num" title={perRound !== '—' ? `每轮输入约 ${perRound} token（计费当量，含缓存折扣）` : undefined}>{perRound}</span>
                   <span className="sh-row-num" title={cost !== null ? `每轮约 ${cost}（含缓存折扣，忙闲时价）` : undefined}>{cost ?? '—'}</span>
                   <span className="sh-row-num">{scale}</span>
-                  <span className="sh-row-num" title={row.createdAt > 0 ? `创建于 ${dateFull(row.createdAt)}（${ageOf(row.createdAt)}）` : undefined}>{ageShort(row.createdAt)}</span>
+                  <span className="sh-row-num" title={updatedById[row.id]?.updatedAt !== undefined
+                    ? `上次使用 ${dateFull(updatedById[row.id]!.updatedAt!)}；创建于 ${row.createdAt > 0 ? dateFull(row.createdAt) : '—'}`
+                    : row.createdAt > 0 ? `创建于 ${dateFull(row.createdAt)}` : undefined}>{agoShort(updatedById[row.id]?.updatedAt, nowMs)}</span>
                 </button>
               )
             })
@@ -1177,6 +1206,8 @@ export function apply(ctx: ClientContext): void {
   const sessions = ctx.sessions as unknown as {
     binding(sessionId: string): { session: { projections: { faceOf(key: string): ProjectionFace | undefined } } } | undefined
     open(id: string): void
+    /** Session-list store: byId rows carry `updatedAt` (last activity, epoch ms). */
+    list: { getSnapshot(): { byId: Record<string, { updatedAt?: number }> } }
   }
   const commands = (ctx.remote as unknown as { commands: CommandsRemote }).commands
   const locale = (ctx as unknown as { locale: { snapshot: { active: string } } }).locale

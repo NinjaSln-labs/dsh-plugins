@@ -90,13 +90,22 @@ async function main() {
   if (failed) { console.log(''); process.exit(1) }
 
   // 3) overview 服务链：{method:'overview'} → 200 ok:true + result.sessions 数组。
+  //    时延预算 200ms（首帧预算）：请求路径上只允许 listSessions + 同步读，cold
+  //    load 一律后台化。0.1.1 的 coldSnapshot 是重操作，插件若退化成"每帧等待
+  //    cold load"会稳定撞满 handler 的 10s abort——响应仍是 200（假阳性）；更
+  //    松的预算会掩盖首帧卡顿。200ms 断言拦住一切"慢到影响体验"的静默降级
+  //    （2026-08-22 一览面板事故）。
+  const t0 = Date.now()
   const ov = await postJson(RPC, { method: 'overview' })
+  const elapsedMs = Date.now() - t0
   let okOverview = ov.status === 200
   if (okOverview) {
     try { const j = JSON.parse(ov.body); okOverview = j?.ok === true && Array.isArray(j?.result?.sessions) } catch { okOverview = false }
   }
-  if (okOverview) {
-    pass('overview 注入服务链', 'POST {method:overview} → 200 ok:true + result.sessions[]')
+  if (okOverview && elapsedMs <= 200) {
+    pass('overview 注入服务链', `POST {method:overview} → 200 ok:true + result.sessions[]（${elapsedMs}ms ≤ 200ms 首帧预算）`)
+  } else if (okOverview) {
+    fail('overview 注入服务链', `200 但耗时 ${elapsedMs}ms > 200ms 首帧预算 —— cold load 侵入请求路径/服务链退化（面板首帧卡顿）`)
   } else {
     fail('overview 注入服务链', `POST {method:overview} → ${ov.status} ${ov.body.slice(0, 80)}`)
   }
