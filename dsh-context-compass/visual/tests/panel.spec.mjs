@@ -52,9 +52,10 @@ test('panel: 分页 + 时间排序', async ({ page }) => {
   await page.locator('.sh-pager-btn[aria-label="下一页"]').click()
   await expect(page.locator('.sh-panel-row')).toHaveCount(1)
   await expect(page.locator('.sh-panel-row .sh-sev-chip')).toHaveText('暂无数据')
-  // 切「创建」排序：时间最新在前（green2=600, unknown=500, green=400,
+  // 切「活动」排序（按上次使用；mock 行无 updatedAt → 回退 createdAt）：
+  // 时间最新在前（green2=600, unknown=500, green=400,
   // yellow=300, blue=200）→ 回到第 1 页（changeSort 重置页码）。
-  await page.locator('.sh-col-head[aria-label="按创建时间排序"]').click()
+  await page.locator('.sh-col-head[aria-label="按上次使用排序"]').click()
   await expect(page.locator('.sh-panel-row')).toHaveCount(5)
   await expect(page.locator('.sh-panel-row .sh-sev-chip').first()).toHaveText('放心继续')
   await expect(page.locator('.sh-panel-row .sh-sev-chip').nth(1)).toHaveText('暂无数据')

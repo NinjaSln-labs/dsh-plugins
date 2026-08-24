@@ -16,7 +16,7 @@ import { sessionHealthTool } from '../lib/tool.js'
 import { resolveConfig } from '../lib/config.js'
 import { PriceCache, periodAt, staticPricing } from '../lib/pricing.js'
 import { formatCompact, formatUsd, formatCny, formatHitRate } from '../lib/util.js'
-import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, buildHandoffSummary } from '../lib/overview.js'
+import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, buildHandoffSummary, __resetOverviewCachesForTests } from '../lib/overview.js'
 
 let failures = 0
 async function check(name, fn) {
@@ -1133,7 +1133,8 @@ const overviewServices = {
 const overviewCtx = { get: name => overviewServices[name] }
 
 await check('overview: snapshot / cache / cold fallback + titles + severity sort', async () => {
-  const rows = await buildOverview(overviewCtx, signal)
+  __resetOverviewCachesForTests()
+  const { rows: rows } = await buildOverview(overviewCtx, signal)
   assert.equal(rows.length, 4)
   // Red first, yellow second, green third, unknown last (host sort).
   assert.deepEqual(rows.map(r => r.id), ['live-red', 'cold-yellow', 'live-green', 'cold-unknown'])
@@ -1153,6 +1154,7 @@ await check('overview: snapshot / cache / cold fallback + titles + severity sort
 })
 
 await check('overview: same-tier rows sort newest-first', () => {
+  __resetOverviewCachesForTests()
   const rows = sortOverviewRows([
     { id: 'a', title: null, status: 'cold', createdAt: 100, health: healthOf('green') },
     { id: 'b', title: null, status: 'cold', createdAt: 400, health: healthOf('green') },
@@ -1168,6 +1170,7 @@ await check('overview: same-tier rows sort newest-first', () => {
 })
 
 await check('overview: activity from the agents service — running only when agent.status=running', async () => {
+  __resetOverviewCachesForTests()
   const agentsCtx = {
     get: name => ({
       ...overviewServices,
@@ -1180,7 +1183,7 @@ await check('overview: activity from the agents service — running only when ag
       },
     })[name],
   }
-  const rows = await buildOverview(agentsCtx, signal)
+  const { rows: rows } = await buildOverview(agentsCtx, signal)
   assert.equal(rows[0].status, 'running')  // agent running → 运行中
   assert.equal(rows[1].status, 'cold')     // source live:false + no agent → cold
   assert.equal(rows[2].status, 'loaded')   // agent idle → loaded
@@ -1188,6 +1191,7 @@ await check('overview: activity from the agents service — running only when ag
 })
 
 await check('overview: activity sort — running > loaded > cold inside a tier', () => {
+  __resetOverviewCachesForTests()
   const rows = sortOverviewRows([
     { id: 'idle', title: null, status: 'loaded', createdAt: 100, health: healthOf('green') },
     { id: 'running', title: null, status: 'running', createdAt: 300, health: healthOf('green') },
@@ -1198,11 +1202,24 @@ await check('overview: activity sort — running > loaded > cold inside a tier',
   assert.deepEqual(rows.map(r => r.id), ['running', 'old-run', 'idle', 'cold'])
 })
 
+await check('overview: sort — running 置顶（跨 severity tier，2026-08-22 反馈）', () => {
+  __resetOverviewCachesForTests()
+  const rows = sortOverviewRows([
+    // 冷却+红（严重度高）曾排在 运行中+绿 前面——运行中必须永远在最上。
+    { id: 'red-cold', title: null, status: 'cold', createdAt: 500, health: healthOf('red') },
+    { id: 'yellow-loaded', title: null, status: 'loaded', createdAt: 400, health: healthOf('yellow') },
+    { id: 'running-green', title: null, status: 'running', createdAt: 100, health: healthOf('green') },
+  ])
+  assert.deepEqual(rows.map(r => r.id), ['running-green', 'red-cold', 'yellow-loaded'])
+})
+
 await check('overview: absent sessionQuery degrades to empty list', async () => {
-  assert.deepEqual(await buildOverview({ get: () => undefined }, signal), [])
+  __resetOverviewCachesForTests()
+  assert.deepEqual((await buildOverview({ get: () => undefined }, signal)).rows, [])
 })
 
 await check('overview: top-level + archive filtering matches the sidebar', async () => {
+  __resetOverviewCachesForTests()
   // Subagent children and archived sessions are excluded everywhere; the
   // cwd / workspace membership plays no role (sidebar shows all of them).
   const wsServices = {
@@ -1218,11 +1235,12 @@ await check('overview: top-level + archive filtering matches the sidebar', async
       readTitleSnapshots: async () => [],
     },
   }
-  const rows = await buildOverview({ get: name => wsServices[name] }, signal)
+  const { rows: rows } = await buildOverview({ get: name => wsServices[name] }, signal)
   assert.deepEqual(rows.map(r => r.id), ['no-cwd', 'in-ws']) // archived + subagent out, newest first
 })
 
-await check('overview: parallel cold loads backfill health', async () => {
+await check('overview: cold loads run OFF the request path — first frame null, next frame backfilled', async () => {
+  __resetOverviewCachesForTests()
   const slowCtx = {
     get: name => ({
       ...overviewServices,
@@ -1239,12 +1257,21 @@ await check('overview: parallel cold loads backfill health', async () => {
       },
     })[name],
   }
-  const rows = await buildOverview(slowCtx, signal)
+  // First frame: cold load is scheduled in the background — the row reads
+  // health:null THIS frame and buildOverview does NOT wait for the disk IO.
+  const t0 = Date.now()
+  const { rows: rows } = await buildOverview(slowCtx, signal)
   assert.equal(rows.length, 1)
-  assert.equal(rows[0].health.severity, 'blue') // async cold load backfilled
+  assert.equal(rows[0].health, null) // background load not awaited
+  assert.ok(Date.now() - t0 < 20, `first frame must not wait the ${Date.now() - t0}ms cold IO`)
+  // Next frame (after the 20ms background load lands): TTL cache serves it.
+  await new Promise(resolve => setTimeout(resolve, 60))
+  const { rows: rows2 } = await buildOverview(slowCtx, signal)
+  assert.equal(rows2[0].health?.severity, 'blue') // backfilled from cache
 })
 
 await check('overview: archived sessions are hidden everywhere', async () => {
+  __resetOverviewCachesForTests()
   const archivedCtx = {
     get: name => ({
       ...overviewServices,
@@ -1258,11 +1285,12 @@ await check('overview: archived sessions are hidden everywhere', async () => {
       },
     })[name],
   }
-  const rows = await buildOverview(archivedCtx, signal)
+  const { rows: rows } = await buildOverview(archivedCtx, signal)
   assert.deepEqual(rows.map(r => r.id), ['a1'])
 })
 
 await check('overview: workspaceRegistry.list() throwing degrades to ungrouped rows', async () => {
+  __resetOverviewCachesForTests()
   // A workspace registry whose list()/archivedSessionIds access throws must NOT
   // blank the panel — archive cut is skipped and rows stay ungrouped, never throw.
   const wsbCtx = {
@@ -1274,12 +1302,13 @@ await check('overview: workspaceRegistry.list() throwing degrades to ungrouped r
       },
     })[name],
   }
-  const rows = await buildOverview(wsbCtx, signal)
+  const { rows: rows } = await buildOverview(wsbCtx, signal)
   assert.equal(rows.length, 4) // nothing archived → all rows present
   assert.ok(rows.every(r => r.workspace === null)) // ungrouped, never thrown
 })
 
 await check('overview: title cache — first frame null, background fill, next hit', async () => {
+  __resetOverviewCachesForTests()
   clearTitleCache()
   const titleCtx = {
     get: name => ({
@@ -1290,16 +1319,17 @@ await check('overview: title cache — first frame null, background fill, next h
       },
     })[name],
   }
-  const first = await buildOverview(titleCtx, signal)
+  const { rows: first } = await buildOverview(titleCtx, signal)
   assert.equal(first.length, 1)
   assert.equal(first[0].title, null) // cache miss: no log read on first paint
   await new Promise(resolve => setTimeout(resolve, 50)) // background fill settles
-  const second = await buildOverview(titleCtx, signal)
+  const { rows: second } = await buildOverview(titleCtx, signal)
   assert.equal(second[0].title, 'T-t1') // cache hit on the next frame
   clearTitleCache()
 })
 
 await check('overview: one broken record degrades that row only', async () => {
+  __resetOverviewCachesForTests()
   const brokenCtx = {
     get: name => ({
       ...overviewServices,
@@ -1307,12 +1337,13 @@ await check('overview: one broken record degrades that row only', async () => {
       sessionProjectionCache: { cachedSnapshot: () => { throw new Error('boom') }, coldSnapshot: async () => { throw new Error('boom') } },
     })[name],
   }
-  const rows = await buildOverview(brokenCtx, signal)
+  const { rows: rows } = await buildOverview(brokenCtx, signal)
   assert.equal(rows.length, 4)
   assert.ok(rows.every(r => r.health === null)) // per-record failures degrade, never throw
 })
 
 await check('overview: title-backend failures (readTitleSnapshots + sessionTitle) degrade silently', async () => {
+  __resetOverviewCachesForTests()
   // scheduleTitleFill 的 readTitleSnapshots 抛错 + sessionTitle.get 抛错：
   // 标题降级 null（下一帧重试），health 也正常降级——绝不向上抛导致面板白屏。
   clearTitleCache()
@@ -1326,7 +1357,7 @@ await check('overview: title-backend failures (readTitleSnapshots + sessionTitle
       sessionTitle: { get: () => { throw new Error('title get boom') } },
     })[name],
   }
-  const rows = await buildOverview(titleBoomCtx, signal)
+  const { rows: rows } = await buildOverview(titleBoomCtx, signal)
   assert.equal(rows.length, 1)
   assert.equal(rows[0].title, null) // degraded, never thrown
   clearTitleCache()
@@ -1348,6 +1379,7 @@ function fakeReq(method, body, remoteAddress) {
 }
 
 await check('overview rpc: POST overview → 200 + sorted sessions', async () => {
+  __resetOverviewCachesForTests()
   const res = fakeRes()
   await handleOverviewRpc(fakeReq('POST', JSON.stringify({ method: 'overview' }), '127.0.0.1'), res, overviewCtx, config)
   assert.equal(res.out.status, 200)

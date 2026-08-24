@@ -75,12 +75,18 @@ function activityRank(status: SessionActivity | null | undefined): number {
  */
 export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
   return [...rows].sort((a, b) => {
+    // Running agents first regardless of severity tier: the session burning
+    // tokens right now is the one the user is watching (2026-08-22 反馈——
+    // 「已加载/冷却排在运行中上面」观感错误)。其余行保持 severity 优先。
+    const aa = a.status === 'running' ? 0 : 1
+    const ab = b.status === 'running' ? 0 : 1
+    if (aa !== ab) return aa - ab
     const ra = rankOf(a.health)
     const rb = rankOf(b.health)
     if (ra !== rb) return ra - rb
-    const aa = activityRank(a.status)
-    const ab = activityRank(b.status)
-    if (aa !== ab) return aa - ab
+    const la = activityRank(a.status)
+    const lb = activityRank(b.status)
+    if (la !== lb) return la - lb
     return (b.createdAt ?? 0) - (a.createdAt ?? 0)
   })
 }
@@ -149,23 +155,118 @@ function scheduleTitleFill(ctx: Context, ids: string[], fillSignal: AbortSignal)
 }
 
 /**
+ * Cold-load cache: result-value cache + in-flight dedup, NEVER awaited on the
+ * request path.
+ *
+ * 0.1.1 起 `sessionProjectionCache.coldSnapshot` 是重操作（cached rows +
+ * persistence readFrom tail + registry refold + fail-soft write-back）。本面板
+ * 的首帧预算是 200ms——cold load 一律后台化：
+ * - 同步读：TTL 内的已解析结果直接进本帧（零等待）；
+ * - miss → 后台发起（fire-and-forget，带 in-flight 去重与单帧新增上限），
+ *   完成后回填缓存；该行本帧保持 `health: null`，由面板 5s 轮询自然补齐。
+ * - 缓存 Promise 不携带单次请求的 AbortSignal（一次请求的 abort 不能污染共享
+ *   结果），用独立超时兜底防永久挂起。
+ */
+const coldCache = new Map<string, { value: SessionHealthProjection | null; at: number }>()
+const coldInFlight = new Map<string, Promise<void>>()
+const COLD_TTL_MS = 60_000
+const COLD_MAX_NEW = 4
+const COLD_LOAD_TIMEOUT_MS = 20_000
+
+/** 测试专用：清空模块级缓存（listSessions / cold load），隔离用例间的 stub 状态。 */
+export function __resetOverviewCachesForTests(): void {
+  listCache = { rows: null, at: 0 }
+  listInFlight.clear()
+  coldCache.clear()
+  coldInFlight.clear()
+}
+
+/**
+ * listSessions 结果缓存（2.5s TTL）+ 在途去重。空/异常结果不覆盖已有缓存。
+ * 见 buildOverview 内注释——listSessions 是本 RPC 时延的全部来源。
+ */
+interface ListRowRec { header: { id: string; createdAt?: number; origin?: string }; live?: boolean; persisted?: boolean }
+let listCache: { rows: ListRowRec[] | null; at: number } = { rows: null, at: 0 }
+const listInFlight = new Map<string, Promise<ListRowRec[]>>()
+const LIST_TTL_MS = 2_500
+
+/**
+ * Kick off one background cold load for `id`; on completion the parsed value
+ * (or null) lands in {@link coldCache}. Never throws; never rejects.
+ */
+function scheduleColdLoad(
+  id: string,
+  run: () => Promise<{ values?: Record<string, unknown> }>,
+): void {
+  if (coldInFlight.has(id)) return
+  const done = new Promise<void>(resolve => {
+    const t = setTimeout(() => resolve(), COLD_LOAD_TIMEOUT_MS)
+    try {
+      run()
+        .then(snap => {
+          const value = (snap?.values?.sessionHealth as SessionHealthProjection | undefined) ?? null
+          coldCache.set(id, { value: value !== undefined && value !== null ? value : null, at: Date.now() })
+        })
+        .catch(() => coldCache.set(id, { value: null, at: Date.now() }))
+        .finally(() => clearTimeout(t))
+    } catch {
+      clearTimeout(t)
+      coldCache.set(id, { value: null, at: Date.now() })
+    }
+  })
+  coldInFlight.set(id, done)
+  void done.finally(() => { coldInFlight.delete(id) })
+}
+
+/**
  * Build the overview rows: top-level (non-subagent), non-archived sessions.
  * Never throws on a single bad session — per-record failures degrade to
  * `health: null` / `title: null` so one broken record cannot blank the whole
  * panel. Returns [] when the sessionQuery service is absent (headless
  * assemblies keep working).
+ *
+ * First-frame budget is 200ms: the ONLY await on this path is
+ * `listSessions`; every cold projection load runs in the background and its
+ * row simply reads `health: null` this frame (the panel's 5s refresh picks
+ * the backfilled value up).
  */
-export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<OverviewRow[]> {
+export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<{ rows: OverviewRow[]; elapsed: { listMs: number; rowsMs: number; totalMs: number } }> {
+  const t0 = Date.now()
   const sessionQuery = ctx.get('sessionQuery') as SessionQueryLike | undefined
-  if (sessionQuery === undefined) return []
+  if (sessionQuery === undefined) return { rows: [], elapsed: { listMs: 0, rowsMs: 0, totalMs: 0 } }
 
-  let records: Array<{ header: { id: string; createdAt?: number; origin?: string }; live?: boolean; persisted?: boolean }>
-  try {
-    records = await sessionQuery.listSessions(signal)
-  } catch {
-    return []
+  // listSessions 结果缓存（2.5s TTL + in-flight 去重 + 空结果保护）。
+  // 实测（2026-08-22，dsh 0.1.1-rc.1）：listSessions 本身 0.3s～11.2s 剧烈波动
+  // 且偶尔返回空——它是本 RPC 全部时延的来源（rows 构建仅 ~20ms）。面板 5s 轮询
+  // 不需要每帧都打真查询：TTL 内复用上一份列表；并发帧共享同一次在途调用；
+  // 空/异常结果绝不覆盖已有缓存（防止一次抖动把面板清空）。
+  type ListRows = ListRowRec[]
+  let records: ListRows
+  const cachedList = listCache.rows !== null && t0 - listCache.at < LIST_TTL_MS ? listCache : null
+  if (cachedList !== null) {
+    records = cachedList.rows as ListRowRec[]
+    var listMs = 0
+  } else {
+    let inflight = listInFlight.get('list')
+    if (inflight === undefined) {
+      const thisSignal = signal
+      inflight = (async () => {
+        try {
+          const r = await sessionQuery.listSessions(thisSignal)
+          // 成功且非空才更新缓存；空/异常保留旧值（防一次抖动清空面板）。
+          if (Array.isArray(r) && r.length > 0) listCache = { rows: r, at: Date.now() }
+          return Array.isArray(r) ? r : []
+        } catch {
+          return listCache.rows ?? []
+        }
+      })()
+      listInFlight.set('list', inflight)
+      void inflight.finally(() => { listInFlight.delete('list') })
+    }
+    records = await inflight
+    listMs = Date.now() - t0
   }
-  if (!Array.isArray(records) || records.length === 0) return []
+  if (!Array.isArray(records) || records.length === 0) return { rows: [], elapsed: { listMs, rowsMs: 0, totalMs: Date.now() - t0 } }
 
   // Archived sessions are hidden from every sidebar grouping surface; the
   // panel mirrors that (workspace accounting keeps them, visibility drops).
@@ -216,9 +317,10 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
     | undefined
 
   const rows: OverviewRow[] = []
-  // Cold projection loads are a slow path (per-session disk reads): collect
-  // them and run them in PARALLEL instead of serially awaiting each one.
-  const coldLoads: Array<{ id: string; promise: Promise<SessionHealthProjection | null> }> = []
+  // Cold projection loads NEVER run on this path: misses are scheduled in the
+  // background (scheduleColdLoad) and the panel's 5s refresh picks the values
+  // up. First-frame budget is listSessions + synchronous reads only.
+  let coldLoadsNew = 0
   // Title cache misses: filled in the background, never awaited this frame.
   const titleMisses: string[] = []
   const now = Date.now()
@@ -251,15 +353,21 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       } catch { /* fall through to cold load */ }
     }
     if (health === null && cache?.coldSnapshot !== undefined && rec.persisted === true) {
-      coldLoads.push({
-        id,
-        promise: cache.coldSnapshot(id, signal)
-          .then(snap => {
-            const value = snap?.values?.sessionHealth as SessionHealthProjection | undefined
-            return value !== undefined && value !== null ? value : null
-          })
-          .catch(() => null),
-      })
+      const cached = coldCache.get(id)
+      if (cached !== undefined && now - cached.at < COLD_TTL_MS) {
+        // TTL 内的已解析结果：直接进本帧（零等待、零 IO）。
+        if (cached.value !== null) health = cached.value
+      } else if (coldLoadsNew < COLD_MAX_NEW) {
+        // miss：后台发起（fire-and-forget），本帧保持 health=null，5s 轮询补齐。
+        coldLoadsNew++
+        const coldSnapshot = cache.coldSnapshot.bind(cache)
+        scheduleColdLoad(id, () => coldSnapshot(id))
+        // 顺手清理过期条目，防 Map 无界增长（会话数有限，O(n) 可忽略）。
+        if (coldCache.size > 64) {
+          for (const [k, v] of coldCache) if (now - v.at >= COLD_TTL_MS) coldCache.delete(k)
+        }
+      }
+      // 超过单帧新增上限：本轮该行保持 health=null，后续帧补齐。
     }
 
     // Title: live log-backed fold (in-memory, fast) first, then the cache.
@@ -298,21 +406,13 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
     })
   }
 
-  // Parallel cold loads, then backfill in place (fast path: most sessions
-  // are served by the sync cachedSnapshot and this list stays empty).
-  if (coldLoads.length > 0) {
-    const byId = new Map(rows.map(r => [r.id, r]))
-    const settled = await Promise.all(coldLoads.map(c => c.promise))
-    for (let i = 0; i < coldLoads.length; i++) {
-      const row = byId.get(coldLoads[i].id)
-      if (row !== undefined && settled[i] !== null) row.health = settled[i]
-    }
-  }
-
   // Background title fill (never awaited; fresh signal, own abort scope).
   if (titleMisses.length > 0) scheduleTitleFill(ctx, titleMisses, signal)
 
-  return sortOverviewRows(rows)
+  // 分段计时（诊断用，随 RPC result.elapsed 暴露）：listMs = listSessions；
+  // rowsMs = 行构建（同步读 live snapshot / cachedSnapshot / 缓存）。
+  const rowsMs = Date.now() - t0 - listMs
+  return { rows: sortOverviewRows(rows), elapsed: { listMs, rowsMs, totalMs: Date.now() - t0 } }
 }
 
 /** Loopback-only guard for the RPC route (the panel data stays on the machine). */
@@ -428,8 +528,8 @@ export async function handleOverviewRpc(
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
     if (call.method === 'overview') {
-      const sessions = await buildOverview(ctx, controller.signal)
-      sendJson(res, 200, { ok: true, result: { sessions } })
+      const { rows: sessions, elapsed } = await buildOverview(ctx, controller.signal)
+      sendJson(res, 200, { ok: true, result: { sessions, elapsed } })
       return
     }
     if (call.method === 'summary') {
