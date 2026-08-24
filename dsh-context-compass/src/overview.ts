@@ -186,7 +186,7 @@ export function __resetOverviewCachesForTests(): void {
  */
 interface ListRowRec { header: { id: string; createdAt?: number; origin?: string }; live?: boolean; persisted?: boolean }
 let listCache: { rows: ListRowRec[] | null; at: number } = { rows: null, at: 0 }
-const listInFlight = new Map<string, Promise<ListRowRec[]>>()
+const listInFlight = new Map<string, Promise<unknown>>()
 const LIST_TTL_MS = 6_000
 
 /**
@@ -241,11 +241,25 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   // 空/异常结果绝不覆盖已有缓存（防止一次抖动把面板清空）。
   type ListRows = ListRowRec[]
   let records: ListRows
-  const cachedList = listCache.rows !== null && t0 - listCache.at < LIST_TTL_MS ? listCache : null
-  if (cachedList !== null) {
-    records = cachedList.rows as ListRowRec[]
+  const fresh = listCache.rows !== null && t0 - listCache.at < LIST_TTL_MS
+  if (fresh || listCache.rows !== null) {
+    // 命中缓存（TTL 内）或有过期值（stale-while-revalidate）：立即返回，
+    // 过期的同时后台刷新——任何帧都不等 harness 的慢查询（rc.2 实测抖到 5.7s）。
+    records = listCache.rows as ListRowRec[]
     var listMs = 0
+    if (!fresh && !listInFlight.has('list')) {
+      const bgSignal = signal
+      const bg = (async () => {
+        try {
+          const r = await sessionQuery.listSessions(bgSignal)
+          if (Array.isArray(r) && r.length > 0) listCache = { rows: r, at: Date.now() }
+        } catch { /* 保留旧值 */ }
+      })()
+      listInFlight.set('list', bg)
+      void bg.finally(() => { listInFlight.delete('list') })
+    }
   } else {
+    // 冷启动第一帧（完全无缓存）：唯一真正等待 listSessions 的路径。
     let inflight = listInFlight.get('list')
     if (inflight === undefined) {
       const thisSignal = signal
@@ -262,7 +276,7 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       listInFlight.set('list', inflight)
       void inflight.finally(() => { listInFlight.delete('list') })
     }
-    records = await inflight
+    records = (await inflight) as ListRows
     listMs = Date.now() - t0
   }
   if (!Array.isArray(records) || records.length === 0) return { rows: [], elapsed: { listMs, rowsMs: 0, totalMs: Date.now() - t0 } }
