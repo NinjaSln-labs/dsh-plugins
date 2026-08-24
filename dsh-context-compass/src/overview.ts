@@ -181,13 +181,13 @@ export function __resetOverviewCachesForTests(): void {
 }
 
 /**
- * listSessions 结果缓存（2.5s TTL）+ 在途去重。空/异常结果不覆盖已有缓存。
+ * listSessions 结果缓存（6s TTL——略大于面板 5s 轮询，保证轮询帧大多命中缓存）+ 在途去重。空/异常结果不覆盖已有缓存。
  * 见 buildOverview 内注释——listSessions 是本 RPC 时延的全部来源。
  */
 interface ListRowRec { header: { id: string; createdAt?: number; origin?: string }; live?: boolean; persisted?: boolean }
 let listCache: { rows: ListRowRec[] | null; at: number } = { rows: null, at: 0 }
 const listInFlight = new Map<string, Promise<ListRowRec[]>>()
-const LIST_TTL_MS = 2_500
+const LIST_TTL_MS = 6_000
 
 /**
  * Kick off one background cold load for `id`; on completion the parsed value
