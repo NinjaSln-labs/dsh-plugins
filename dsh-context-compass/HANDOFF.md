@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.7.17 已发布（npm latest）；本周期仅 2 个 commit（ui-slots devDep 修复 + release）；profile 已回归干净包 0.7.17，待 harness 重启后做面板验证**
+> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.7.17 已发布（npm latest）且本机已重启加载、§3.2 验证全过；本周期仅 2 个 commit（ui-slots devDep 修复 + release）；下一步见 docs/ROADMAP.md（配置点 C1/C2 待调研）**
 
 ## 1. 交接元信息
 
@@ -64,12 +64,12 @@
 - [x] `npm version patch --no-git-tag-version` → tag `context-compass-v0.7.17`（== HEAD `822e122`）→ push → CI 审批发布（npm latest 已确认 0.7.17）
 - [x] 发布后 profile 回归干净包：手动编辑 `~/.dsh/profiles/web/package.json` 版本号 + `pnpm install` + bundles 6 条目核对完整
 
-### 3.2 重启验证清单（**待 harness 重启加载 0.7.17 后执行**）
+### 3.2 重启验证清单——✅ 已完成（2026-08-25 晚，harness 19:14 重启加载 0.7.17）
 
-- [ ] 一览面板打开秒出列表；运行中会话置顶且组内按缓急排
-- [ ] 「活动」列相对时间显示；数字列表头与数据右对齐
-- [ ] `/compass` 命令、`context_compass` 工具、badge 浮层正常
-- [x] `node scripts/contract-check.mjs` 全绿（3 项含时延，发版后复跑通过）
+- [x] 一览面板打开秒出列表；运行中会话置顶且组内按缓急排（RPC 实测 running→loaded→cold；GUI 目视确认）
+- [x] 「活动」列相对时间显示；数字列表头与数据右对齐（visual 6/6 断言 + GUI 目视确认）
+- [x] `/compass` 命令、`context_compass` 工具、badge 浮层正常（client-mount 绿 + visual 6/6 + GUI 目视确认）
+- [x] `node scripts/contract-check.mjs` 全绿（overview 13ms；偶发 >200ms 尖峰为 harness 瞬时负载，连续采样 12–16ms）
 
 ### 3.3 风险提醒
 
