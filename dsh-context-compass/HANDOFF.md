@@ -1,11 +1,11 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-24 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.7.16 已发布（npm latest）；dsh 0.1.1 升级连环坑全部修复（wire 契约 / coldSnapshot / listSessions SWR）；一览面板性能重构完成（轮询帧 ≤20ms）+ UI 精修；4 个 commit 待发版（0.7.17）**
+> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.7.17 已发布（npm latest）；本周期仅 2 个 commit（ui-slots devDep 修复 + release）；profile 已回归干净包 0.7.17，待 harness 重启后做面板验证**
 
 ## 1. 交接元信息
 
-- **日期**：2026-08-24
-- **插件包**：`dsh-context-compass@0.7.16`（npm latest），npm 用户名 `ninjasln`
+- **日期**：2026-08-25（接收方接手并完成 0.7.17 发版）
+- **插件包**：`dsh-context-compass@0.7.17`（npm latest），npm 用户名 `ninjasln`
 - **交接原因**：会话切换
 - **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.7.11.md`
 - **接收方建议**：
@@ -20,10 +20,10 @@
 | 域 | 状态 |
 |---|---|
 | git 仓库 | `NinjaSln-labs/dsh-plugins`，`main` 分支 |
-| origin 对齐 | **ahead 3**——`37bde70`(TTL 6s) / `54487d2`(SWR) / `8f546ce`(冷启动豁免) 未推送，等 0.7.17 |
-| npm latest | **0.7.16**（tag `context-compass-v0.7.16`，commit `5758680`） |
-| HEAD | `8f546ce`（领先 npm 3 个性能修复 commit） |
-| 本机部署 | `~/.dsh/profiles/web` 装 npm 0.7.16 + **手工覆盖的 lib/overview.js（含未发布 SWR 修复）**——0.7.17 发版后需回归干净包 |
+| origin 对齐 | **已对齐**（HEAD `822e122` 已推送） |
+| npm latest | **0.7.17**（tag `context-compass-v0.7.17`，commit `822e122`） |
+| HEAD | `822e122`（== tag，发布前已核对） |
+| 本机部署 | `~/.dsh/profiles/web` 已回归干净包 **0.7.17**（手动改版本 + pnpm install，bundles 6 条目完整；**待 harness 重启生效**） |
 | harness | 全局 dsh `0.1.1-rc.2`（公测阶段，版本变化快） |
 | 发布管道 | `.github/workflows/publish.yml`——tag `context-compass-v*` → 验证链（含 contract 时延断言）→ `npm-publish` 审批 |
 
@@ -40,36 +40,36 @@
 
 | 套件 | 结果 |
 |---|---|
-| release-check | **7 步全绿**（build/typecheck/smoke/mount/client-mount/**contract**/visual） |
+| release-check | **7 步全绿**（0.7.17 tag 前 gate：build/typecheck/smoke/mount/client-mount/contract/visual） |
 | smoke | 全绿（88 项级，含 compactIntervalRounds / cold-load-off-request-path / running-置顶 断言） |
-| contract-check | ✅（RPC 判别器 + overview ≤200ms 时延断言 + 冷启动豁免重试） |
-| visual | 6/6（基线已随排版精修更新） |
+| contract-check | ✅（RPC 判别器 + overview ≤200ms 时延断言 + 冷启动豁免重试；发版后复跑 167ms） |
+| visual | 6/6（本机为 Linux：已补 linux 基线入库 + Playwright 浏览器/系统依赖已装） |
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
+- `822e122` release v0.7.17
+- `311cc1f` 补装 @deepseek-ai/dsh-client-ui-slots devDep（重装 node_modules 后 build 失败）+ linux 视觉基线入库
+- `8249ee3` HANDOFF 更新（0.7.16 发布 + 坑归档）
 - `8f546ce` contract-check 冷启动豁免（预热重试）
 - `54487d2` listSessions 改 stale-while-revalidate（任何帧不等慢查询）
 - `37bde70` listSessions TTL 2.5s→6s（原值小于轮询间隔）
 - `5758680` release v0.7.16
-- `8e9425a` 运行中组内 severity 排序（黄跑 > 绿跑）
-- `890a07f` 排版精修（定宽对齐 + 8px 容器错位修复 + 基线更新）
-- `32d6160` 性能+UI 重构（双缓存/活动列/时延断言）
-- 更早（0.7.13→0.7.15 周期）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
+- 更早（0.7.13→0.7.16 周期）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
 
 ## 3. 下一步与验证点
 
-### 3.1 待发版（0.7.17）
+### 3.1 待发版（0.7.17）——✅ 已完成（2026-08-25）
 
-- [ ] push 3 个未推送 commit（`git push origin main`）
-- [ ] `npm version patch --no-git-tag-version` → 手动 tag `context-compass-v0.7.17` → push → CI 审批发布
-- [ ] 发布后 profile 回归干净包：**手动编辑** `~/.dsh/profiles/web/package.json` 版本号（勿用 pnpm add——会弄丢 bundles 条目，见 pits）+ `pnpm install` + 核对 bundles 列表
+- [x] push 未推送 commit（共 6 个推至 origin/main）
+- [x] `npm version patch --no-git-tag-version` → tag `context-compass-v0.7.17`（== HEAD `822e122`）→ push → CI 审批发布（npm latest 已确认 0.7.17）
+- [x] 发布后 profile 回归干净包：手动编辑 `~/.dsh/profiles/web/package.json` 版本号 + `pnpm install` + bundles 6 条目核对完整
 
-### 3.2 重启验证清单
+### 3.2 重启验证清单（**待 harness 重启加载 0.7.17 后执行**）
 
 - [ ] 一览面板打开秒出列表；运行中会话置顶且组内按缓急排
 - [ ] 「活动」列相对时间显示；数字列表头与数据右对齐
 - [ ] `/compass` 命令、`context_compass` 工具、badge 浮层正常
-- [ ] `node scripts/contract-check.mjs` 全绿（3 项含时延）
+- [x] `node scripts/contract-check.mjs` 全绿（3 项含时延，发版后复跑通过）
 
 ### 3.3 风险提醒
 
@@ -91,10 +91,11 @@ npm run contract-check       # RPC 判别器 + overview ≤200ms（含冷启动�
 1. `pnpm peers check` 报缺 peer → 正常（profile peers 经共享层解析）
 2. 视觉测试只读不写卡（card.spec 已删）
 3. harness 冷启动后第一帧 overview 必慢（listSessions 真查一次）——contract-check 已内置预热重试豁免
+4. **新 Linux 环境首次跑 visual**：需 `npx playwright install chromium` + `npx playwright install-deps chromium`（系统库 libnspr4 等）；linux 基线已入库（`311cc1f`），无需再生成
 
-**已修并已归档的坑**（详见 `../../HANDOFF-ARCHIVE/pits.md` 2026-08-22 段）：
-- 0.1.1 wire 契约 / coldSnapshot 重操作化 / listSessions 抖动 / 时延假阳性
-- pnpm add 弄丢 profile bundles 条目 / cp 整目录覆盖坏 client bundle
+**已修并已归档的坑**（详见 `../../HANDOFF-ARCHIVE/pits.md`）：
+- 2026-08-25：node_modules 重装后缺 `@deepseek-ai/dsh-client-ui-slots` 导致 build/typecheck 失败（已入 devDep，commit `311cc1f`）
+- 2026-08-22 段：0.1.1 wire 契约 / coldSnapshot 重操作化 / listSessions 抖动 / 时延假阳性 / pnpm add 弄丢 profile bundles 条目 / cp 整目录覆盖坏 client bundle
 - 更早：0.7.11 tag 旧代码事故等（见 pits 上方段落）
 
 ## 5. 引用索引
