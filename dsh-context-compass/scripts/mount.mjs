@@ -153,6 +153,30 @@ try {
   assert.equal(payload.result.sessions[1].health.severity, 'yellow')     // live session cut the registry snapshot
   console.log('  ok  /context-compass-rpc route registered + overview handler runs (top-level + non-archived)')
 
+  // 5) S3（ROADMAP 0.8.0）：projection.enabled=false → 投影单元不注册（接线
+  // 开关可观测），工具/命令/RPC 不受影响。独立 Context + 同套 stub（去掉
+  // sessionProjections——禁用后 inject 根本不应发生）。
+  const offCtx = new Context()
+  offCtx.provide('tokenMeter', { measure: () => ({ totalTokens: 300_000 }) })
+  offCtx.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) })
+  offCtx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
+  offCtx.provide('sandboxPolicy', { workspaceRoot: '/tmp/ws' })
+  offCtx.provide('workspaceRegistry', { archivedSessionIds: [] })
+  offCtx.provide('fs', { resolve: async p => p, stat: async () => undefined })
+  offCtx.provide('subprocess', { spawn: () => ({ done: Promise.resolve({ exitCode: 0 }), collected: { stdout: { readFrom: () => ({ text: '' }) } } }) })
+  offCtx.provide('commands', { register: () => {} })
+  offCtx.provide('tools', { register: () => {} })
+  offCtx.provide('webServer', { register: () => () => {} })
+  offCtx.provide('sessionQuery', { listEvents: async () => [], listSessions: async () => [] })
+  offCtx.provide('sessionProjectionCache', { cachedSnapshot: () => ({ values: {} }), coldSnapshot: async () => undefined })
+  offCtx.provide('sessionTitle', { get: () => undefined })
+  const offRegs = { projections: null }
+  offCtx.provide('sessionProjections', { register: def => { offRegs.projections = def }, snapshot: () => ({ values: {} }) })
+  await offCtx.plugin(plugin, { projection: { enabled: false } }).await()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  assert.equal(offRegs.projections, null, 'projection.enabled=false must skip the projection registration')
+  console.log('  ok  projection.enabled=false skips the projection unit (config wiring observable)')
+
   console.log('\nmount smoke passed')
   process.exit(0)
 } catch (err) {
