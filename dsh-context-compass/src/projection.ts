@@ -154,6 +154,23 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
 }
 
 /**
+ * Wire-boundary coercion (S2, ROADMAP 0.8.0): the view is the only seam where
+ * persisted state meets the wire schema, and the schema is strict (integers,
+ * non-negative, finite). States written by an older same-version build — or
+ * any degenerate JSON — must fold into a schema-valid view, never a throw or
+ * a NaN. Every state field passes through one of these two coercers; the
+ * fold itself stays trust-our-own-writer (states only come from apply).
+ */
+function finiteNonNeg(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null
+}
+
+/** Non-negative safe integer for the wire count fields (null/NaN → 0). */
+function countOrZero(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
+}
+
+/**
  * State → wire payload: severity + advice from the config thresholds.
  *
  * Priority mirrors the skill: economy (per-round billable cost, paid every
@@ -170,8 +187,8 @@ export function healthView(
   config: ResolvedConfig,
   price?: ResolvedPricing,
 ): SessionHealthProjection {
-  const total = state.pressureTokens ?? null
-  const window = state.contextWindow ?? null
+  const total = finiteNonNeg(state.pressureTokens)
+  const window = finiteNonNeg(state.contextWindow)
   const ratio = total !== null && window !== null && window > 0 ? total / window : null
   const t = config.thresholds
 
@@ -180,8 +197,8 @@ export function healthView(
   // badge and /compass read the core `tokenUsage` projection (the same value
   // the input-bar stats line shows) — one data source, one algorithm spot.
   const lastUsage = state.lastUsage
-  const uncachedInputTokens = lastUsage?.inputTokens ?? null
-  const cacheReadTokens = lastUsage?.cacheReadTokens ?? null
+  const uncachedInputTokens = finiteNonNeg(lastUsage?.inputTokens)
+  const cacheReadTokens = finiteNonNeg(lastUsage?.cacheReadTokens)
   // Money math: with an official pricing document the cache-hit ratio comes
   // from the official USD pair and each currency uses its own official miss
   // price (zh docs: CNY, en docs: USD — no conversion); static mode uses the
@@ -189,8 +206,8 @@ export function healthView(
   const missPerMUsd = price !== undefined ? price.missPerMUsd : config.cost.inputPricePerM
   const hitPerMUsd = price !== undefined ? price.hitPerMUsd : missPerMUsd * config.cost.cacheHitDiscount
   const discount = missPerMUsd > 0 ? hitPerMUsd / missPerMUsd : config.cost.cacheHitDiscount
-  const effectivePerRound = lastUsage !== undefined
-    ? lastUsage.inputTokens + lastUsage.cacheReadTokens * discount
+  const effectivePerRound = uncachedInputTokens !== null && cacheReadTokens !== null
+    ? uncachedInputTokens + cacheReadTokens * discount
     : null
   const effectivePerRoundUsd = effectivePerRound !== null
     ? effectivePerRound * missPerMUsd / 1_000_000
@@ -218,7 +235,11 @@ export function healthView(
   // bottom-tier sessions escalate to "留意" instead of "放心继续". The proxy
   // scales with the window (A4): max(messageCountProxy, ratio × window) — 800
   // messages means little on a 1M window.
-  const messages = state.userMessages + state.assistantMessages
+  const turns = countOrZero(state.turns)
+  const userMessages = countOrZero(state.userMessages)
+  const assistantMessages = countOrZero(state.assistantMessages)
+  const compactions = countOrZero(state.compactions)
+  const messages = userMessages + assistantMessages
   const effectiveProxy = window !== null && window > 0
     ? Math.max(t.messageCountProxy, Math.round(window * t.messageCountWindowRatio))
     : t.messageCountProxy
@@ -229,14 +250,19 @@ export function healthView(
   // 上限满窗——与 client 的 badge min(100) 一致）。
   const pct = ratio !== null ? Math.min(Math.round(ratio * 100), 100) : null
   // Compression ratio annotation (snapshot-delta caliber — see foldCompression).
-  const compressionRatio = state.compressionRatio ?? null
+  // Non-finite / out-of-range legacy values read as null (inconclusive), the
+  // same surface an inconclusive fold produces.
+  const rawRatio = state.compressionRatio
+  const compressionRatio = typeof rawRatio === 'number' && Number.isFinite(rawRatio) && rawRatio >= 0 && rawRatio <= 1
+    ? rawRatio
+    : null
   const ratioNote = compressionRatio !== null
     ? `；上次压缩比例 ≈ ${Math.round(compressionRatio * 100)}%，快照口径`
     : ''
   const compacted = (() => {
-    if (!(state.compactions > 0)) return ``
-    const freqNote = compactIntervalRounds(state.turns, state.compactions)
-    return `（已压缩 ${state.compactions} 次${freqNote !== null ? `，约每 ${freqNote} 轮一次` : ''}${ratioNote}）`
+    if (!(compactions > 0)) return ``
+    const freqNote = compactIntervalRounds(turns, compactions)
+    return `（已压缩 ${compactions} 次${freqNote !== null ? `，约每 ${freqNote} 轮一次` : ''}${ratioNote}）`
   })()
 
   let advice: string
@@ -266,10 +292,10 @@ export function healthView(
     ratio,
     total,
     window,
-    turns: state.turns,
-    userMessages: state.userMessages,
-    assistantMessages: state.assistantMessages,
-    compactions: state.compactions,
+    turns,
+    userMessages,
+    assistantMessages,
+    compactions,
     compressionRatio,
     uncachedInputTokens,
     cacheReadTokens,
@@ -297,11 +323,15 @@ export function sessionHealthProjectionDefinition(
   const wireView = (state: SessionHealthState) => healthView(state, config, pricing?.get(modelOf?.() ?? ''))
   // sessionHealth 不在 harness 核心 SessionProjectionMap → TS 上 wire 为 never，
   // 需整体断言（运行时 register 只看 def.wire 是否存在，与类型无关）。
+  // 双契约兼容（S2）：0.1.1+ register 只擦除式保留 wire（wire.view 归一化为
+  // 读侧）；rc.6 直接用顶层 def.view + def.schema。两代 harness 各取所需，
+  // 顶层 view 在 0.1.1 上被擦除、无副作用。
   const unit = {
     key: 'sessionHealth',
     schema: sessionHealthProjectionSchema,
     init,
     apply: applyHealthEvent,
+    view: wireView,
     wire: {
       viewSchema: sessionHealthProjectionSchema,
       view: wireView,

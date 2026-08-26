@@ -36,6 +36,12 @@
 - **R2 压缩触发频率** — 「已压缩 N 次」补「平均每 X 轮一次」（`compactIntervalRounds` 纯函数，防除零；投影 view advice 全档位追加）
 - **rc.7→rc.8 升级** — 仅实质变化为移除 dead 声明 `dsh-client-ui-primitives`（`client.tsx` 从不 import），已清理；4 硬注入 + 全部可选读取 + 3 client slot 形状无漂移
 
+### 0.8.0 稳定性基建收尾
+
+- **S2 stateVersion 向后兼容测试** — 语义基线入账（harness 持久化行带 ver，不匹配即丢弃全量重放）；v7 形状旧 state + 退化/异形 JSON 矩阵（空/null/NaN/负数/越界/非整/多余字段）折进 view 断言无 crash/NaN 且通过 strict wire schema；真实 `SessionProjectionRegistry` 集成测试（ver 不匹配行被丢弃、匹配行出 view 即合法）；wire payload 键集合稳定守卫。**顺带修真 bug**：`healthView` 原样透传 state 字段，旧 JSON state 字段缺失/null 会在冷加载 `schema.parse` 崩——加 wire 边界防御收口（finite/countOrZero coercion）；投影单元补**双契约兼容**（顶层 `view` + `wire`，0.1.1+ 与 rc.6 各取所需）
+- **S3 配置生效冒烟** — 每个可调 config 字段的「改动 → 可观测行为变化」断言：8 个 thresholds（severity 边界/经济门槛窗口缩放/消息代理缩放/A3 升级门槛）+ 5 个 checks 开关（git/handoff/handoff.paths/sessionResume/knowledge/processes）+ cost（cacheHitDiscount/inputPricePerM/priceSource/priceUrl/priceFallbackUrl/priceRefreshHours 刷新周期捕获）+ projection.enabled 接线开关（mount：禁用后投影单元不注册）
+- **测试规模** — 100 项 → smoke 100（+11）+ mount 5（+1）+ client-mount 7 + visual 6
+
 ### 一览面板周期（0.7.14 → 0.7.17）
 
 - **性能重构（0.7.16/0.7.17）** — 双缓存 + 活动列 + RPC 时延断言；listSessions 缓存 TTL 2.5s→6s（对齐 5s 轮询间隔）→ stale-while-revalidate（过期帧立即返回旧列表 + 后台刷新，任何帧不等慢查询）；contract-check 加冷启动预热重试豁免。实测轮询帧 **≤20ms**（冷启动首帧唯一例外）
@@ -48,12 +54,10 @@
 
 ### 稳定性基建（保证发布稳定）
 
-> S0（本地发布门禁）已交付，见「已交付」。
+> S0（本地发布门禁）、S2（stateVersion 兼容测试）、S3（配置生效冒烟）均已交付，见「已交付」。
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| S2 | **stateVersion 向后兼容测试**（旧 state 折进当前 view，断言无 crash/NaN） | P1 | 加 sparkline 需 bump stateVersion，防旧缓存踩坑 | — |
-| S3 | **配置生效冒烟**（每个 config 字段改动可观测到行为变化） | P1 | 堵配置静默失效 | — |
 | S4 | **canary 发布通道**（`next` tag → 本地实测 → promote `latest`） | P2 | 新版本先灰度再全量 | — |
 
 ### 配置点接入（⚠️ 需深入调研与设计）
@@ -69,7 +73,7 @@
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| R1 | **占用趋势 sparkline**（浮层「上下文占用」行下方） | P1 | 竞品空白；一眼看出稳步上升 vs 压缩后回落 | 投影加 `pressureHistory`（stateVersion 8→9）+ 客户端 SVG/CSS 渲染；**需 S2 兼容测试先就绪** |
+| R1 | **占用趋势 sparkline**（浮层「上下文占用」行下方） | P1 | 竞品空白；一眼看出稳步上升 vs 压缩后回落 | 投影加 `pressureHistory`（stateVersion 8→9，**S2 兼容测试已就绪**）+ 客户端 SVG/CSS 渲染 |
 | R3 | **定价同步自动化（C4）** | P2 | `pricing/deepseek.json` 手动同步 → CI 定时对比官方、变更开 PR | GitHub Actions 定时 job |
 | R4 | **session-health 技能阈值回写（D1）** | P2 | 插件阈值与技能默认参数已分叉，需对齐 | 技能侧配合 |
 | R5 | **轮次语义细化（A5）** | P3 | 区分多工具调用的回合：「轮次 X / 步数 Y」 | 投影加 step 计数 |
@@ -87,7 +91,7 @@
 | 版本 | 内容 |
 |---|---|
 | ~~0.7.14~~ | 已跳过该排期——0.7.14–0.7.17 实际交付：R2 压缩频率 + S0/S1 稳定性基建 + 一览面板性能重构与排序/排版精修（见「已交付」）|
-| **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选）——稳定性基建收尾 |
+| **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选，顺延）——稳定性基建收尾 |
 | **0.9.0** | R1 sparkline（S2 就绪后）· C1 host 配置点接入（调研定稿后）|
 | **0.10.x** | C2 client 配置卡片 |
 | **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|

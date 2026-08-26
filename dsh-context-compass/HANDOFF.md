@@ -1,11 +1,11 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.7.17 已发布（npm latest）且本机已重启加载、§3.2 验证全过；本周期仅 2 个 commit（ui-slots devDep 修复 + release）；下一步见 docs/ROADMAP.md（配置点 C1/C2 待调研）**
+> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.8.0 周期：S2 stateVersion 兼容测试 + S3 配置生效冒烟已交付（门禁 7 步全绿，顺带修 healthView 透传真 bug + 投影双契约兼容）；待发版 0.8.0**
 
 ## 1. 交接元信息
 
-- **日期**：2026-08-25（接收方接手并完成 0.7.17 发版）
-- **插件包**：`dsh-context-compass@0.7.17`（npm latest），npm 用户名 `ninjasln`
+- **日期**：2026-08-25（0.7.17 发版 + 0.8.0 稳定性基建收尾）
+- **插件包**：`dsh-context-compass@0.7.17`（npm latest；**0.8.0 待发**），npm 用户名 `ninjasln`
 - **交接原因**：会话切换
 - **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.7.11.md`
 - **接收方建议**：
@@ -20,11 +20,11 @@
 | 域 | 状态 |
 |---|---|
 | git 仓库 | `NinjaSln-labs/dsh-plugins`，`main` 分支 |
-| origin 对齐 | **已对齐**（HEAD `822e122` 已推送） |
+| origin 对齐 | 见 §2.4（0.8.0 周期 commit 待推送/待发版） |
 | npm latest | **0.7.17**（tag `context-compass-v0.7.17`，commit `822e122`） |
-| HEAD | `822e122`（== tag，发布前已核对） |
-| 本机部署 | `~/.dsh/profiles/web` 已回归干净包 **0.7.17**（手动改版本 + pnpm install，bundles 6 条目完整；**待 harness 重启生效**） |
-| harness | 全局 dsh `0.1.1-rc.2`（公测阶段，版本变化快） |
+| HEAD | 领先 npm（S2+S3 commit，等 0.8.0 发版） |
+| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.7.17** 已加载（harness 19:14 重启生效，§3.2 验证全过） |
+| harness | 全局 dsh `0.1.1-rc.2`（公测阶段，版本变化快）；**注意**：本机文件系统映射已变为 `/mnt/e/ninjasin-labs/...`（原 `/Users/sin/...` 挂载失效，node_modules 已重装） |
 | 发布管道 | `.github/workflows/publish.yml`——tag `context-compass-v*` → 验证链（含 contract 时延断言）→ `npm-publish` 审批 |
 
 ### 2.2 功能与质量
@@ -40,31 +40,33 @@
 
 | 套件 | 结果 |
 |---|---|
-| release-check | **7 步全绿**（0.7.17 tag 前 gate：build/typecheck/smoke/mount/client-mount/contract/visual） |
-| smoke | 全绿（88 项级，含 compactIntervalRounds / cold-load-off-request-path / running-置顶 断言） |
-| contract-check | ✅（RPC 判别器 + overview ≤200ms 时延断言 + 冷启动豁免重试；发版后复跑 167ms） |
-| visual | 6/6（本机为 Linux：已补 linux 基线入库 + Playwright 浏览器/系统依赖已装） |
+| release-check | **7 步全绿**（0.8.0 周期 gate，含新增 S2/S3 断言） |
+| smoke | 全绿 **100 项**（+11：S2 兼容矩阵/真实 registry 集成/wire 键集合守卫 + S3 每字段配置生效） |
+| mount | 全绿 **5 项**（+1：projection.enabled=false 接线开关） |
+| contract-check | ✅（RPC 判别器 + overview ≤200ms 时延断言 + 冷启动豁免重试） |
+| visual | 6/6（darwin + linux 双平台基线入库） |
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
+- S2 stateVersion 向后兼容测试（退化矩阵 + 真实 registry 集成 + wire 键集合守卫）——顺带修 healthView 透传真 bug（旧 JSON state 冷加载 schema.parse 崩）+ 投影双契约兼容（顶层 view + wire）
+- S3 配置生效冒烟（thresholds×8 / checks×5 / cost×6 / projection.enabled，每字段「改动→可观测」）
+- `ecd10b4` 文档对齐 0.7.17（ROADMAP 基准 + 根/插件 README 排序与 SWR 口径，中英同步）
+- `e431e7b` HANDOFF §3.2 重启验证清单全过
+- `d25fabf` HANDOFF 回填（0.7.17 发布 + ui-slots 坑迁归档）
 - `822e122` release v0.7.17
-- `311cc1f` 补装 @deepseek-ai/dsh-client-ui-slots devDep（重装 node_modules 后 build 失败）+ linux 视觉基线入库
-- `8249ee3` HANDOFF 更新（0.7.16 发布 + 坑归档）
-- `8f546ce` contract-check 冷启动豁免（预热重试）
-- `54487d2` listSessions 改 stale-while-revalidate（任何帧不等慢查询）
-- `37bde70` listSessions TTL 2.5s→6s（原值小于轮询间隔）
-- `5758680` release v0.7.16
-- 更早（0.7.13→0.7.16 周期）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
+- `311cc1f` 补装 @deepseek-ai/dsh-client-ui-slots devDep + linux 视觉基线入库
+- 更早（0.7.16 及以前）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
 
 ## 3. 下一步与验证点
 
-### 3.1 待发版（0.7.17）——✅ 已完成（2026-08-25）
+### 3.1 待发版（0.8.0）
 
-- [x] push 未推送 commit（共 6 个推至 origin/main）
-- [x] `npm version patch --no-git-tag-version` → tag `context-compass-v0.7.17`（== HEAD `822e122`）→ push → CI 审批发布（npm latest 已确认 0.7.17）
-- [x] 发布后 profile 回归干净包：手动编辑 `~/.dsh/profiles/web/package.json` 版本号 + `pnpm install` + bundles 6 条目核对完整
+- [ ] push S2/S3 commit（`git push origin main`）
+- [ ] `npm version minor --no-git-tag-version` → tag `context-compass-v0.8.0`（核对 == HEAD）→ push → CI 审批发布
+- [ ] 发布后 profile 回归干净包：手动编辑 `~/.dsh/profiles/web/package.json` 版本号 + `pnpm install` + 核对 bundles
+- [ ] 重启后跑 §3.2 清单（S2/S3 是纯测试 + 防御收口，行为应无可见变化；重点看 badge/面板照常）
 
-### 3.2 重启验证清单——✅ 已完成（2026-08-25 晚，harness 19:14 重启加载 0.7.17）
+### 3.2 重启验证清单（0.7.17）——✅ 已完成（2026-08-25 晚）
 
 - [x] 一览面板打开秒出列表；运行中会话置顶且组内按缓急排（RPC 实测 running→loaded→cold；GUI 目视确认）
 - [x] 「活动」列相对时间显示；数字列表头与数据右对齐（visual 6/6 断言 + GUI 目视确认）
