@@ -1,0 +1,47 @@
+# dsh-context-compass canary promote 工作流（S4 灰度通道的另一半）
+#
+# 用途：canary 版本（`context-compass-vX.Y.Z-next.N` tag 发布到 dist-tag `next`）
+# 本地实测通过后，把该版本的 dist-tag `latest` 指过去——正式晋级，不重新发布。
+#
+# 手动触发：Actions → canary-promote → Run workflow → 输入完整版本号
+#   （如 0.10.1-next.0）
+#
+# 安全模型与 publish.yml 一致：environment `npm-publish` 人工审批 + NPM_TOKEN
+# 仅注入目标步骤 + actions 按 SHA 固定。
+name: canary-promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '要晋级的完整版本号（如 0.10.1-next.0）'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: 'Guard: version must be a prerelease (canary never promotes by accident)'
+        run: |
+          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            echo "::error::version ${{ inputs.version }} 不是 prerelease——stable 版本发布时已是 latest，无需 promote"
+            exit 1
+          fi
+      - name: 'Guard: version exists on npm'
+        run: npm view "dsh-context-compass@${{ inputs.version }}" version
+      - name: Promote canary to latest
+        run: npm dist-tag add dsh-context-compass@"${{ inputs.version }}" latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Confirm
+        run: npm view dsh-context-compass dist-tags --json

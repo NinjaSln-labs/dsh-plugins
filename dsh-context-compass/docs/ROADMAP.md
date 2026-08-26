@@ -52,6 +52,7 @@
 - **C1 host 配置点** — `installSettingsSection(ctx, 'context-compass', Config, entry, hooks)`（设计定稿 `C1-SETTINGS-DESIGN.md`，实施按 T1→T3）：source-thunk 模式（官方 `dsh-agent-default-model` 同款），投影/工具/命令/overview RPC 四处经 `readConfig` 每次使用读当前值——**thresholds×8 / checks×5 / cost 显示项 live 生效**；`projection.enabled` 经 onChange 重判定（dispose/重注册）live 切换；`validate` 三档阈值单调性写时拒绝；pricing 源 4 字段 restart（schema 文案注明）。**双源治愈**：live 路径默认值全走 schemastery schema，`resolveConfig` 降级为测试/回退路径。peer 新增 `@deepseek-ai/dsh-settings: ^0.1.0-rc.6`（局部升策略）
 - **测试** — smoke +3（validate 单调 / readConfig 双形态 / thunk 换层即时生效）+ mount +1（**真实接线集成**：settings 写入 → 工具判定 live 变化 + validate 拒绝非单调——该测试抓到 `as` 强转压掉 thunk 未调用的真 bug，见 pits 2026-08-26）
 - **测试规模** — smoke 107 + mount 6 + client-mount 7 + visual 6
+- **S4 canary 发布通道（顺带交付）** — `publish.yml`：prerelease 版本（`0.10.1-next.0` 形态，tag 同后缀）自动 `npm publish --tag next`（不动 latest）；新增 `canary-promote.yml`（workflow_dispatch 输入版本号 → 守卫 prerelease/存在性 → `npm dist-tag add … latest`，走同一 npm-publish 审批门）；流程文档入 `PUBLISHING.md`
 
 ### 一览面板周期（0.7.14 → 0.7.17）
 
@@ -65,13 +66,9 @@
 
 ### 稳定性基建（保证发布稳定）
 
-> S0（本地发布门禁）、S2（stateVersion 兼容测试）、S3（配置生效冒烟）均已交付，见「已交付」。
+> **稳定性基建 S0–S4 全部交付**（S4 见「已交付」0.10.0 段），本节无待做项。
 
-| # | 项 | 优先级 | 动机 / 价值 | 依赖 |
-|---|---|---|---|---|
-| S4 | **canary 发布通道**（`next` tag → 本地实测 → promote `latest`） | P2 | 新版本先灰度再全量 | — |
-
-### 配置点接入（⚠️ 需深入调研与设计）
+### 配置点接入（C1 已交付，C2 待实施）
 
 > `ctx.settings` 插件配置点：Host 注册 settings 命名空间 + Client 在 `settings.plugin.item` 槽注册卡片，设置 UI 直接调参。**C1 已交付（0.10.0，设计定稿 `docs/C1-SETTINGS-DESIGN.md`）；C2 待实施。**
 
@@ -105,7 +102,7 @@
 | **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选，顺延）——稳定性基建收尾 |
 | ~~0.9.0~~ | R1 sparkline（已交付）· C1 调研 + 设计定稿（已交付）|
 | **0.10.0** | **C1 host 配置点接入（已交付，随本版发）**——`installSettingsSection` getter 模式：thresholds/checks live 生效、resolveConfig 双源治愈、validate 三档单调、projection.enabled live 切换；pricing 源 4 字段 restart |
-| **0.11.x** | C2 client 配置卡片 · S4 canary（可选）|
+| **0.11.x** | C2 client 配置卡片 |
 | **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|
 
 ## 维护规则

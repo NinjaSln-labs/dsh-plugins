@@ -77,6 +77,16 @@ jobs:
           npm run mount
           node scripts/client-mount.mjs
       - name: Publish to npm
-        run: npm publish --access public
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          # S4 canary：prerelease 版本（版本号含 `-`，如 0.10.1-next.0）发到 `next`
+          # dist-tag——npm publish 永远默认打 latest，必须显式覆盖，否则灰度版劫持 latest。
+          if [[ "$VERSION" == *-* ]]; then
+            echo "canary prerelease $VERSION → dist-tag next"
+            npm publish --access public --tag next
+          else
+            echo "stable $VERSION → dist-tag latest"
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
