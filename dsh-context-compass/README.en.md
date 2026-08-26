@@ -46,6 +46,8 @@ Per the methodology, the economy dimension (per-round billable, cache-discounted
 
 ## Configuration
 
+**Live effect (v0.10.0)**: the plugin registers the settings namespace `context-compass` — while the host settings system (`ctx.settings`) is mounted, changes to `thresholds` / `checks` / the `cost` display fields **take effect immediately** (badge on the next push frame, the next `/compass` uses the new values) with no restart; toggling `projection.enabled` is live too. Only `cost.priceSource / priceUrl / priceFallbackUrl / priceRefreshHours` (the price-refresh wiring) need a restart. Deployments without a settings service fall back to the composition entry config and behave exactly as before.
+
 ```ts
 // thresholds: decision-model parameters
 thresholds: {
