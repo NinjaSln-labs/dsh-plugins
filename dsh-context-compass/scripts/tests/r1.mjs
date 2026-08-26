@@ -82,6 +82,49 @@ export async function run() {
     assert.ok(!view.advice.includes('NaN'), view.advice)
   })
 
+  await check('R1: 重放重建 history 与在线折叠一致（AUDIT 测试洞 3——harness restore 语义）', () => {
+    // harness 丢弃 ver 不匹配行后从 seq 0 全量重放（restore）——纯 fold 重放
+    // 两次必须产出完全相同的 state（含 history/lastSample），否则持久化缓存
+    // 重建与在线折叠会分叉。
+    const events = [
+      msg(1, 1, { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0 }),
+      chunk(1, 2, { inputTokens: 1200, cacheReadTokens: 0, cacheWriteTokens: 0 }),
+      msg(1, 2, { inputTokens: 1300, cacheReadTokens: 0, cacheWriteTokens: 0 }), // 同 step 替换
+      { type: 'compaction/end' },
+      chunk(2, 1, { inputTokens: 600, cacheReadTokens: 0, cacheWriteTokens: 0 }),
+      msg(2, 2, { inputTokens: 900, cacheReadTokens: 0, cacheWriteTokens: 0 }),
+      msg(3, 1, { inputTokens: 700, cacheReadTokens: 50, cacheWriteTokens: 0 }),
+    ]
+    const def = sessionHealthProjectionDefinition(config)
+    const fold = () => {
+      let s = def.init()
+      for (const e of events) s = applyHealthEvent(s, e)
+      return s
+    }
+    assert.deepEqual(fold(), fold())
+  })
+
+  await check('R1: chunk 路径环形封顶同样生效（AUDIT 测试洞 4）', () => {
+    let s = sessionHealthProjectionDefinition(config).init()
+    for (let i = 1; i <= 45; i++) {
+      s = applyHealthEvent(s, chunk(i, 1, { inputTokens: i * 1000, cacheReadTokens: 0, cacheWriteTokens: 0 }))
+    }
+    assert.equal(s.pressureHistory.length, 40)
+    assert.equal(s.pressureHistory[0], 6000)
+    assert.equal(s.pressureHistory[39], 45000)
+  })
+
+  await check('R1: compaction 后首个 chunk 采样触发 foldCompression（AUDIT 测试洞 5）', () => {
+    // chunk 先建立压力 → compaction 捕获 pre → 下一个 chunk 是 post → 比例推断。
+    let s = sessionHealthProjectionDefinition(config).init()
+    s = applyHealthEvent(s, chunk(1, 1, { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0 }))
+    s = applyHealthEvent(s, { type: 'compaction/end' }) // pre = 1000
+    s = applyHealthEvent(s, chunk(1, 2, { inputTokens: 400, cacheReadTokens: 0, cacheWriteTokens: 0 })) // post = 400
+    const view = healthView(s, config)
+    assert.equal(view.compressionRatio, 0.6)
+    assert.deepEqual(s.pressureHistory, [1000, 400])
+  })
+
   await check('R1: 压缩捕获失败时陈旧 compressionRatio 失效（AUDIT R1-3）', () => {
     // 先有旧比例：一轮可判定的压缩。
     let s = sessionHealthProjectionDefinition(config).init()

@@ -38,12 +38,12 @@
 **OV-3 无 Host/Origin 校验 → DNS rebinding 可跨源读取**
 - 位置：`handleOverviewRpc`；另 `readBody` 不限 Content-Type（text/plain 可免预检）
 - 建议：handler 校验 Host 头 ∈ {127.0.0.1[:port], ::1[:port], localhost[:port]}。
-- 状态：recorded（loopback + 本机单用户场景，rebinding 实际收益低；随 OV-2 修复一并加 Host 校验成本低，本轮顺带修）
+- 状态：**fixed（e87b7ca：isLoopback 加 Host 头校验，防 DNS rebinding）**
 
 **OV-4 `__resetOverviewCachesForTests` 漏清 titleCache；运行时无改名/删除事件驱动失效**
 - 位置：`src/overview.ts:176-181`
 - 影响：会话改名后旧标题最长残留 60s。
-- 状态：recorded（有界陈旧，可接受；测试助手补一行属顺手修）
+- 状态：**fixed（e87b7ca：__resetOverviewCachesForTests 补清 titleCache）**
 
 **OV-5 排序规则 host/client 双份实现，仅靠注释约定同源**
 - 位置：`src/overview.ts:56,76-91` vs `src/client.tsx:843,916-929`
@@ -57,10 +57,10 @@
 
 ### P3
 
-**OV-7** 共享 `listInFlight` 被创建者 signal 污染——并发冷启动时一帧 abort 连累其它帧拿空列表。recorded（低概率，降级为空帧下次自愈）。
+**OV-7** 共享 `listInFlight` 被创建者 signal 污染——并发冷启动时一帧 abort 连累其它帧拿空列表。**fixed（本轮：SWR 后台刷新改用独立 AbortController，不再骑请求帧 signal）**。
 **OV-8** summary 对任意已加载会话无鉴权开放；冷会话行点摘要必 404。recorded（本机单用户场景）。
 **OV-9** contract-check 冷启动豁免每次无条件重试 + 单样本判定 + postRaw 无超时——持续慢查会被豁免掩盖，间歇性慢查漏检。recorded（工具型检查，可接受）。
-**OV-10** TTL 注释漂移（注释 2.5s vs 实际 6s）。recorded（顺手修注释）。
+**OV-10** TTL 注释漂移（注释 2.5s vs 实际 6s）。**fixed（本轮：注释改 6s）**。
 **OV-11** 已检查无问题：XFF 不信任、IPv6 ::1 覆盖、body 限额、单行降级、coldLoad 超时兜底。
 
 ---
@@ -93,8 +93,8 @@
 
 ### P3
 
-**C1-4** namespace 注册疑似骑 provider fiber 而非调用方 fiber（上游契约疑点，置信中等）——插件 re-apply 可能命中 already-registered。recorded（后续写 re-apply 冒烟确认；若复现属上游项，本侧 try/catch 兜底）。
-**C1-5** handleOverviewRpc 的 readConfig(configSource) 在 try 块外（极端拆除竞态下异常不走 500）。recorded（顺手挪入 try）。
+**C1-4** namespace 注册疑似骑 provider fiber 而非调用方 fiber（上游契约疑点，置信中等）——插件 re-apply 可能命中 already-registered。**resolved（本轮 mount 冒烟：共享 provider + 插件 fiber dispose 后 re-apply 正常，注册随插件 fiber 拆除——本侧无坑，疑点排除）**。
+**C1-5** handleOverviewRpc 的 readConfig(configSource) 在 try 块外（极端拆除竞态下异常不走 500）。**fixed（e87b7ca：挪入 try + 500 兜底）**。
 **C1-6** 默认值双源（schema .default ×18 与 resolveConfig 回退）人工同步漂移风险。recorded（本次逐项比对一致；C1 已降级 resolveConfig 为测试/回退路径，长期可由 schema 单向生成回退表）。
 
 ### 已检查无问题（带过）
@@ -124,16 +124,16 @@
 ### P3
 
 **R1-4** sparkline 归一分母跨模型切换失真（128K 到 1M 假性骤降）。**fixed（e87b7ca：title 注明按当前窗口归一；aria 改「个采样」）**。
-**R1-5** 折线触顶描边被 viewBox 裁半像素。recorded（CSS overflow:visible 一行，顺手修）。
+**R1-5** 折线触顶描边被 viewBox 裁半像素。**fixed（e87b7ca：.sh-spark overflow:visible）**。
 **R1-6** as unknown as ProjectionDefinition 双重断言关闭 unit 形状编译期检查。recorded（运行时键集合守卫已兜底；重构阶段评估收窄断言）。
 
 ### 测试覆盖洞（smoke S2/R1 块）
 
 1. 「同一 turn/step 两事件都带 usage」用例——**已补（e87b7ca：r1.mjs 同 step 去重 + 合成事件不塌缩）**
 2. 「proxyHit 晋级 blue 且 ratio null」用例——**已补（e87b7ca：r1.mjs null% 文案断言）**
-3. 无「重放重建 history 与在线折叠一致」等价性断言。recorded
-4. chunk 路径封顶未测（同代码路径，低风险）。recorded
-5. compaction 与 chunk 采样交互无直接断言。recorded
+3. 「重放重建 history 与在线折叠一致」等价性断言——**已补（本轮：r1.mjs 双折叠深等）**
+4. chunk 路径封顶——**已补（本轮：r1.mjs chunk 45 封顶 40）**
+5. compaction 与 chunk 采样交互——**已补（本轮：r1.mjs compaction 后 chunk 触发 foldCompression）**
 6. client 渲染边界（全同值/denom 回退/length 边界）无自动化——纯视觉层，知悉。
 
 ### 已检查无问题（带过）
