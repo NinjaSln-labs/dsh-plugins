@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.8.0 已发布且本机重启加载、重启验证全过；下一步 R1 sparkline（S2 已就绪）或 C1 host 配置点调研（先调研定稿再动工）**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.9.0（R1 占用趋势 sparkline，stateVersion 9）已推送待 CI 审批发布；⚠️ 仓库有并行会话且 main 历史曾被改写（旧 0.8.0 tag commit 已不在 main，npm 包不受影响）；下一步 C1 调研或 S4 canary**
 
 ## 1. 交接元信息
 
@@ -48,18 +48,21 @@
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
-- `b73b47d` release v0.8.0
-- `509ce94` S2 stateVersion 向后兼容测试 + S3 配置生效冒烟（修 healthView 透传真 bug + 投影双契约兼容）
-- `ecd10b4` 文档对齐 0.7.17（ROADMAP 基准 + 根/插件 README 排序与 SWR 口径，中英同步）
-- `e431e7b` HANDOFF §3.2 重启验证清单全过
-- `d25fabf` HANDOFF 回填（0.7.17 发布 + ui-slots 坑迁归档）
-- `822e122` release v0.7.17
-- `311cc1f` 补装 @deepseek-ai/dsh-client-ui-slots devDep + linux 视觉基线入库
-- 更早（0.7.16 及以前）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
+- `08f2b9f` release v0.9.0（R1 占用趋势 sparkline；tag == HEAD 已核对）
+- `cd559bd` R1：pressureHistory 环形采样（stateVersion 9）+ 浮层 SVG 折线 + smoke +4
+- ⚠️ 0.8.0 周期 commit 因并行会话改写历史，哈希已变（内容不变，npm 0.8.0 包正常）：release 现为 `3459038`、S2/S3 现为 `e7edb68`
+- 更早（0.7.x 周期）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
 
 ## 3. 下一步与验证点
 
-### 3.1 待发版（0.8.0）——✅ 已完成（2026-08-25）
+### 3.1 待发版（0.9.0）——推送完成，待 CI 审批
+
+- [x] push R1 commit + tag `context-compass-v0.9.0`（== HEAD `08f2b9f`）
+- [ ] **CI npm-publish 审批**（GitHub Actions）→ npm latest 确认 0.9.0
+- [ ] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对
+- [ ] 重启后浮层验证：占用行下出现 sparkline（需 ≥2 次请求采样；badge.spec 无截图断言，目视即可）
+
+### 3.1.1 已完成——0.8.0 发版（2026-08-25）
 
 - [x] push S2/S3 commit
 - [x] `npm version minor --no-git-tag-version` → tag `context-compass-v0.8.0`（== HEAD `b73b47d`）→ push → CI 审批发布（npm latest 已确认 0.8.0）
