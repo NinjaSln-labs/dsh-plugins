@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入：settings live 生效 + 双源治愈）已推送待 CI 审批；0.9.0 sparkline 已重启验证；接线 bug（as 强转压掉 thunk 未调用）已修并入 pits；下一步 C2 卡片或 S4 canary**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入）已发布（npm latest）+ profile 已回归干净包；待重启后验证 settings 命名空间与 live 生效；下一步 C2 卡片或 S4 canary**
 
 ## 1. 交接元信息
 
@@ -60,9 +60,9 @@
 ### 3.1 待发版（0.10.0）——推送完成，待 CI 审批
 
 - [x] push C1 commit（设计定稿 `docs/C1-SETTINGS-DESIGN.md` 经用户确认后实施）
-- [ ] **CI npm-publish 审批** → npm latest 确认 0.10.0
-- [ ] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对
-- [ ] 重启后 settings 验证：设置 UI 出现 context-compass 命名空间（C2 卡片未做前经 describe 可查）；改 threshold 看 badge 下一帧变化
+- [x] CI npm-publish 审批 → **npm latest 已确认 0.10.0**（2026-08-26）
+- [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿（26ms）
+- [ ] 重启后 settings 验证：设置 UI 出现 context-compass 命名空间（C2 卡片未做前经 describe 可查）；改 threshold 看 badge 下一帧变化——**待下次 harness 重启**
 
 ### 3.1.1 已完成——0.9.0 发版（2026-08-26）
 
