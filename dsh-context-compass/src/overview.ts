@@ -251,7 +251,7 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   const sessionQuery = ctx.get('sessionQuery') as SessionQueryLike | undefined
   if (sessionQuery === undefined) return { rows: [], elapsed: { listMs: 0, rowsMs: 0, totalMs: 0 } }
 
-  // listSessions 结果缓存（2.5s TTL + in-flight 去重 + 空结果保护）。
+  // listSessions 结果缓存（6s TTL + in-flight 去重 + 空结果保护）。
   // 实测（2026-08-22，dsh 0.1.1-rc.1）：listSessions 本身 0.3s～11.2s 剧烈波动
   // 且偶尔返回空——它是本 RPC 全部时延的来源（rows 构建仅 ~20ms）。面板 5s 轮询
   // 不需要每帧都打真查询：TTL 内复用上一份列表；并发帧共享同一次在途调用；
@@ -265,7 +265,13 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
     records = listCache.rows as ListRowRec[]
     var listMs = 0
     if (!fresh && !listInFlight.has('list')) {
-      const bgSignal = signal
+      // AUDIT OV-7: the background refresh must NOT ride the requesting frame's
+      // signal — the frame can be aborted (panel closed) mid-flight, and the
+      // in-flight refresh is SHARED: aborting it starves every other frame that
+      // was waiting on the same promise. An independent controller lets the
+      // refresh finish (and populate the cache) no matter what happens to the
+      // frame that kicked it off.
+      const bgSignal = new AbortController().signal
       const bg = (async () => {
         try {
           const r = await sessionQuery.listSessions(bgSignal)

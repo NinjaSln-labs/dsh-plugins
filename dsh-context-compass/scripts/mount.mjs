@@ -234,6 +234,57 @@ try {
   assert.equal(c1After.severity, 'yellow', 'a settings write must reach the tool live (getter mode)')
   console.log('  ok  settings ns registered + live write reaches the tool + validate refuses non-monotonic ladder')
 
+  // 7) C1-4（AUDIT）：插件 re-apply 时 settings 命名空间不得撞 already-registered。
+  // 真实 provider 对重复 register 是 fail-loud——若命名空间注册骑在 provider
+  // fiber 上（未随插件 fiber 拆除），第二次 apply 会炸。用同一共享 provider
+  // （fake 拒绝重复 ns）先后挂载两个独立 Context，验证第二个能正常注册。
+  const dupGuard = {
+    registeredNs: new Set(),
+    register(ns, schema, opts) {
+      if (dupGuard.registeredNs.has(ns)) throw new Error(`already registered: ${ns}`)
+      dupGuard.registeredNs.add(ns)
+      const value = schema({ ...(opts.base ?? {}) })
+      return {
+        get: () => value,
+        watch: cb => { dupGuard.watchCb = cb; return () => {} },
+      }
+    },
+    // 模拟 provider 在插件 fiber 拆除后的清理（真实 provider 的 effect 语义）。
+    unregister(ns) { dupGuard.registeredNs.delete(ns) },
+  }
+  const mkCtx = () => {
+    const c = new Context()
+    c.provide('tokenMeter', { measure: () => ({ totalTokens: 300_000 }) })
+    c.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) })
+    c.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
+    c.provide('sandboxPolicy', { workspaceRoot: '/tmp/ws' })
+    c.provide('workspaceRegistry', { archivedSessionIds: [] })
+    c.provide('fs', { resolve: async p => p, stat: async () => undefined })
+    c.provide('subprocess', { spawn: () => ({ done: Promise.resolve({ exitCode: 0 }), collected: { stdout: { readFrom: () => ({ text: '' }) } } }) })
+    c.provide('commands', { register: () => {} })
+    c.provide('tools', { register: () => {} })
+    c.provide('webServer', { register: () => () => {} })
+    c.provide('sessionQuery', { listEvents: async () => [], listSessions: async () => [] })
+    c.provide('sessionProjectionCache', { cachedSnapshot: () => ({ values: {} }), coldSnapshot: async () => undefined })
+    c.provide('sessionTitle', { get: () => undefined })
+    c.provide('sessionProjections', { register: () => () => {}, snapshot: () => ({ values: {} }) })
+    c.provide('settings', dupGuard)
+    return c
+  }
+  const firstCtx = mkCtx()
+  const firstFiber = await firstCtx.plugin(plugin).await()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  assert.ok(dupGuard.registeredNs.has('context-compass'), 'first apply registers the namespace')
+  // 拆掉第一个插件 fiber（其上的 settings 注册应随之移除）。
+  firstFiber.dispose()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  // 第二个 Context + 同一 provider：若注册骑 provider fiber 未拆除，这里会撞
+  // already-registered 抛错——断言它正常完成（C1-4 不成立 / 本侧无坑）。
+  const secondCtx = mkCtx()
+  await secondCtx.plugin(plugin).await()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  console.log('  ok  plugin re-apply against a shared settings provider does not hit already-registered (AUDIT C1-4 clean)')
+
   console.log('\nmount smoke passed')
   process.exit(0)
 } catch (err) {
