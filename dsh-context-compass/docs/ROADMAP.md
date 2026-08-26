@@ -67,11 +67,11 @@
 
 ### 配置点接入（⚠️ 需深入调研与设计）
 
-> rc.7 新增 `ctx.settings` 插件配置点：Host 注册 settings 命名空间 + Client 在 `settings.plugin.item` 槽注册卡片，设置 UI 直接调参。**本项尚未落到可执行设计——先调研再定稿，未定稿前不动工。**
+> `ctx.settings` 插件配置点：Host 注册 settings 命名空间 + Client 在 `settings.plugin.item` 槽注册卡片，设置 UI 直接调参。**C1 调研已完成、设计定稿见 `docs/C1-SETTINGS-DESIGN.md`（待确认后动工）；C2 待 C1 落地后实施。**
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| C1 | **Host 侧接入 `installSettingsSection`**（getter 模式，配置 live 可读 + 消除 V11-1 双源） | P2 | 配置单一权威 + settings 文档驱动；顺带治愈 resolveConfig 双源 | `@deepseek-ai/dsh-settings`（rc.7）；先调研投影/工具/命令三处改 getter 的准确范围、`applies: live/restart` 取舍、peer 升级影响 |
+| C1 | **Host 侧接入 `installSettingsSection`**（getter 模式，配置 live 可读 + 消除 V11-1 双源）——**调研完成，设计定稿待确认** | P2 | 配置单一权威 + settings 文档驱动；顺带治愈 resolveConfig 双源 | 设计定稿：`docs/C1-SETTINGS-DESIGN.md`（实测 `ctx.settings` live 已挂载、rc.6 已含 `installSettingsSection` → peer 新增 `^0.1.0-rc.6` 即可；thresholds/checks live，pricing 源字段 restart） |
 | C2 | **Client 配置卡片**（`settings.plugin.item` keyed 自建） | P3 | 设置 UI 直接调参 | C1；场外插件不可复用内置控件（bundle 门禁），需自建表单 + 草稿暂存 + revision 设栅；先调研卡片契约与构建要求 |
 
 ### 功能项
