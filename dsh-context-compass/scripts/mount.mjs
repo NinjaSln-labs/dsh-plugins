@@ -177,6 +177,62 @@ try {
   assert.equal(offRegs.projections, null, 'projection.enabled=false must skip the projection registration')
   console.log('  ok  projection.enabled=false skips the projection unit (config wiring observable)')
 
+  // 6) C1（docs/C1-SETTINGS-DESIGN.md）：settings 服务挂载 → 注册 ns
+  // 'context-compass'（base=entry）；settings 写入 → source 切换 → 工具行为
+  // live 变化；validate 拒绝非单调阈值。独立 Context + 同套 stub + fake settings。
+  const c1Ctx = new Context()
+  c1Ctx.provide('tokenMeter', { measure: () => ({ totalTokens: 300_000 }) })
+  c1Ctx.provide('llm', { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) })
+  c1Ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash' }) })
+  c1Ctx.provide('sandboxPolicy', { workspaceRoot: '/tmp/ws' })
+  c1Ctx.provide('workspaceRegistry', { archivedSessionIds: [] })
+  c1Ctx.provide('fs', { resolve: async p => p, stat: async p => (p === '.git' ? {} : undefined) })
+  c1Ctx.provide('subprocess', { spawn: () => ({ done: Promise.resolve({ exitCode: 0 }), collected: { stdout: { readFrom: () => ({ text: '' }) } } }) })
+  const c1Regs = { tools: null }
+  c1Ctx.provide('commands', { register: () => {} })
+  c1Ctx.provide('tools', { register: tool => { c1Regs.tools = tool } })
+  c1Ctx.provide('webServer', { register: () => () => {} })
+  c1Ctx.provide('sessionQuery', { listEvents: async () => [], listSessions: async () => [] })
+  c1Ctx.provide('sessionProjectionCache', { cachedSnapshot: () => ({ values: {} }), coldSnapshot: async () => undefined })
+  c1Ctx.provide('sessionTitle', { get: () => undefined })
+  c1Ctx.provide('sessionProjections', { register: () => () => {}, snapshot: () => ({ values: {} }) })
+  const fake = {
+    registered: null, watchCb: null, value: null,
+    register(ns, schema, opts) {
+      fake.registered = { ns, schema, opts }
+      fake.value = schema({ ...(opts.base ?? {}) })
+      return {
+        get: () => fake.value,
+        watch: cb => { fake.watchCb = cb; return () => {} },
+      }
+    },
+    // 模拟一次 settings 写入：schema 解析 → 提交 → watch 推送。
+    async write(patch) {
+      fake.value = fake.registered.schema({ ...fake.value, ...patch })
+      fake.watchCb?.(fake.value, fake.value)
+    },
+  }
+  c1Ctx.provide('settings', fake)
+  await c1Ctx.plugin(plugin).await()
+  await new Promise(resolve => setTimeout(resolve, 50))
+  assert.ok(fake.registered, 'settings namespace registered while the service is mounted')
+  assert.equal(fake.registered.ns, 'context-compass', 'ns is the plugin short name')
+  assert.equal(typeof fake.registered.opts.validate, 'function', 'cross-field validate wired')
+  // validate：非单调阈值在写入口被拒（schema 表达不了的跨字段约束）。
+  assert.throws(
+    () => fake.registered.opts.validate(fake.registered.schema({ thresholds: { windowMid: 0.9, windowHigh: 0.5, windowCritical: 0.8 } })),
+    /单调递增/,
+  )
+  // live 写入：windowHigh 0.5 → 0.25，30% 占比从蓝升黄（无重启、无重挂）。
+  // （c1Ctx 投影快照为空 → assess 走 tokenMeter 路径：300K/1M = 30%。）
+  assert.equal(c1Regs.tools !== null, true, 'tool registered on the settings-mounted context')
+  const c1Before = await c1Regs.tools.execute({}, { agent: { id: 'agent-1', session }, signal: new AbortController().signal })
+  assert.equal(c1Before.severity, 'blue')
+  await fake.write({ thresholds: { ...fake.value.thresholds, windowHigh: 0.25 } })
+  const c1After = await c1Regs.tools.execute({}, { agent: { id: 'agent-1', session }, signal: new AbortController().signal })
+  assert.equal(c1After.severity, 'yellow', 'a settings write must reach the tool live (getter mode)')
+  console.log('  ok  settings ns registered + live write reaches the tool + validate refuses non-monotonic ladder')
+
   console.log('\nmount smoke passed')
   process.exit(0)
 } catch (err) {

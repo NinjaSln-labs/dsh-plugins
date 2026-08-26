@@ -47,6 +47,12 @@
 - **R1 占用趋势 sparkline** — 投影加 `pressureHistory` 环形采样（每次带 inputTokens 的 usage 报告一个样本，封顶最近 40 个；stateVersion 8→9：旧行丢弃全量重放重建趋势，S2 套件兜底）；浮层「上下文占用」行下方 SVG 迷你折线（归一口径：优先除以当前窗口=逼近满窗趋势，窗口未知除以序列峰值只看形状；少于 2 点隐藏；主题色随 severity accent）；view 边界过滤非有限/负数遗留样本
 - **测试规模** — smoke 104（+4 R1：追加/封顶/退化过滤/version bump 守卫）+ mount 5 + client-mount 7 + visual 6
 
+### 0.10.0 配置点接入（C1）
+
+- **C1 host 配置点** — `installSettingsSection(ctx, 'context-compass', Config, entry, hooks)`（设计定稿 `C1-SETTINGS-DESIGN.md`，实施按 T1→T3）：source-thunk 模式（官方 `dsh-agent-default-model` 同款），投影/工具/命令/overview RPC 四处经 `readConfig` 每次使用读当前值——**thresholds×8 / checks×5 / cost 显示项 live 生效**；`projection.enabled` 经 onChange 重判定（dispose/重注册）live 切换；`validate` 三档阈值单调性写时拒绝；pricing 源 4 字段 restart（schema 文案注明）。**双源治愈**：live 路径默认值全走 schemastery schema，`resolveConfig` 降级为测试/回退路径。peer 新增 `@deepseek-ai/dsh-settings: ^0.1.0-rc.6`（局部升策略）
+- **测试** — smoke +3（validate 单调 / readConfig 双形态 / thunk 换层即时生效）+ mount +1（**真实接线集成**：settings 写入 → 工具判定 live 变化 + validate 拒绝非单调——该测试抓到 `as` 强转压掉 thunk 未调用的真 bug，见 pits 2026-08-26）
+- **测试规模** — smoke 107 + mount 6 + client-mount 7 + visual 6
+
 ### 一览面板周期（0.7.14 → 0.7.17）
 
 - **性能重构（0.7.16/0.7.17）** — 双缓存 + 活动列 + RPC 时延断言；listSessions 缓存 TTL 2.5s→6s（对齐 5s 轮询间隔）→ stale-while-revalidate（过期帧立即返回旧列表 + 后台刷新，任何帧不等慢查询）；contract-check 加冷启动预热重试豁免。实测轮询帧 **≤20ms**（冷启动首帧唯一例外）
@@ -67,12 +73,11 @@
 
 ### 配置点接入（⚠️ 需深入调研与设计）
 
-> `ctx.settings` 插件配置点：Host 注册 settings 命名空间 + Client 在 `settings.plugin.item` 槽注册卡片，设置 UI 直接调参。**C1 调研已完成、设计定稿见 `docs/C1-SETTINGS-DESIGN.md`（待确认后动工）；C2 待 C1 落地后实施。**
+> `ctx.settings` 插件配置点：Host 注册 settings 命名空间 + Client 在 `settings.plugin.item` 槽注册卡片，设置 UI 直接调参。**C1 已交付（0.10.0，设计定稿 `docs/C1-SETTINGS-DESIGN.md`）；C2 待实施。**
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| C1 | **Host 侧接入 `installSettingsSection`**（getter 模式，配置 live 可读 + 消除 V11-1 双源）——**调研完成，设计定稿待确认** | P2 | 配置单一权威 + settings 文档驱动；顺带治愈 resolveConfig 双源 | 设计定稿：`docs/C1-SETTINGS-DESIGN.md`（实测 `ctx.settings` live 已挂载、rc.6 已含 `installSettingsSection` → peer 新增 `^0.1.0-rc.6` 即可；thresholds/checks live，pricing 源字段 restart） |
-| C2 | **Client 配置卡片**（`settings.plugin.item` keyed 自建） | P3 | 设置 UI 直接调参 | C1；场外插件不可复用内置控件（bundle 门禁），需自建表单 + 草稿暂存 + revision 设栅；先调研卡片契约与构建要求 |
+| C2 | **Client 配置卡片**（`settings.plugin.item` keyed 自建） | P3 | 设置 UI 直接调参 | C1 已落地；场外插件不可复用内置控件（bundle 门禁），需自建表单 + 草稿暂存 + revision 设栅（`SettingsConflictError` 兜底）；卡片数据面走既有 `/context-compass-rpc` 转发 `describe({redactSecrets:true})`/`update` |
 
 ### 功能项
 
@@ -98,8 +103,9 @@
 |---|---|
 | ~~0.7.14~~ | 已跳过该排期——0.7.14–0.7.17 实际交付：R2 压缩频率 + S0/S1 稳定性基建 + 一览面板性能重构与排序/排版精修（见「已交付」）|
 | **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选，顺延）——稳定性基建收尾 |
-| **0.9.0** | R1 sparkline（已交付，随本版发）· C1 host 配置点接入（调研定稿后，可落 0.9.x）|
-| **0.10.x** | C2 client 配置卡片 |
+| ~~0.9.0~~ | R1 sparkline（已交付）· C1 调研 + 设计定稿（已交付）|
+| **0.10.0** | **C1 host 配置点接入（已交付，随本版发）**——`installSettingsSection` getter 模式：thresholds/checks live 生效、resolveConfig 双源治愈、validate 三档单调、projection.enabled live 切换；pricing 源 4 字段 restart |
+| **0.11.x** | C2 client 配置卡片 · S4 canary（可选）|
 | **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|
 
 ## 维护规则

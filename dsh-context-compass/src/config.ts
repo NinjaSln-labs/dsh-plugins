@@ -103,9 +103,9 @@ export interface Config {
 }
 
 /** Schemastery schema: documents the shape for the Loader and settings UI.
- *  *** 双源警告 ***：此 schema 的 .default() 值与下方 resolveConfig 的 ?? 回退
- *  必须保持同步——Loader 路径走 schema 归一化，直接调用路径走 resolveConfig；
- *  改一处必须改另一处。 */
+ *  *** 单一权威（C1）***：此 schema 的 .default() 是配置默认值的唯一来源——
+ *  settings 服务路径由它归一化；resolveConfig 的 ?? 回退仅服务无 settings
+ *  回退与测试路径，改默认值时两处仍需同步。 */
 export const Config: z<Config> = z.object({
   thresholds: z.object({
     windowMid: z.number().min(0).max(1).default(0.3),
@@ -150,9 +150,38 @@ export interface ResolvedConfig {
   cost: CostConfig
 }
 
-/** 双源警告：此函数手动维护与上方 Config schema .default() 完全相同的默认值。
- *  Loader 路径走 schema 归一化，直接调用路径（测试/内部）走此处回退；
- *  改一处必须改另一处。 */
+/**
+ * C1 live config source: a resolved snapshot (mount-time closure, the old
+ * shape — tests and the no-settings fallback) or a thunk reading the current
+ * authoritative value (the installSettingsSection wiring). Consumers read
+ * through readConfig() at USE time, so a thunk makes threshold changes live.
+ */
+export type ConfigSource = ResolvedConfig | (() => ResolvedConfig)
+
+/** Read one ConfigSource at use time. */
+export function readConfig(source: ConfigSource): ResolvedConfig {
+  return typeof source === 'function' ? source() : source
+}
+
+/**
+ * C1 cross-field validate (settings hooks.validate): the three capacity tiers
+ * must ascend — a schema cannot express the relation, and a non-monotonic
+ * ladder would make severity ordering silently wrong. Throwing refuses the
+ * write that produced the value (settings-service semantics), so the caller
+ * learns at update time instead of storing a broken ladder.
+ */
+export function validateThresholdLadder(value: ResolvedConfig): void {
+  const t = value.thresholds
+  if (!(t.windowMid < t.windowHigh && t.windowHigh < t.windowCritical)) {
+    throw new Error(
+      `阈值必须单调递增：windowMid(${t.windowMid}) < windowHigh(${t.windowHigh}) < windowCritical(${t.windowCritical})`,
+    )
+  }
+}
+
+/** 双源警告（C1 后语义）：live 路径的默认值由 Config schema（settings 服务）
+ *  归一化——schema 是唯一权威；此函数仅服务「无 settings 服务的回退」与
+ *  纯函数测试路径，其 `??` 回退必须与 schema .default() 保持同步。 */
 export function resolveConfig(config: Config = {}): ResolvedConfig {
   const thresholds: ThresholdsConfig = {
     windowMid: config.thresholds?.windowMid ?? 0.3,

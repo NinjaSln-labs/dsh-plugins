@@ -30,7 +30,7 @@ import type { HealthSeverity, SessionActivity, SessionHealthProjection } from '.
 import type { HealthReport } from './assess.ts'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { assess } from './assess.ts'
-import type { ResolvedConfig } from './config.ts'
+import { readConfig, type ConfigSource } from './config.ts'
 import { formatCompact, formatHitRate } from './util.ts'
 
 /** One session row in the overview panel. */
@@ -518,8 +518,11 @@ export async function handleOverviewRpc(
   req: IncomingMessage,
   res: ServerResponse,
   ctx: Context,
-  config: ResolvedConfig,
+  configSource: ConfigSource,
 ): Promise<void> {
+  // C1: read the live source once per request — thresholds/sorting reflect the
+  // current config without a restart.
+  const config = readConfig(configSource)
   if (req.method !== 'POST') {
     sendJson(res, 405, { ok: false, error: 'POST only' })
     return

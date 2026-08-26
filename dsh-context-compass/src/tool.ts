@@ -9,7 +9,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { ResolvedConfig } from './config.ts'
+import { readConfig, type ConfigSource } from './config.ts'
 import { assess } from './assess.ts'
 import { buildCommandText } from './command.ts'
 
@@ -129,8 +129,8 @@ function renderToolText(value: {
   return parts.filter(Boolean).join('；') + '。如需完整报告可让用户运行 /compass。'
 }
 
-/** Build the model-facing tool (config closed over at mount time). */
-export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDefinition {
+/** Build the model-facing tool (C1: config may be a live source thunk, read at execute time). */
+export function sessionHealthTool(ctx: Context, config: ConfigSource): ToolDefinition {
   return defineTool({
     name: 'context_compass',
     description: '评估当前上下文状态（继续 vs 新开）：真实 token 测量 + 窗口占比 + 切换成本提示。长任务中自查用，只读、无副作用；若建议切换，请把报告交给用户决定。',
@@ -145,7 +145,7 @@ export function sessionHealthTool(ctx: Context, config: ResolvedConfig): ToolDef
       if (session === undefined) {
         throw new Error('无法定位当前会话（context_compass 仅在会话上下文中可用）')
       }
-      const report = await assess(ctx, session, exec.agent?.id, exec.signal, config, {
+      const report = await assess(ctx, session, exec.agent?.id, exec.signal, readConfig(config), {
         docName: args.handoffDoc ?? null,
         checkProcesses: true,
         remainingRounds: args.remainingRounds ?? null,

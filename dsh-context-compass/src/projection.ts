@@ -17,7 +17,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { sessionHealthProjectionSchema } from './schemas.ts'
 import type { HealthSeverity, SessionHealthProjection } from './types.ts'
-import type { ResolvedConfig } from './config.ts'
+import { readConfig, type ConfigSource, type ResolvedConfig } from './config.ts'
 import type { PricePeriod, ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
 
@@ -329,7 +329,7 @@ export function healthView(
 
 /** Build the unit for one registration; the fold functions close over config. */
 export function sessionHealthProjectionDefinition(
-  config: ResolvedConfig,
+  config: ConfigSource,
   pricing?: { get(model?: string): ResolvedPricing },
   modelOf?: () => string,
 ): ProjectionDefinition<'sessionHealth', SessionHealthState> {
@@ -341,7 +341,7 @@ export function sessionHealthProjectionDefinition(
   // def.wire 是否存在——补上即进入所有快照。viewSchema 复用 wire payload
   // schema；view 与旧 view 同源（healthView）——payload 形状不变，stateVersion
   // 无需 bump。
-  const wireView = (state: SessionHealthState) => healthView(state, config, pricing?.get(modelOf?.() ?? ''))
+  const wireView = (state: SessionHealthState) => healthView(state, readConfig(config), pricing?.get(modelOf?.() ?? ''))
   // sessionHealth 不在 harness 核心 SessionProjectionMap → TS 上 wire 为 never，
   // 需整体断言（运行时 register 只看 def.wire 是否存在，与类型无关）。
   // 双契约兼容（S2）：0.1.1+ register 只擦除式保留 wire（wire.view 归一化为
