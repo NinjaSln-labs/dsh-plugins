@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.9.0（R1 占用趋势 sparkline，stateVersion 9）已发布（npm latest）+ profile 已回归干净包；sparkline 浮层目视待下次重启后确认；main 历史曾因 Contributors 污染清理被有意改写（非事故）；下一步 C1 调研或 S4 canary**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.9.0（R1 占用趋势 sparkline，stateVersion 9）已发布（npm latest）+ profile 已回归干净包；sparkline 已重启验证（浮层实测渲染）；main 历史曾因 Contributors 污染清理被有意改写（非事故）；下一步 C1 调研或 S4 canary**
 
 ## 1. 交接元信息
 
@@ -60,7 +60,7 @@
 - [x] push R1 commit + tag `context-compass-v0.9.0`（== HEAD `08f2b9f`）
 - [x] CI npm-publish 审批 → **npm latest 已确认 0.9.0**（2026-08-26）
 - [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿（19ms）
-- [ ] 重启后浮层验证：占用行下出现 sparkline（需 ≥2 次请求采样；badge.spec 无截图断言，目视即可）——**待下次 harness 重启**
+- [x] 重启后浮层验证——✅ 已完成（2026-08-26 15:34 重启加载 0.9.0）：wire 带 pressureHistory（重放重建满环 40 样本）；一次性 Playwright 实测浮层 `.sh-spark` 可见（110×18，aria「占用趋势（最近 40 次请求）」）
 
 ### 3.1.1 已完成——0.8.0 发版（2026-08-25）
 
