@@ -30,7 +30,7 @@ import type { HealthSeverity, SessionActivity, SessionHealthProjection } from '.
 import type { HealthReport } from './assess.ts'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { assess } from './assess.ts'
-import { readConfig, type ConfigSource } from './config.ts'
+import { readConfig, type ConfigSource, type ResolvedConfig } from './config.ts'
 import { formatCompact, formatHitRate } from './util.ts'
 
 /** One session row in the overview panel. */
@@ -178,6 +178,7 @@ export function __resetOverviewCachesForTests(): void {
   listInFlight.clear()
   coldCache.clear()
   coldInFlight.clear()
+  titleCache.clear()
 }
 
 /**
@@ -188,6 +189,22 @@ interface ListRowRec { header: { id: string; createdAt?: number; origin?: string
 let listCache: { rows: ListRowRec[] | null; at: number } = { rows: null, at: 0 }
 const listInFlight = new Map<string, Promise<unknown>>()
 const LIST_TTL_MS = 6_000
+/**
+ * Consecutive empty listSessions results (AUDIT OV-1): a single empty read is
+ * treated as jitter and ignored, but TWO in a row are accepted as a legitimate
+ * "all sessions deleted" — without this the ghost list could never heal.
+ */
+let listEmptyStreak = 0
+/** True when this result may overwrite the cache (non-empty, or 2nd empty in a row). */
+function listResultUsable(r: unknown): boolean {
+  if (!Array.isArray(r)) return false
+  if (r.length > 0) {
+    listEmptyStreak = 0
+    return true
+  }
+  listEmptyStreak += 1
+  return listEmptyStreak >= 2
+}
 
 /**
  * Kick off one background cold load for `id`; on completion the parsed value
@@ -238,7 +255,7 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
   // 实测（2026-08-22，dsh 0.1.1-rc.1）：listSessions 本身 0.3s～11.2s 剧烈波动
   // 且偶尔返回空——它是本 RPC 全部时延的来源（rows 构建仅 ~20ms）。面板 5s 轮询
   // 不需要每帧都打真查询：TTL 内复用上一份列表；并发帧共享同一次在途调用；
-  // 空/异常结果绝不覆盖已有缓存（防止一次抖动把面板清空）。
+  // 单次空/异常不覆盖缓存（防抖动），连续两次空采信清空（自愈幽灵列表）。
   type ListRows = ListRowRec[]
   let records: ListRows
   const fresh = listCache.rows !== null && t0 - listCache.at < LIST_TTL_MS
@@ -252,7 +269,7 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       const bg = (async () => {
         try {
           const r = await sessionQuery.listSessions(bgSignal)
-          if (Array.isArray(r) && r.length > 0) listCache = { rows: r, at: Date.now() }
+          if (listResultUsable(r)) listCache = { rows: r, at: Date.now() }
         } catch { /* 保留旧值 */ }
       })()
       listInFlight.set('list', bg)
@@ -266,8 +283,8 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
       inflight = (async () => {
         try {
           const r = await sessionQuery.listSessions(thisSignal)
-          // 成功且非空才更新缓存；空/异常保留旧值（防一次抖动清空面板）。
-          if (Array.isArray(r) && r.length > 0) listCache = { rows: r, at: Date.now() }
+          // 单次空/异常保留旧值（防一次抖动清空面板）；连续两次空采信清空（AUDIT OV-1）。
+          if (listResultUsable(r)) listCache = { rows: r, at: Date.now() }
           return Array.isArray(r) ? r : []
         } catch {
           return listCache.rows ?? []
@@ -431,8 +448,13 @@ export async function buildOverview(ctx: Context, signal: AbortSignal): Promise<
 /** Loopback-only guard for the RPC route (the panel data stays on the machine). */
 function isLoopback(req: IncomingMessage): boolean {
   const addr = (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress
-  if (addr === undefined) return true
-  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1'
+  // Fail-closed (AUDIT OV-2): an unreadable peer address refuses the request
+  // instead of silently dropping the loopback guard.
+  if (addr !== '127.0.0.1' && addr !== '::1' && addr !== '::ffff:127.0.0.1') return false
+  // Host check (AUDIT OV-3): DNS rebinding (evil.com → 127.0.0.1) sends a
+  // foreign Host header — only loopback hostnames may talk to the RPC.
+  const host = String(req.headers?.host ?? '')
+  return /^(127\.0\.0\.1|\[::1\]|::1|localhost)(:\d+)?$/i.test(host)
 }
 
 function sendJson(res: ServerResponse, status: number, value: unknown): void {
@@ -521,8 +543,15 @@ export async function handleOverviewRpc(
   configSource: ConfigSource,
 ): Promise<void> {
   // C1: read the live source once per request — thresholds/sorting reflect the
-  // current config without a restart.
-  const config = readConfig(configSource)
+  // current config without a restart. (AUDIT C1-5: inside the try so a torn
+  // namespace cannot escape the handler without a 500.)
+  let config: ResolvedConfig
+  try {
+    config = readConfig(configSource)
+  } catch (err) {
+    sendJson(res, 500, { ok: false, error: err instanceof Error ? err.message : String(err) })
+    return
+  }
   if (req.method !== 'POST') {
     sendJson(res, 405, { ok: false, error: 'POST only' })
     return
