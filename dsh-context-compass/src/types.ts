@@ -55,6 +55,14 @@ export interface SessionHealthProjection {
   /** Last request's tokens served from the provider cache. Null before any usage report. */
   cacheReadTokens: number | null
   /**
+   * Recent prompt-side pressure samples (R1 sparkline), oldest first — one
+   * sample per usage report that carried inputTokens, capped to the most
+   * recent PRESSURE_HISTORY_CAP entries. Raw token totals; normalize against
+   * `window` (fallback: the series max) at render time. The client hides the
+   * sparkline under 2 points, so a short series is fine.
+   */
+  pressureHistory: number[]
+  /**
    * Per-round billable-equivalent: uncached input + cacheRead ×
    * cost.cacheHitDiscount (host config). Null before any usage report.
    */
