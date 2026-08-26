@@ -16,6 +16,14 @@ import * as React from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 
+// Side-effect type import: pulls the augmented module into the program so the
+// `declare module` below can merge into its SlotMap interface. Under
+// `skipLibCheck` TS does not chase the .d.ts imports that reference this
+// module (e.g. dsh-client-runtime's slots types), so without this import the
+// augmentation fails with TS2664 "module cannot be found" in a clean install.
+// Type-only -> erased at bundle time; ui-slots stays external at runtime.
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** One plugin's card inside the plugin configuration section (key = settings namespace). */
