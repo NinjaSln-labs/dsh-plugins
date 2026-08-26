@@ -17,7 +17,7 @@
  */
 import { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { Config, resolveConfig, validateThresholdLadder, type Config as ConfigType, type ResolvedConfig } from './config.ts'
+import { Config, resolveConfig, validateConfig, type Config as ConfigType, type ResolvedConfig } from './config.ts'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { sessionHealthProjectionDefinition } from './projection.ts'
 import { healthCommandDefinition } from './command.ts'
@@ -56,11 +56,21 @@ export default {
     // the entry when it goes away. All consumers read through source() at USE
     // time — threshold changes reach the badge on the next push frame.
     let source: () => ResolvedConfig = () => resolveConfig(config)
-    installSettingsSection(ctx, settingsNamespace('context-compass'), Config, config, {
-      setSource: current => { source = () => resolveConfig(current()) },
-      onChange: () => syncProjectionUnit(),
-      validate: value => validateThresholdLadder(resolveConfig(value)),
-    })
+    // AUDIT C1-1: register() fails loudly on an invalid STORED section (the
+    // settings service resolves + validates at registration). When settings is
+    // already mounted at apply time that throw would propagate out of apply
+    // and kill the whole plugin — asymmetric with the runtime publish path's
+    // last-good+warn. Wrap the wiring: on failure we keep the entry fallback
+    // and warn, so a hand-edited settings.yaml can never brick the plugin.
+    try {
+      installSettingsSection(ctx, settingsNamespace('context-compass'), Config, config, {
+        setSource: current => { source = () => resolveConfig(current()) },
+        onChange: () => syncProjectionUnit(),
+        validate: value => validateConfig(resolveConfig(value)),
+      })
+    } catch (err) {
+      console.warn(`[dsh-context-compass] settings section invalid — falling back to entry config: ${err instanceof Error ? err.message : String(err)}`)
+    }
     // Stable reader: setSource REASSIGNS `source`, so consumers must capture
     // this wrapper (not the current thunk) to see later assignments.
     const configSource = (): ResolvedConfig => source()
@@ -88,16 +98,27 @@ export default {
     // projection registry just lose the push path, not the plugin).
     // C1: projection.enabled is a registration-level fact — onChange re-judges
     // it (dispose the unit, or register it) instead of requiring a restart.
+    // AUDIT C1-2: `projectionQueued` guarantees at most one pending inject —
+    // without it, the async mount sequence (settings mounts → onChange while
+    // sessionProjections is still absent) queued two inject children that both
+    // registered on arrival, double-registering the unit and orphaning the
+    // first disposer.
     let projectionDisposer: (() => void) | null = null
+    let projectionQueued = false
     const syncProjectionUnit = (): void => {
       const want = source().projection.enabled
-      if (want && projectionDisposer === null) {
+      if (want && projectionDisposer === null && !projectionQueued) {
+        projectionQueued = true
         ctx.inject(['sessionProjections'], (projectionCtx) => {
-          if (!source().projection.enabled) return // toggled off while the inject child was pending
+          projectionQueued = false
+          // Re-check at arrival: toggled off while pending, or another pending
+          // child already registered (AUDIT C1-2 guard) → do nothing.
+          if (!source().projection.enabled || projectionDisposer !== null) return
           projectionDisposer = projectionCtx.sessionProjections.register(sessionHealthProjectionDefinition(configSource, pricing, modelOf))
         })
-      } else if (!want && projectionDisposer !== null) {
-        projectionDisposer()
+      } else if (!want) {
+        projectionQueued = false
+        projectionDisposer?.()
         projectionDisposer = null
       }
     }

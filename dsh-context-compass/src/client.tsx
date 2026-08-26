@@ -81,7 +81,7 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
 .sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
 /* R1 占用趋势 sparkline：占用行下方的迷你折线（主题色随 severity accent）。 */
-.sh-spark{display:block;width:110px;height:18px;margin:2px 0 4px auto;color:var(--sh-accent,var(--dsw-alias-label-secondary));opacity:.85}
+.sh-spark{display:block;width:110px;height:18px;margin:2px 0 4px auto;color:var(--sh-accent,var(--dsw-alias-label-secondary));opacity:.85;overflow:visible}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
 /* 复制交接摘要（B3）：浮层底部动作行。 */
 .sh-tip-copy-row{margin-top:8px;display:flex}
@@ -470,7 +470,7 @@ function HealthBadge(props: {
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
               role="img"
-              aria-label={`占用趋势（最近 ${hist.length} 次请求）`}
+              aria-label={`占用趋势（最近 ${hist.length} 个采样）`}
             >
               <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
             </svg>

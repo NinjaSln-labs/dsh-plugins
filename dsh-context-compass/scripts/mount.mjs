@@ -139,7 +139,8 @@ try {
   assert.ok(route, '/context-compass-rpc route registered via webServer')
   assert.equal(route.kind, 'exact')
   const res = { status: null, body: null, writeHead: (s) => { res.status = s }, end: (b) => { res.body = b } }
-  const req = { method: 'POST', socket: { remoteAddress: '127.0.0.1' } }
+  // Host header required by the AUDIT OV-3 loopback-Host check.
+  const req = { method: 'POST', socket: { remoteAddress: '127.0.0.1' }, headers: { host: '127.0.0.1:3080' } }
   req[Symbol.asyncIterator] = async function* () { yield JSON.stringify({ method: 'overview' }) }
   await route.handler(req, res)
   assert.equal(res.status, 200)

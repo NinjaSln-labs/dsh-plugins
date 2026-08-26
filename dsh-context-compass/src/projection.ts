@@ -59,6 +59,12 @@ export interface SessionHealthState {
    */
   pressureHistory?: number[]
   /**
+   * (turn, step) of the most recent pressureHistory sample — the R1 dedup key
+   * (a streamed step emits chunk-usage early + message-usage final; the second
+   * arrival replaces instead of appending).
+   */
+  lastSample?: { turn: number; step: number }
+  /**
    * Pressure snapshot captured when `compaction/end` arrived — the "pre"
    * side of the compression-ratio inference. Consumed by the first usage
    * sample after the fold (the "post" side); never set while no pressure is
@@ -124,6 +130,10 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
     // the ratio — no event payload involved.
     if (typeof state.pressureTokens === 'number' && state.pressureTokens > 0) {
       next.preCompactionPressure = state.pressureTokens
+    } else {
+      // 无法捕获 pre（无压力样本）→ 本次推理不可判定；陈旧比例不再冒充
+      // 「上次压缩比例」（AUDIT R1-3）。
+      next.compressionRatio = null
     }
     return next
   }
@@ -142,8 +152,9 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       // 不覆盖已有压力，也不产生 NaN/0 污染。
       if (u === undefined || typeof u.inputTokens !== 'number') return next
       const post = pressureOf(u)
+      const sample = pushSample(state, event.data.turn, event.data.step, post)
       return foldCompression(
-        { ...next, pressureTokens: post, lastUsage: bucketsOf(u), pressureHistory: pushSample(state, post) },
+        { ...next, pressureTokens: post, lastUsage: bucketsOf(u), pressureHistory: sample.history, lastSample: sample.last },
         post,
       )
     }
@@ -152,8 +163,9 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       const u = event.data.chunk.usage
       if (typeof u.inputTokens !== 'number') return state
       const post = pressureOf(u)
+      const sample = pushSample(state, event.data.turn, event.data.step, post)
       return foldCompression(
-        { ...state, pressureTokens: post, lastUsage: bucketsOf(u), pressureHistory: pushSample(state, post) },
+        { ...state, pressureTokens: post, lastUsage: bucketsOf(u), pressureHistory: sample.history, lastSample: sample.last },
         post,
       )
     }
@@ -183,9 +195,30 @@ function countOrZero(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
 }
 
-/** R1 sparkline: append one pressure sample, capped to the most recent CAP entries. */
-function pushSample(state: SessionHealthState, post: number): number[] {
-  return [...(state.pressureHistory ?? []), post].slice(-PRESSURE_HISTORY_CAP)
+/**
+ * R1 sparkline: record one pressure sample, capped to the most recent CAP
+ * entries. Dedup by (turn, step), aligned with token-meter's口径: a streamed
+ * step emits `assistant/chunk(usage)` early and `assistant/message` with the
+ * same step's final usage — the second arrival REPLACES the first instead of
+ * double-writing (AUDIT R1-1).
+ */
+function pushSample(
+  state: SessionHealthState,
+  turn: number,
+  step: number,
+  post: number,
+): { history: number[]; last: { turn: number; step: number } | undefined } {
+  // Only dedup on a real (turn, step) key — synthetic/legacy events without
+  // one must never collapse into the same sample.
+  if (Number.isInteger(turn) && Number.isInteger(step)) {
+    const last = state.lastSample
+    if (last !== undefined && last.turn === turn && last.step === step) {
+      const history = state.pressureHistory ?? []
+      return { history: history.length === 0 ? [post] : [...history.slice(0, -1), post], last }
+    }
+    return { history: [...(state.pressureHistory ?? []), post].slice(-PRESSURE_HISTORY_CAP), last: { turn, step } }
+  }
+  return { history: [...(state.pressureHistory ?? []), post].slice(-PRESSURE_HISTORY_CAP), last: state.lastSample }
 }
 
 /**
@@ -296,7 +329,10 @@ export function healthView(
     case 'blue':
       // The compaction annotation rides every tier (blue/green appended):
       // how much the last fold compressed is useful context at any severity.
-      advice = (proxyHit && ratio !== null && ratio < t.windowMid
+      // proxyHit can promote to blue with ratio === null (no pressure sample
+      // or window unknown) — render the message-count reason then, never a
+      // literal "null%" (AUDIT R1-2).
+      advice = (proxyHit && (ratio === null || ratio < t.windowMid)
         ? `消息量已达 ${messages} 条（代理指标），早期内容可能被压缩——继续但留意，必要时开新会话。`
         : `上下文占用 ${pct}%（中等），继续但留意窗口压力。`) + compacted
       break
@@ -365,7 +401,10 @@ export function sessionHealthProjectionDefinition(
     // v9 (R1): pressureHistory ring added to the fold — old persisted rows
     // are discarded and the full log replay rebuilds the history (the S2
     // suite asserts the discard + schema-valid-view contract).
-    stateVersion: 9,
+    // v10 (AUDIT R1-1): lastSample (turn, step) dedup key + capture-failure
+    // ratio invalidation change fold semantics — old rows discarded, replay
+    // rebuilds both history and dedup state.
+    stateVersion: 10,
   }
   return unit as unknown as ProjectionDefinition<'sessionHealth', SessionHealthState>
 }

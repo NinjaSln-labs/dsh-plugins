@@ -179,6 +179,35 @@ export function validateThresholdLadder(value: ResolvedConfig): void {
   }
 }
 
+/**
+ * C1 hooks.validate — full-config cross-field + finiteness check (AUDIT C1-3).
+ * Schemastery's range check is NaN-blind (`NaN > max` is false), so a
+ * hand-edited YAML (`.nan`/`.inf`, which bypasses the settings-write JSON
+ * shape check) could silently distort the economy/cost verdicts. Every numeric
+ * config field must be finite; ladder monotonicity rides on top.
+ */
+export function validateConfig(value: ResolvedConfig): void {
+  validateThresholdLadder(value)
+  const numeric: Array<[string, number]> = [
+    ['thresholds.windowMid', value.thresholds.windowMid],
+    ['thresholds.windowHigh', value.thresholds.windowHigh],
+    ['thresholds.windowCritical', value.thresholds.windowCritical],
+    ['thresholds.economyTokenFloor', value.thresholds.economyTokenFloor],
+    ['thresholds.economyWindowRatio', value.thresholds.economyWindowRatio],
+    ['thresholds.economyRoundFloor', value.thresholds.economyRoundFloor],
+    ['thresholds.messageCountProxy', value.thresholds.messageCountProxy],
+    ['thresholds.messageCountWindowRatio', value.thresholds.messageCountWindowRatio],
+    ['cost.cacheHitDiscount', value.cost.cacheHitDiscount],
+    ['cost.inputPricePerM', value.cost.inputPricePerM],
+    ['cost.priceRefreshHours', value.cost.priceRefreshHours],
+  ]
+  for (const [path, n] of numeric) {
+    if (!Number.isFinite(n) || n < 0) {
+      throw new Error(`配置 ${path} 必须是非负有限数，收到 ${String(n)}`)
+    }
+  }
+}
+
 /** 双源警告（C1 后语义）：live 路径的默认值由 Config schema（settings 服务）
  *  归一化——schema 是唯一权威；此函数仅服务「无 settings 服务的回退」与
  *  纯函数测试路径，其 `??` 回退必须与 schema .default() 保持同步。 */
