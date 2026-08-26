@@ -1,18 +1,23 @@
 # 发布记录：dsh-subagent-router
 
-**已发布**（GitHub + npm）：`dsh-subagent-router@0.1.1`（latest，git CI 自动发布）。旧名 `dsh-subagent-model-picker`（0.1.0 / 0.1.1）已 deprecate 指向本包。
+**已发布**（GitHub + npm）：`dsh-subagent-router@0.2.0`（latest，git CI 自动发布）。旧名 `dsh-subagent-model-picker`（0.1.0 / 0.1.1）已 deprecate 指向本包。
 
-## 发布状态（2026-08-15 更新）
+## 发布状态（2026-08-27 更新）
 
 | 项 | 状态 |
 |---|---|
-| npm | ✅ `dsh-subagent-router@0.1.1`（latest，CI 自动发布 run completed success）· `0.1.0`（手动首发 bootstrap） |
-| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main，tag `subagent-router-v0.1.1` |
+| npm | ✅ `dsh-subagent-router@0.2.0`（latest，CI 自动发布 run completed success）· `0.1.1` · `0.1.0`（手动首发 bootstrap） |
+| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main，tag `subagent-router-v0.2.0` |
 | 旧包 | ✅ `dsh-subagent-model-picker` 0.1.0/0.1.1 deprecated（Renamed to dsh-subagent-router） |
-| profile | ✅ `~/.dsh/profiles/web` 已装 0.1.1（依赖 `dsh-subagent-router@^0.1.0`，pnpm update） |
-| 发布管道 | ✅ tag → 版本守卫 → 验证链 → 人工审批 → publish（0.1.1 首次跑通） |
+| profile | `~/.dsh/profiles/web` 仍为 `file:/mnt/e/...` 本地链接（发版后可选切回 npm `^0.2.0`，见 HANDOFF §3.1） |
+| 发布管道 | ✅ tag → 版本守卫 → 验证链 → 人工审批 → publish（0.1.1 首次跑通；0.2.0 第二次） |
 
 ## 版本历史
+
+- **0.2.0** — **健康感知 + 配置化 + 设置页 UI**（HANDOFF 会话三大功能块）：
+  - 内容：失败分类脱敏透传、死锚检测（RouteHealthStore）、终态换路（autoReroute）、升级参数化（autoEscalationTiers）、目录健康标注、模型路由优先级配置化四层（autoProviderOrder/autoTierPolicy/autoTierPicks/autoCeiling）、设置页配置 UI（host+client 化，settings 命名空间 + 插件卡片）
+  - 发布前置修复（`500933b`，接手会话）：client build 干净安装缺陷——`@deepseek-ai/dsh-client-ui-slots` module augmentation 在全新 `npm install` 下 TS2664/TS2345（`skipLibCheck` 不加载 .d.ts 传递 import）；修复 = devDependencies 精确 pin `0.1.0-rc.6`（与 runtime peer 解析副本一致，caret 会漂移致 SlotMap 双副本）+ client.tsx 副作用 `import type {}`。详见 HANDOFF §4 坑 9
+  - 验证：strict typecheck + 66/66 vitest + build 全绿；CI 等价（fresh `npm install`）模拟通过后推 tag → GitHub 审批 → publish
 
 - **0.1.1** — **git 自动发布管道首次跑通**：
   - 发布流程：`npm version patch --no-git-tag-version`（工作树脏时 npm 的自动 commit/tag 会被跳过）→ 手动 commit + 打 `subagent-router-v0.1.1` tag → push → GitHub 审批（environment `npm-publish`）→ CI publish
