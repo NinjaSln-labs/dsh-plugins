@@ -36,6 +36,13 @@ export function compactIntervalRounds(turns: number, compactions: number): numbe
   return rounded < 1 ? 1 : rounded
 }
 
+/**
+ * R1 sparkline: how many recent pressure samples the fold keeps. One sample
+ * per usage report that carried inputTokens (≈ one model request); 40 covers
+ * a long session's recent trend without growing the persisted state unboundedly.
+ */
+export const PRESSURE_HISTORY_CAP = 40
+
 /** Fold state (plain JSON per the unit contract — persisted-cache precondition). */
 export interface SessionHealthState {
   turns: number
@@ -45,6 +52,12 @@ export interface SessionHealthState {
   compactions: number
   pressureTokens?: number
   contextWindow?: number
+  /**
+   * R1 sparkline source: the last ≤ PRESSURE_HISTORY_CAP prompt-side pressure
+   * samples, oldest first. Appended on the same usage reports that update
+   * `pressureTokens`; a plain array (JSON contract) capped with slice.
+   */
+  pressureHistory?: number[]
   /**
    * Pressure snapshot captured when `compaction/end` arrived — the "pre"
    * side of the compression-ratio inference. Consumed by the first usage
@@ -130,7 +143,7 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       if (u === undefined || typeof u.inputTokens !== 'number') return next
       const post = pressureOf(u)
       return foldCompression(
-        { ...next, pressureTokens: post, lastUsage: bucketsOf(u) },
+        { ...next, pressureTokens: post, lastUsage: bucketsOf(u), pressureHistory: pushSample(state, post) },
         post,
       )
     }
@@ -140,7 +153,7 @@ export function applyHealthEvent(state: SessionHealthState, event: SessionEvent)
       if (typeof u.inputTokens !== 'number') return state
       const post = pressureOf(u)
       return foldCompression(
-        { ...state, pressureTokens: post, lastUsage: bucketsOf(u) },
+        { ...state, pressureTokens: post, lastUsage: bucketsOf(u), pressureHistory: pushSample(state, post) },
         post,
       )
     }
@@ -168,6 +181,11 @@ function finiteNonNeg(v: unknown): number | null {
 /** Non-negative safe integer for the wire count fields (null/NaN → 0). */
 function countOrZero(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
+}
+
+/** R1 sparkline: append one pressure sample, capped to the most recent CAP entries. */
+function pushSample(state: SessionHealthState, post: number): number[] {
+  return [...(state.pressureHistory ?? []), post].slice(-PRESSURE_HISTORY_CAP)
 }
 
 /**
@@ -299,6 +317,9 @@ export function healthView(
     compressionRatio,
     uncachedInputTokens,
     cacheReadTokens,
+    // R1 sparkline: coerce at the wire boundary (S2 discipline) — drop
+    // non-finite / negative legacy samples, keep insertion order.
+    pressureHistory: (state.pressureHistory ?? []).filter(s => finiteNonNeg(s) !== null),
     effectivePerRound,
     effectivePerRoundUsd,
     effectivePerRoundCny,
@@ -341,7 +362,10 @@ export function sessionHealthProjectionDefinition(
     // algorithm location shared with the input-bar stats line).
     // v8: compression-ratio inference added (preCompactionPressure +
     // compressionRatio fold fields, wire field compressionRatio).
-    stateVersion: 8,
+    // v9 (R1): pressureHistory ring added to the fold — old persisted rows
+    // are discarded and the full log replay rebuilds the history (the S2
+    // suite asserts the discard + schema-valid-view contract).
+    stateVersion: 9,
   }
   return unit as unknown as ProjectionDefinition<'sessionHealth', SessionHealthState>
 }

@@ -80,6 +80,8 @@ body[data-ds-dark-theme] .sh-sev-red{--sh-accent:color-mix(in srgb,var(--dsw-ali
 .sh-cost-toggle:focus-visible{outline:2px solid var(--dsw-alias-state-primary);outline-offset:1px}
 .sh-bar{flex:1;height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;max-width:110px}
 .sh-bar-fill{height:100%;border-radius:3px;display:block;background:var(--sh-accent,var(--dsw-alias-label-secondary))}
+/* R1 占用趋势 sparkline：占用行下方的迷你折线（主题色随 severity accent）。 */
+.sh-spark{display:block;width:110px;height:18px;margin:2px 0 4px auto;color:var(--sh-accent,var(--dsw-alias-label-secondary));opacity:.85}
 .sh-tip-hint{margin-top:8px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-tertiary);font-size:11px}
 /* 复制交接摘要（B3）：浮层底部动作行。 */
 .sh-tip-copy-row{margin-top:8px;display:flex}
@@ -450,6 +452,30 @@ function HealthBadge(props: {
           {bar}
           <span className="sh-v">{pct !== null ? `${pct}%` : '未知'}</span>
         </div>
+        {(() => {
+          // R1 占用趋势 sparkline：投影的 pressureHistory（≤40 个压力采样，
+          // 每次带 inputTokens 的 usage 报告一个）。归一口径：优先除以当前
+          // 窗口（趋势即逼近满窗），窗口未知时除以序列峰值（只看形状）。
+          // 少于 2 个点不成趋势，隐藏。
+          const hist = proj?.pressureHistory ?? []
+          if (hist.length < 2) return null
+          const win = merged.window ?? proj?.window ?? null
+          const denom = win !== null && win > 0 ? win : Math.max(...hist, 1)
+          const pts = hist
+            .map((v, i) => `${((i / (hist.length - 1)) * 100).toFixed(1)},${(100 - (Math.min(v / denom, 1) * 100)).toFixed(1)}`)
+            .join(' ')
+          return (
+            <svg
+              className="sh-spark"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label={`占用趋势（最近 ${hist.length} 次请求）`}
+            >
+              <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            </svg>
+          )
+        })()}
         <div className="sh-tip-row">
           <span className="sh-k">每轮输入</span>
           <span className="sh-v">约 {compact(merged.total)} token{(() => { const rate = cacheHitRateOf(usage); return rate !== null ? `（缓存命中 ${formatHitRate(rate)}）` : '' })()}</span>

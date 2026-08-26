@@ -42,6 +42,11 @@
 - **S3 配置生效冒烟** — 每个可调 config 字段的「改动 → 可观测行为变化」断言：8 个 thresholds（severity 边界/经济门槛窗口缩放/消息代理缩放/A3 升级门槛）+ 5 个 checks 开关（git/handoff/handoff.paths/sessionResume/knowledge/processes）+ cost（cacheHitDiscount/inputPricePerM/priceSource/priceUrl/priceFallbackUrl/priceRefreshHours 刷新周期捕获）+ projection.enabled 接线开关（mount：禁用后投影单元不注册）
 - **测试规模** — 100 项 → smoke 100（+11）+ mount 5（+1）+ client-mount 7 + visual 6
 
+### 0.9.0 占用趋势
+
+- **R1 占用趋势 sparkline** — 投影加 `pressureHistory` 环形采样（每次带 inputTokens 的 usage 报告一个样本，封顶最近 40 个；stateVersion 8→9：旧行丢弃全量重放重建趋势，S2 套件兜底）；浮层「上下文占用」行下方 SVG 迷你折线（归一口径：优先除以当前窗口=逼近满窗趋势，窗口未知除以序列峰值只看形状；少于 2 点隐藏；主题色随 severity accent）；view 边界过滤非有限/负数遗留样本
+- **测试规模** — smoke 104（+4 R1：追加/封顶/退化过滤/version bump 守卫）+ mount 5 + client-mount 7 + visual 6
+
 ### 一览面板周期（0.7.14 → 0.7.17）
 
 - **性能重构（0.7.16/0.7.17）** — 双缓存 + 活动列 + RPC 时延断言；listSessions 缓存 TTL 2.5s→6s（对齐 5s 轮询间隔）→ stale-while-revalidate（过期帧立即返回旧列表 + 后台刷新，任何帧不等慢查询）；contract-check 加冷启动预热重试豁免。实测轮询帧 **≤20ms**（冷启动首帧唯一例外）
@@ -71,9 +76,10 @@
 
 ### 功能项
 
+> R1 已交付（0.9.0），见「已交付」。
+
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| R1 | **占用趋势 sparkline**（浮层「上下文占用」行下方） | P1 | 竞品空白；一眼看出稳步上升 vs 压缩后回落 | 投影加 `pressureHistory`（stateVersion 8→9，**S2 兼容测试已就绪**）+ 客户端 SVG/CSS 渲染 |
 | R3 | **定价同步自动化（C4）** | P2 | `pricing/deepseek.json` 手动同步 → CI 定时对比官方、变更开 PR | GitHub Actions 定时 job |
 | R4 | **session-health 技能阈值回写（D1）** | P2 | 插件阈值与技能默认参数已分叉，需对齐 | 技能侧配合 |
 | R5 | **轮次语义细化（A5）** | P3 | 区分多工具调用的回合：「轮次 X / 步数 Y」 | 投影加 step 计数 |
@@ -92,7 +98,7 @@
 |---|---|
 | ~~0.7.14~~ | 已跳过该排期——0.7.14–0.7.17 实际交付：R2 压缩频率 + S0/S1 稳定性基建 + 一览面板性能重构与排序/排版精修（见「已交付」）|
 | **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选，顺延）——稳定性基建收尾 |
-| **0.9.0** | R1 sparkline（S2 就绪后）· C1 host 配置点接入（调研定稿后）|
+| **0.9.0** | R1 sparkline（已交付，随本版发）· C1 host 配置点接入（调研定稿后，可落 0.9.x）|
 | **0.10.x** | C2 client 配置卡片 |
 | **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|
 

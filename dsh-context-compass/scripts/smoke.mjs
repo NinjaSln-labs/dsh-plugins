@@ -1531,6 +1531,7 @@ function assertWireSafe(view, label) {
   for (const k of ['turns', 'userMessages', 'assistantMessages', 'compactions']) {
     assert.ok(Number.isInteger(view[k]) && view[k] >= 0, `${label}: ${k} = ${view[k]}`)
   }
+  assert.ok(Array.isArray(view.pressureHistory) && view.pressureHistory.every(Number.isFinite), `${label}: pressureHistory = ${JSON.stringify(view.pressureHistory)}`)
   assert.ok(view.pricePeriod === null || view.pricePeriod === 'peak' || view.pricePeriod === 'offpeak', `${label}: pricePeriod`)
   sessionHealthProjectionSchema.parse(view) // strict schema — 任何漂移在此抛错
 }
@@ -1611,9 +1612,50 @@ await check('S2: wire payload 键集合稳定（bump stateVersion 前的漂移�
   const view = healthView({ turns: 1, userMessages: 1, assistantMessages: 1, compactions: 0, pressureTokens: 100_000, contextWindow: 1_000_000 }, config)
   assert.deepEqual(Object.keys(view).sort(), [
     'advice', 'assistantMessages', 'cacheReadTokens', 'compactions', 'compressionRatio',
-    'effectivePerRound', 'effectivePerRoundCny', 'effectivePerRoundUsd', 'pricePeriod',
+    'effectivePerRound', 'effectivePerRoundCny', 'effectivePerRoundUsd',
+    'pressureHistory', 'pricePeriod',
     'ratio', 'severity', 'total', 'turns', 'uncachedInputTokens', 'userMessages', 'window',
   ])
+})
+
+/* ---------- R1: 占用趋势 sparkline（ROADMAP 0.9.0，stateVersion 9） ---------- */
+
+await check('R1: pressureHistory 随 usage 报告追加（旧→新），缺 inputTokens 的报告不追加', () => {
+  let s = sessionHealthProjectionDefinition(config).init()
+  s = applyHealthEvent(s, { type: 'assistant/message', data: { usage: { inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0 } } })
+  s = applyHealthEvent(s, { type: 'user/message', data: {} }) // 非采样事件
+  s = applyHealthEvent(s, { type: 'assistant/message', data: {} }) // 缺 usage → 不追加
+  s = applyHealthEvent(s, { type: 'assistant/message', data: { usage: { inputTokens: 300, cacheReadTokens: 50, cacheWriteTokens: 0 } } })
+  s = applyHealthEvent(s, { type: 'assistant/chunk', data: { chunk: { type: 'usage', usage: { inputTokens: 600, cacheReadTokens: 0, cacheWriteTokens: 0 } } } })
+  assert.deepEqual(s.pressureHistory, [100, 350, 600])
+  // compaction/end 不采样（压缩前压力快照走 preCompactionPressure，不进趋势）。
+  s = applyHealthEvent(s, { type: 'compaction/end' })
+  assert.deepEqual(s.pressureHistory, [100, 350, 600])
+  const view = healthView(s, config)
+  assert.deepEqual(view.pressureHistory, [100, 350, 600])
+})
+
+await check('R1: 采样环形封顶——超过 40 个只留最近 40 个（旧端淘汰）', () => {
+  let s = sessionHealthProjectionDefinition(config).init()
+  for (let i = 1; i <= 45; i++) {
+    s = applyHealthEvent(s, { type: 'assistant/message', data: { usage: { inputTokens: i * 1000, cacheReadTokens: 0, cacheWriteTokens: 0 } } })
+  }
+  assert.equal(s.pressureHistory.length, 40)
+  assert.equal(s.pressureHistory[0], 6000) // 前 5 个被淘汰（45-40+1）
+  assert.equal(s.pressureHistory[39], 45000)
+})
+
+await check('R1: 退化 state 的 history 在 view 边界过滤（非有限/负数丢弃，序保持）', () => {
+  const view = healthView({ turns: 1, userMessages: 0, assistantMessages: 0, compactions: 0, pressureHistory: [100, NaN, -5, Infinity, 300, 'x', null] }, config)
+  assert.deepEqual(view.pressureHistory, [100, 300])
+  assertWireSafe(view, 'r1-degenerate')
+  // 无 history 字段（v8 旧 state）→ 空数组（strict schema 必须有该键）。
+  assert.deepEqual(healthView({ turns: 1, userMessages: 0, assistantMessages: 0, compactions: 0 }, config).pressureHistory, [])
+})
+
+await check('R1: stateVersion 已 bump 至 9（旧持久化行丢弃、全量重放重建趋势）', () => {
+  const def = sessionHealthProjectionDefinition(config)
+  assert.equal(def.stateVersion, 9)
 })
 
 /* ---------- S3: 配置生效冒烟（ROADMAP 0.8.0） ---------- */
