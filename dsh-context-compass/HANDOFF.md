@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入）已发布 + 重启加载 + live 生效实测通过（settings.yaml 写 windowMid → 6 会话判定即时翻转，撤销即恢复）；下一步 C2 卡片或 S4 canary**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入）已发布 + 重启加载 + live 生效实测通过（settings.yaml 写 windowMid → 6 会话判定即时翻转，撤销即恢复）；下一步 C2 卡片**
 
 ## 1. 交接元信息
 
@@ -48,6 +48,7 @@
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
+- S4 canary 发布通道：publish.yml prerelease → `--tag next`（不动 latest）+ 新增 canary-promote.yml（workflow_dispatch 晋级 latest，同审批门）；流程文档入 PUBLISHING.md
 - C1 配置点接入：installSettingsSection + source thunk（投影/工具/命令/RPC getter 化，thresholds/checks live）+ validate 三档单调 + projection.enabled live 切换 + peer `@deepseek-ai/dsh-settings ^0.1.0-rc.6`；接线 bug（`as` 强转压掉 thunk 未调用 → settings 写入静默无效）被 mount 集成测试抓到已修，见 pits 2026-08-26
 - commit-msg hook CRLF 根因修复（PowerShell 安装产物，非 noexec）+ 入库 LF 版
 - `08f2b9f` release v0.9.0（R1 占用趋势 sparkline；tag == HEAD 已核对）

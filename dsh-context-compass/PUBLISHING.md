@@ -114,6 +114,16 @@ dsh plugin add dsh-context-compass
                                                #   （environment npm-publish, required reviewers）
                                                #   → npm publish
   ```
+  **S4 canary 灰度通道**（先灰度再全量，2026-08-26 上线）：
+  ```sh
+  # ① 发 canary：版本号带 prerelease 后缀（publish.yml 自动发到 dist-tag next，不动 latest）
+  npm version prerelease --preid=next -m "chore: canary v%s"
+  git push && git push --tags                # CI 验证链同稳定版 → npm publish --tag next
+  # ② 本地实测：~/.dsh/profiles/web 手动改版本 → pnpm install → 重启 dsh → 跑验证清单
+  # ③ 实测通过 → 晋级 latest：GitHub Actions → canary-promote → Run workflow →
+  #    输入完整版本号（如 0.10.1-next.0）——走同一 npm-publish 审批门；
+  #    workflow 会拒绝晋级非 prerelease 版本（stable 发布时已是 latest）
+  ```
   应急手动发布（CI 不可用时）：`npm run build && npm run smoke && npm run mount && node scripts/client-mount.mjs && npm publish --access public`（本机 npm 登录态）
 - **一次性配置（CI 首次使用前）**：npm granular access token（仅授权 `dsh-context-compass` 包）→ GitHub secrets `NPM_TOKEN`；GitHub Environments 建 `npm-publish` 并设 Required reviewers（自己）——**token 绝不进聊天/对话**
 - **安全**：token 存 GitHub secrets；怀疑泄露时 secrets 一键轮换；workflow 权限最小化（contents: read，token 仅注入 publish 步骤）
