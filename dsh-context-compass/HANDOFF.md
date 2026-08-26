@@ -1,11 +1,11 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.8.0 周期：S2 stateVersion 兼容测试 + S3 配置生效冒烟已交付（门禁 7 步全绿，顺带修 healthView 透传真 bug + 投影双契约兼容）；待发版 0.8.0**
+> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.8.0 已发布（npm latest）：S2 stateVersion 兼容测试 + S3 配置生效冒烟交付（顺带修 healthView 透传真 bug + 投影双契约兼容）；profile 已回归干净包，待重启后跑 §3.2；下一步 R1 sparkline（S2 已就绪）或 C1 调研**
 
 ## 1. 交接元信息
 
-- **日期**：2026-08-25（0.7.17 发版 + 0.8.0 稳定性基建收尾）
-- **插件包**：`dsh-context-compass@0.7.17`（npm latest；**0.8.0 待发**），npm 用户名 `ninjasln`
+- **日期**：2026-08-25（0.7.17 发版 + 0.8.0 稳定性基建收尾并发版）
+- **插件包**：`dsh-context-compass@0.8.0`（npm latest），npm 用户名 `ninjasln`
 - **交接原因**：会话切换
 - **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.7.11.md`
 - **接收方建议**：
@@ -20,10 +20,10 @@
 | 域 | 状态 |
 |---|---|
 | git 仓库 | `NinjaSln-labs/dsh-plugins`，`main` 分支 |
-| origin 对齐 | 见 §2.4（0.8.0 周期 commit 待推送/待发版） |
-| npm latest | **0.7.17**（tag `context-compass-v0.7.17`，commit `822e122`） |
-| HEAD | 领先 npm（S2+S3 commit，等 0.8.0 发版） |
-| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.7.17** 已加载（harness 19:14 重启生效，§3.2 验证全过） |
+| origin 对齐 | **已对齐**（HEAD == tag `context-compass-v0.8.0`） |
+| npm latest | **0.8.0**（tag `context-compass-v0.8.0`，commit `b73b47d`） |
+| HEAD | `b73b47d`（== tag，发布前已核对） |
+| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.8.0** 已装入（bundles 6+1 条目完整；**待 harness 重启生效**，重启后跑 §3.2） |
 | harness | 全局 dsh `0.1.1-rc.2`（公测阶段，版本变化快）；**注意**：本机文件系统映射已变为 `/mnt/e/ninjasin-labs/...`（原 `/Users/sin/...` 挂载失效，node_modules 已重装） |
 | 发布管道 | `.github/workflows/publish.yml`——tag `context-compass-v*` → 验证链（含 contract 时延断言）→ `npm-publish` 审批 |
 
@@ -48,8 +48,8 @@
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
-- S2 stateVersion 向后兼容测试（退化矩阵 + 真实 registry 集成 + wire 键集合守卫）——顺带修 healthView 透传真 bug（旧 JSON state 冷加载 schema.parse 崩）+ 投影双契约兼容（顶层 view + wire）
-- S3 配置生效冒烟（thresholds×8 / checks×5 / cost×6 / projection.enabled，每字段「改动→可观测」）
+- `b73b47d` release v0.8.0
+- `509ce94` S2 stateVersion 向后兼容测试 + S3 配置生效冒烟（修 healthView 透传真 bug + 投影双契约兼容）
 - `ecd10b4` 文档对齐 0.7.17（ROADMAP 基准 + 根/插件 README 排序与 SWR 口径，中英同步）
 - `e431e7b` HANDOFF §3.2 重启验证清单全过
 - `d25fabf` HANDOFF 回填（0.7.17 发布 + ui-slots 坑迁归档）
@@ -59,12 +59,12 @@
 
 ## 3. 下一步与验证点
 
-### 3.1 待发版（0.8.0）
+### 3.1 待发版（0.8.0）——✅ 已完成（2026-08-25）
 
-- [ ] push S2/S3 commit（`git push origin main`）
-- [ ] `npm version minor --no-git-tag-version` → tag `context-compass-v0.8.0`（核对 == HEAD）→ push → CI 审批发布
-- [ ] 发布后 profile 回归干净包：手动编辑 `~/.dsh/profiles/web/package.json` 版本号 + `pnpm install` + 核对 bundles
-- [ ] 重启后跑 §3.2 清单（S2/S3 是纯测试 + 防御收口，行为应无可见变化；重点看 badge/面板照常）
+- [x] push S2/S3 commit
+- [x] `npm version minor --no-git-tag-version` → tag `context-compass-v0.8.0`（== HEAD `b73b47d`）→ push → CI 审批发布（npm latest 已确认 0.8.0）
+- [x] 发布后 profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对（6 原有条目完整 + 另一会话新增 dsh-session-slm-router）
+- [ ] **重启后跑 §3.2 清单**（S2/S3 是纯测试 + 防御收口，行为应无可见变化；重点看 badge/面板照常）
 
 ### 3.2 重启验证清单（0.7.17）——✅ 已完成（2026-08-25 晚）
 
