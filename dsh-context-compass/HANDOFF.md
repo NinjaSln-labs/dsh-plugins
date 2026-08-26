@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.9.0（R1 占用趋势 sparkline，stateVersion 9）已发布（npm latest）+ profile 已回归干净包；sparkline 浮层目视待下次重启后确认；⚠️ 仓库有并行会话且 main 历史曾被改写；下一步 C1 调研或 S4 canary**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.9.0（R1 占用趋势 sparkline，stateVersion 9）已发布（npm latest）+ profile 已回归干净包；sparkline 浮层目视待下次重启后确认；main 历史曾因 Contributors 污染清理被有意改写（非事故）；下一步 C1 调研或 S4 canary**
 
 ## 1. 交接元信息
 
@@ -50,7 +50,7 @@
 
 - `08f2b9f` release v0.9.0（R1 占用趋势 sparkline；tag == HEAD 已核对）
 - `cd559bd` R1：pressureHistory 环形采样（stateVersion 9）+ 浮层 SVG 折线 + smoke +4
-- ⚠️ 0.8.0 周期 commit 因并行会话改写历史，哈希已变（内容不变，npm 0.8.0 包正常）：release 现为 `3459038`、S2/S3 现为 `e7edb68`
+- ℹ️ 0.8.0 周期 commit 哈希已变（内容不变，npm 0.8.0 包正常：release 现为 `3459038`、S2/S3 现为 `e7edb68`）——**有意操作**：Contributors 被 cursoragent 污染，另一会话做了历史清理（剥离 attribution trailer + `.githooks/commit-msg` hook + contributors cache 刷新）；非并行冲突
 - 更早（0.7.x 周期）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
 
 ## 3. 下一步与验证点
