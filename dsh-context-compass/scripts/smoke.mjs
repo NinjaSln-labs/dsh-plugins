@@ -16,7 +16,7 @@ import { cacheHitRateOf } from '../lib/usage.js'
 import { assess } from '../lib/assess.js'
 import { healthCommandDefinition, buildCommandText } from '../lib/command.js'
 import { sessionHealthTool } from '../lib/tool.js'
-import { resolveConfig } from '../lib/config.js'
+import { resolveConfig, validateThresholdLadder, readConfig } from '../lib/config.js'
 import { PriceCache, periodAt, staticPricing, startPricingRefresh } from '../lib/pricing.js'
 import { formatCompact, formatUsd, formatCny, formatHitRate } from '../lib/util.js'
 import { buildOverview, sortOverviewRows, rankOf, clearTitleCache, handleOverviewRpc, buildHandoffSummary, __resetOverviewCachesForTests } from '../lib/overview.js'
@@ -1777,6 +1777,41 @@ await check('S3: cost.priceSource=static 不刷新；auto 按 priceUrl/priceFall
   assert.equal(refreshAnyCalls.length, 1)
   assert.deepEqual(refreshAnyCalls[0], ['https://a.test/p.json', 'https://b.test/p.json'])
   assert.equal(capturedDelay, 7 * 3_600_000) // priceRefreshHours → 刷新周期
+})
+
+/* ---------- C1: settings 配置点（docs/C1-SETTINGS-DESIGN.md） ---------- */
+
+await check('C1: validateThresholdLadder——三档单调通过，非单调拒绝', () => {
+  validateThresholdLadder(resolveConfig({})) // 默认 0.3/0.5/0.8：通过
+  assert.throws(
+    () => validateThresholdLadder(resolveConfig({ thresholds: { windowMid: 0.5, windowHigh: 0.5, windowCritical: 0.8 } })),
+    /单调递增/,
+  )
+  assert.throws(
+    () => validateThresholdLadder(resolveConfig({ thresholds: { windowMid: 0.1, windowHigh: 0.9, windowCritical: 0.5 } })),
+    /单调递增/,
+  )
+})
+
+await check('C1: readConfig——快照与 thunk 两种形态都读到值', () => {
+  assert.equal(readConfig(config), config)
+  let inner = config
+  const thunk = () => inner
+  assert.equal(readConfig(thunk), config)
+  inner = resolveConfig({ thresholds: { windowCritical: 0.95 } })
+  assert.equal(readConfig(thunk).thresholds.windowCritical, 0.95) // 换内层 → 读到新值
+})
+
+await check('C1: 工具经 source thunk 读配置——换 thunk 内层，行为即时变化（无需重挂）', async () => {
+  let cfg = config
+  const liveTool = sessionHealthTool(ctx, () => cfg)
+  const run = () => liveTool.execute({ reason: '自检', remainingRounds: 5 }, { agent: { id: 'agent-1', session }, signal })
+  const before = await run()
+  assert.equal(before.severity, 'yellow') // 基线：经济命中（300K/1M）→ 黄
+  // 切内层：经济门槛抬到 400K → 300K 不再命中 → 蓝（A3 升级也随之消失）
+  cfg = resolveConfig({ thresholds: { economyTokenFloor: 400_000 } })
+  const after = await run()
+  assert.equal(after.severity, 'blue')
 })
 
 if (failures > 0) {

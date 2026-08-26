@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.9.0（R1 占用趋势 sparkline，stateVersion 9）已发布（npm latest）+ profile 已回归干净包；sparkline 已重启验证（浮层实测渲染）；main 历史曾因 Contributors 污染清理被有意改写（非事故）；下一步 C1 调研或 S4 canary**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入：settings live 生效 + 双源治愈）已推送待 CI 审批；0.9.0 sparkline 已重启验证；接线 bug（as 强转压掉 thunk 未调用）已修并入 pits；下一步 C2 卡片或 S4 canary**
 
 ## 1. 交接元信息
 
@@ -48,6 +48,8 @@
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
+- C1 配置点接入：installSettingsSection + source thunk（投影/工具/命令/RPC getter 化，thresholds/checks live）+ validate 三档单调 + projection.enabled live 切换 + peer `@deepseek-ai/dsh-settings ^0.1.0-rc.6`；接线 bug（`as` 强转压掉 thunk 未调用 → settings 写入静默无效）被 mount 集成测试抓到已修，见 pits 2026-08-26
+- commit-msg hook CRLF 根因修复（PowerShell 安装产物，非 noexec）+ 入库 LF 版
 - `08f2b9f` release v0.9.0（R1 占用趋势 sparkline；tag == HEAD 已核对）
 - `cd559bd` R1：pressureHistory 环形采样（stateVersion 9）+ 浮层 SVG 折线 + smoke +4
 - ℹ️ 0.8.0 周期 commit 哈希已变（内容不变，npm 0.8.0 包正常：release 现为 `3459038`、S2/S3 现为 `e7edb68`）——**有意操作**：Contributors 被 cursoragent 污染，另一会话做了历史清理（剥离 attribution trailer + `.githooks/commit-msg` hook + contributors cache 刷新）；非并行冲突
@@ -55,7 +57,14 @@
 
 ## 3. 下一步与验证点
 
-### 3.1 待发版（0.9.0）——推送完成，待 CI 审批
+### 3.1 待发版（0.10.0）——推送完成，待 CI 审批
+
+- [x] push C1 commit（设计定稿 `docs/C1-SETTINGS-DESIGN.md` 经用户确认后实施）
+- [ ] **CI npm-publish 审批** → npm latest 确认 0.10.0
+- [ ] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对
+- [ ] 重启后 settings 验证：设置 UI 出现 context-compass 命名空间（C2 卡片未做前经 describe 可查）；改 threshold 看 badge 下一帧变化
+
+### 3.1.1 已完成——0.9.0 发版（2026-08-26）
 
 - [x] push R1 commit + tag `context-compass-v0.9.0`（== HEAD `08f2b9f`）
 - [x] CI npm-publish 审批 → **npm latest 已确认 0.9.0**（2026-08-26）

@@ -45,6 +45,8 @@
 
 ## 配置
 
+**live 生效（v0.10.0）**：插件注册 settings 命名空间 `context-compass`——宿主设置体系（`ctx.settings`）挂载时，`thresholds` / `checks` / `cost` 显示项改动**即时生效**（badge 下一帧、下次 /compass 即用新值），无需重启；`projection.enabled` 切换亦 live。仅 `cost.priceSource / priceUrl / priceFallbackUrl / priceRefreshHours` 四项（价格刷新 wiring）需重启。无 settings 服务的部署回退组合入口配置，行为不变。
+
 ```ts
 // thresholds: 判定模型参数
 thresholds: {

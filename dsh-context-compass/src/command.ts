@@ -8,7 +8,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
-import type { ResolvedConfig } from './config.ts'
+import { readConfig, type ConfigSource } from './config.ts'
 import { assess, type HealthReport } from './assess.ts'
 import { buildSnapshotText } from './knowledge.ts'
 import { PERIOD_LABEL, formatCny, formatCompact, formatHitRate, formatUsd } from './util.ts'
@@ -100,13 +100,14 @@ export function buildCommandText(report: HealthReport, opts: { minimal: boolean 
   return lines.join('\n')
 }
 
-/** Build the command definition (config closed over at mount time). */
-export function healthCommandDefinition(ctx: Context, config: ResolvedConfig): CommandDefinition {
+/** Build the command definition (C1: config may be a live source thunk, read at handler time). */
+export function healthCommandDefinition(ctx: Context, configSource: ConfigSource): CommandDefinition {
   return {
     name: 'compass',
     description: '评估当前上下文状态（继续 vs 新开）。参数：minimal / no-git / no-handoff / doc=<交接文档文件名> / remaining=<预计剩余轮数> / processes',
     input: { hint: 'minimal | no-git | no-handoff | doc=<文件名> | remaining=<轮数> | processes' },
     handler: async (invocation) => {
+      const config = readConfig(configSource)
       const session = invocation.agent.session
       if (session === undefined) return { kind: 'error', text: '无法定位当前会话。' }
 
