@@ -204,3 +204,37 @@ p95 ≈ 0；未命中查询仍是实时扩展的原始成本。
   目标从"更强"改为"**更快**"（第三方路由 TTFT 实测），从根上解决降级。
 - 回顾：p95/降级门禁连续 3 次记录 FAIL——流程层面建议把门禁口径修订（生产缓存口径）
   或网络条件声明为环境变量，列入后续决策项（第 5 步）。
+
+## 9. 扩展延迟根因链与 0.1.6 修复（2026-08-16）
+
+### 9.1 根因（问题深挖实测闭环，修正此前归因）
+
+扩展请求的 provider/model **跟随会话默认模型**（expand.ts：`provider = 会话默认 provider`，
+`model = config.model ?? 会话默认 model`）。此前各版"外部 LLM TTFT"归因是**误读**——
+latencyMs 是完整调用时长而非首包；且未核对实际路由。curl 同时刻对照：
+
+| 路由 | TTFT | 总耗时 | 说明 |
+|---|---|---|---|
+| api.deepseek.com 官方直连（v4-flash） | **~107ms** | 1.0-1.5s | 直连/代理均快；无 thinking |
+| commandcode 网关 gpt-5.6-sol（旧默认） | 2.4-3.1s | 3.2-3.9s | timeout3000 下 76% 降级 |
+| opencode-go v4-flash thinking 全开 | 3.4s | 11.3s | `reasoning:true` catalog，timeout3000 下 100% 降级 |
+| opencode-go v4-flash thinking disabled | ~2.0s | ~3.4s | 网关自身 TTFT ~2s 为物理属性 |
+
+结论链：主模型切到 reasoning/中转路由 → 扩展隐性跟随 → TTFT 超 timeout → 大规模降级。
+网络/代理/官方 API 均无辜（官方直连 TTFT 107ms 反例证伪）。
+
+### 9.2 修复（0.1.6）与验证
+
+- `reasoningEffort: 'off'` → llm-pi-ai 将 'off' 翻译为省略 reasoning → pi-ai deepseek 分支
+  `thinking: { type: 'disabled' }`——opencode-go v4-flash 总耗时 11.3s → 3.4s ✓
+- 部署配置固定 `queryExpansion.model: 'deepseek-v4-flash'`（不配 provider，跟随会话默认，
+  用户决策保留 opencode-go 默认）
+- 宿主 latency fresh（off 后）：降级 9/17（53%），非降级 2.0-3.0s，p95 3001ms——
+  **网关物理 TTFT ~2s 未解**；human fresh L1-live 59% 无退化
+- 缓存兜底不变：命中查询 0 延迟零降级（§8）
+
+### 9.3 悬而未决（交接 HANDOFF.md §3 决策项）
+
+- 决策 A/B：接受网关 TTFT ~2s vs 0.1.7 加 `queryExpansion.provider` 走官方直连（107ms）；
+  用户此前倾向不直连官方（「官方也可能思维链全开」）——已被本节 curl 实测排除，待用户拍板
+- p95 ≤2.0s 门禁口径修订（fresh vs 生产缓存口径）：连续 FAIL 均为网关环境变量，建议修订口径
