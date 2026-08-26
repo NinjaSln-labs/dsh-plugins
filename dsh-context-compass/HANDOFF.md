@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入）已发布（npm latest）+ profile 已回归干净包；待重启后验证 settings 命名空间与 live 生效；下一步 C2 卡片或 S4 canary**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入）已发布 + 重启加载 + live 生效实测通过（settings.yaml 写 windowMid → 6 会话判定即时翻转，撤销即恢复）；下一步 C2 卡片或 S4 canary**
 
 ## 1. 交接元信息
 
@@ -62,7 +62,7 @@
 - [x] push C1 commit（设计定稿 `docs/C1-SETTINGS-DESIGN.md` 经用户确认后实施）
 - [x] CI npm-publish 审批 → **npm latest 已确认 0.10.0**（2026-08-26）
 - [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿（26ms）
-- [ ] 重启后 settings 验证：设置 UI 出现 context-compass 命名空间（C2 卡片未做前经 describe 可查）；改 threshold 看 badge 下一帧变化——**待下次 harness 重启**
+- [x] 重启后 settings 验证——✅ 已完成（2026-08-26 19:08 重启加载 0.10.0）：settings.yaml（`~/.dsh/settings.yaml`，file provider）写入 `context-compass.thresholds.windowMid: 0.05` → 6 个有数据会话判定 green→blue 即时翻转，撤销即恢复——live 全链路（文件 publish → source → 投影 view）实测通过
 
 ### 3.1.1 已完成——0.9.0 发版（2026-08-26）
 
