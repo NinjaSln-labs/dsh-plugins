@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-25 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.8.0 已发布（npm latest）：S2 stateVersion 兼容测试 + S3 配置生效冒烟交付（顺带修 healthView 透传真 bug + 投影双契约兼容）；profile 已回归干净包，待重启后跑 §3.2；下一步 R1 sparkline（S2 已就绪）或 C1 调研**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.8.0 已发布且本机重启加载、重启验证全过；下一步 R1 sparkline（S2 已就绪）或 C1 host 配置点调研（先调研定稿再动工）**
 
 ## 1. 交接元信息
 
@@ -64,7 +64,7 @@
 - [x] push S2/S3 commit
 - [x] `npm version minor --no-git-tag-version` → tag `context-compass-v0.8.0`（== HEAD `b73b47d`）→ push → CI 审批发布（npm latest 已确认 0.8.0）
 - [x] 发布后 profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对（6 原有条目完整 + 另一会话新增 dsh-session-slm-router）
-- [ ] **重启后跑 §3.2 清单**（S2/S3 是纯测试 + 防御收口，行为应无可见变化；重点看 badge/面板照常）
+- [x] **重启后跑 §3.2 清单**——✅ 已完成（2026-08-26，harness 12:16 重启加载 0.8.0）：contract 全绿、SWR 采样 10–16ms、15 会话排序正确；UI 零变更（visual 6/6 已在 0.8.0 构建包上过 gate）
 
 ### 3.2 重启验证清单（0.7.17）——✅ 已完成（2026-08-25 晚）
 
