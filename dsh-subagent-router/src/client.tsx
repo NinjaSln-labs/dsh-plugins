@@ -62,6 +62,21 @@ type Catalog = {
   groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>
 }
 
+/**
+ * Normalize a model id so cross-provider spelling variants of the same model
+ * collapse: lowercase, strip a leading provider prefix (`deepseek/xxx` → `xxx`),
+ * and fold any separator run to a single `-`. `-free`/`-vision` suffixes stay,
+ * so distinct tiers/variants are NOT merged.
+ */
+function canonicalModelId(id: string): string {
+  return id
+    .toLowerCase()
+    .replace(/^[^/]*\//, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 const CSS = `
 .sr-card{display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-3,#353638);border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:12px;box-sizing:border-box;width:100%;overflow:hidden}
 .sr-header{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--dsw-alias-label-primary,#f9fafb);text-align:left;font:inherit}
@@ -359,22 +374,25 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
   const onCancel = (): void => { setDraft(null); setSaved(false) }
   // Catalog-derived candidates for the pickers (provider ids and model ids).
   const providerCandidates = catalog.groups.map(group => ({ id: group.id, label: group.name }))
-  // Models deduped by id (autoTierPicks stores model ids, not provider-bound
-  // selections): annotate each with its provider(s) so the same id advertised
-  // by several providers is recognizable.
-  const modelProviders = new Map<string, { name: string; providers: string[] }>()
+  // Models collapsed by canonical id (autoTierPicks stores model ids, not
+  // provider-bound selections): spelling variants across providers
+  // (`deepseek-v4-flash` / `DeepSeek-V4-Flash` / `deepseek/deepseek-v4-flash`)
+  // merge into one candidate, annotated with every provider that carries it.
+  // The stored value is the first-seen original id of the group.
+  const modelProviders = new Map<string, { name: string; providers: string[]; firstId: string }>()
   for (const group of catalog.groups) {
     for (const model of group.models) {
-      const entry = modelProviders.get(model.id)
+      const key = canonicalModelId(model.id)
+      const entry = modelProviders.get(key)
       if (entry === undefined) {
-        modelProviders.set(model.id, { name: model.name, providers: [group.name] })
+        modelProviders.set(key, { name: model.name, providers: [group.name], firstId: model.id })
       } else if (!entry.providers.includes(group.name)) {
         entry.providers.push(group.name)
       }
     }
   }
-  const modelCandidates = [...modelProviders].map(([id, { name, providers }]) => ({
-    id,
+  const modelCandidates = [...modelProviders].map(([, { name, providers, firstId }]) => ({
+    id: firstId,
     label: providers.length > 1 ? `${name}（${providers.join(' / ')}）` : `${name}（${providers[0]}）`,
   }))
   const chevron = React.createElement('svg', {
