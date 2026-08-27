@@ -172,23 +172,20 @@ export class ScopeStore {
   }
 }
 
-/**
- * Pick the candidate to run the classifier on: the cheapest tier, preferring
- * providers the caller lists first in `providerOrder` (typically
- * `autoProviderOrder`) so the classifier runs on a route the user already
- * ranked — a dead-slow route nudged to the tail of the order does not get
- * picked as the classifier host. Unlisted providers rank after listed ones.
- */
 /** Models too light to reliably emit structured JSON — skip as the classifier host. */
 const TOO_LIGHT = /\b(lite|mini|nano|tiny|micro|small)\b/i
 
-export function pickClassifier(
+/**
+ * Rank classifier-host candidates: the cheapest tier, preferring providers the
+ * caller lists first in `providerOrder`, skipping ultra-light models (which
+ * often return empty text). Returns up to `limit` candidates so the caller can
+ * retry a stronger/faster model when a cheap one comes back empty.
+ */
+export function pickClassifiers(
   candidates: readonly SelectionEntry[],
   providerOrder: readonly string[] = [],
-): { provider: string; model: string } | undefined {
-  // Skip ultra-light models for the classifier: they often return empty text
-  // for an unfamiliar task. Fall back to the full pool only if every candidate
-  // is ultra-light.
+  limit = 3,
+): Array<{ provider: string; model: string }> {
   const eligible = candidates.filter(candidate => !TOO_LIGHT.test(candidate.model))
   const pool = eligible.length > 0 ? eligible : candidates
   const order = [...providerOrder, ...pool.map(candidate => candidate.provider)]
@@ -196,14 +193,23 @@ export function pickClassifier(
   order.forEach((id, index) => {
     if (!rank.has(id)) rank.set(id, index)
   })
-  const sorted = [...pool].sort((a, b) => {
-    const ra = rank.get(a.provider) ?? Number.MAX_SAFE_INTEGER
-    const rb = rank.get(b.provider) ?? Number.MAX_SAFE_INTEGER
-    if (ra !== rb) return ra - rb
-    return COST_ORDER[a.meta.cost] - COST_ORDER[b.meta.cost]
-  })
-  const first = sorted[0]
-  return first === undefined ? undefined : { provider: first.provider, model: first.model }
+  return [...pool]
+    .sort((a, b) => {
+      const ra = rank.get(a.provider) ?? Number.MAX_SAFE_INTEGER
+      const rb = rank.get(b.provider) ?? Number.MAX_SAFE_INTEGER
+      if (ra !== rb) return ra - rb
+      return COST_ORDER[a.meta.cost] - COST_ORDER[b.meta.cost]
+    })
+    .slice(0, limit)
+    .map(candidate => ({ provider: candidate.provider, model: candidate.model }))
+}
+
+/** The single best classifier-host candidate (first of {@link pickClassifiers}). */
+export function pickClassifier(
+  candidates: readonly SelectionEntry[],
+  providerOrder: readonly string[] = [],
+): { provider: string; model: string } | undefined {
+  return pickClassifiers(candidates, providerOrder, 1)[0]
 }
 
 /** Per-candidate heuristic score (higher = more suitable). */
@@ -464,27 +470,36 @@ export async function recommend(
     note,
   })
 
-  const classifier = pickClassifier(candidates, config.autoProviderOrder)
-  if (classifier === undefined) {
+  const classifiers = pickClassifiers(candidates, config.autoProviderOrder, 3)
+  if (classifiers.length === 0) {
     return heuristic('no classifier model available; heuristic selection')
   }
 
-  return classifyViaLlm(llm, args.task, candidates, classifier, config.recommendTimeoutMs, exec.signal)
-    .then(({ picks, raw }) => {
+  // Try each classifier-host candidate in rank order; the first that returns
+  // a validated pick wins. An empty reply or a fault moves to the next host, so
+  // a single cheap model that comes back empty does not sink the llm path.
+  let lastRaw = ''
+  let lastError: unknown
+  for (const classifier of classifiers) {
+    try {
+      const { picks, raw } = await classifyViaLlm(llm, args.task, candidates, classifier, config.recommendTimeoutMs, exec.signal)
+      lastRaw = raw
       if (picks !== undefined) {
         const recommendations = validatePicks(picks, candidates, n)
         if (recommendations.length > 0) {
           const core: RecommendationCore = buildCore('llm', recommendations)
           cache.set(cacheKey, core)
-          return core as RecommendResult
+          return core
         }
       }
-      return heuristic(`classifier reply failed validation; heuristic selection${rawSnippet(raw)}`)
-    })
-    .catch((error: unknown) => {
-      const timeoutError = error instanceof TimeoutError
-      return heuristic(degradationNote(error, config.recommendTimeoutMs, timeoutError))
-    })
+    } catch (error) {
+      lastError = error
+    }
+  }
+  if (lastError !== undefined) {
+    return heuristic(degradationNote(lastError, config.recommendTimeoutMs, lastError instanceof TimeoutError))
+  }
+  return heuristic(`classifier reply failed validation; heuristic selection${rawSnippet(lastRaw)}`)
 }
 
 /** A bounded, whitespace-collapsed excerpt of the classifier's raw reply, for diagnostics. */
