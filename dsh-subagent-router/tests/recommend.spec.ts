@@ -16,8 +16,10 @@ import {
   LruCache,
   pickClassifier,
   heuristicRecommend,
+  ScopeStore,
 } from '../src/recommend.ts'
-import type { RecommendationCore, Candidate } from '../src/recommend.ts'
+import type { RecommendationCore } from '../src/recommend.ts'
+import type { SelectionEntry } from '../src/selection.ts'
 import { resolveConfig } from '../src/index.ts'
 import { RouteHealthStore } from '../src/health.ts'
 
@@ -66,8 +68,9 @@ function runRecommend(
   config: Parameters<typeof resolveConfig>[0] = {},
   cache = new LruCache<string, RecommendationCore>(128),
   exec: { signal?: AbortSignal } = { signal: undefined },
+  scopeStore = new ScopeStore(),
 ) {
-  return recommend(mockCtx(llm), args, exec, new RouteHealthStore(), () => resolveConfig(config), cache)
+  return recommend(mockCtx(llm), args, exec, new RouteHealthStore(), () => resolveConfig(config), cache, scopeStore)
 }
 
 describe('normalizeTask', () => {
@@ -118,9 +121,9 @@ describe('LruCache', () => {
 
 describe('pickClassifier', () => {
   it('picks the cheapest-tier candidate', () => {
-    const candidates: Candidate[] = [
-      { provider: 'p', model: 'strong-x-pro', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
-      { provider: 'p', model: 'cheap-x-flash', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
+    const candidates: SelectionEntry[] = [
+      { provider: 'p', model: 'strong-x-pro', tier: 'strong', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
+      { provider: 'p', model: 'cheap-x-flash', tier: 'cheapest', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
     ]
     expect(pickClassifier(candidates)).toEqual({ provider: 'p', model: 'cheap-x-flash' })
   })
@@ -130,9 +133,9 @@ describe('pickClassifier', () => {
   })
 
   it('prefers a listed provider over cost tier order', () => {
-    const candidates: Candidate[] = [
-      { provider: 'slow-route', model: 'flash-x', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
-      { provider: 'fast-route', model: 'pro-x', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
+    const candidates: SelectionEntry[] = [
+      { provider: 'slow-route', model: 'flash-x', tier: 'cheapest', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
+      { provider: 'fast-route', model: 'pro-x', tier: 'strong', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
     ]
     // providerOrder 把 fast-route 排前面——即使它的模型更贵也优先选它
     expect(pickClassifier(candidates, ['fast-route'])).toEqual({ provider: 'fast-route', model: 'pro-x' })
@@ -140,9 +143,9 @@ describe('pickClassifier', () => {
 })
 
 describe('heuristicRecommend', () => {
-  const candidates: Candidate[] = [
-    { provider: 'p', model: 'coder-x-pro', meta: { cost: 'high', speed: 'slow', strength: 'strong', specialty: ['code'] } },
-    { provider: 'p', model: 'flash-x', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
+  const candidates: SelectionEntry[] = [
+    { provider: 'p', model: 'coder-x-pro', tier: 'best', meta: { cost: 'high', speed: 'slow', strength: 'strong', specialty: ['code'] } },
+    { provider: 'p', model: 'flash-x', tier: 'cheapest', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
   ]
 
   it('prioritizes a specialty match with a strong tier', () => {
