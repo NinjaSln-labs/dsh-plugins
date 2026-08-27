@@ -46,6 +46,18 @@ type Section = {
   autoCeiling?: string
 }
 
+/** Host model-directory wire face (session-independent; `llm.models`). */
+type CatalogApi = {
+  llm?: { models?: (request: {}) => Promise<{ groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }> }> }
+}
+
+/** Loaded directory snapshot handed to the pickers. */
+type Catalog = {
+  status: 'loading' | 'ready' | 'error'
+  /** Provider groups (id → name + models). */
+  groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>
+}
+
 const CSS = `
 .sr-card{display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-3,#353638);border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:12px;box-sizing:border-box;width:100%;overflow:hidden}
 .sr-header{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--dsw-alias-label-primary,#f9fafb);text-align:left;font:inherit}
@@ -84,6 +96,16 @@ const CSS = `
 .sr-btn-primary:hover:not(:disabled){filter:brightness(0.92)}
 .sr-btn-primary:active:not(:disabled){filter:brightness(0.85)}
 .sr-unavailable{font-size:13px;font-weight:400;line-height:19px;color:var(--dsw-alias-label-secondary,#adb2b8);padding:14px 16px}
+.sr-picker{display:flex;flex-direction:column;gap:8px}
+.sr-picker-row{display:flex;gap:8px;align-items:center}
+.sr-picker-row .sr-input{flex:1}
+.sr-chip-list{display:flex;flex-wrap:wrap;gap:6px}
+.sr-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 10px;border-radius:13px;background:var(--dsw-alias-bg-layer-4,#2a2b2d);border:1px solid var(--dsw-alias-border-l2,#ffffff1f);color:var(--dsw-alias-label-primary,#f9fafb);font-size:12px;font-weight:400}
+.sr-chip-remove{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary,#8a8f96);cursor:pointer;border-radius:50%;padding:0}
+.sr-chip-remove:hover{color:var(--dsw-alias-label-primary,#f9fafb);background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}
+.sr-btn-add{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 14px;border-radius:8px;background:transparent;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);color:var(--dsw-alias-label-primary,#f9fafb);font-size:13px;font-weight:500;cursor:pointer}
+.sr-btn-add:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.06))}
+.sr-btn-add:disabled{opacity:.45;cursor:not-allowed}
 `
 
 /** Form grouping: recovery = failure handling, scope = model selection range, tier = per-tier strategy. */
@@ -94,14 +116,12 @@ type Field =
   | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'number'; min?: number; get: (s: Section) => number | undefined; set: (s: Section, v: number) => Section }
   | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'boolean'; default?: boolean; get: (s: Section) => boolean | undefined; set: (s: Section, v: boolean) => Section }
   | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'text'; get: (s: Section) => string | undefined; set: (s: Section, v: string) => Section }
-  | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'array'; get: (s: Section) => string[] | undefined; set: (s: Section, v: string[]) => Section }
 
 /** Declarative field list — single source for the form (mirrors src/config.ts). */
 const FIELDS: Field[] = [
   { id: 'autoEscalate', group: 'recovery', label: '失败时升级', hint: '前台运行失败后沿下一档自动重试一次。', kind: 'boolean', default: true, get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
   { id: 'autoReroute', group: 'recovery', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', default: true, get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
   { id: 'autoEscalationTiers', group: 'recovery', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', min: 0, get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
-  { id: 'autoProviderOrder', group: 'scope', label: '提供方优先级', hint: '逗号分隔的提供方路由 id，优先的在前（id 见 subagent_models 目录）。', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
   { id: 'autoCeiling', group: 'scope', label: '预算封顶', hint: '绝不选择比该模型更强的模型（不在目录时忽略）。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
 ]
 
@@ -189,36 +209,97 @@ function FieldControl(props: {
         ),
       )
     }
-    case 'array': {
-      const current = (field.get(value) ?? []).join(', ')
-      return React.createElement('div', { className: 'sr-field' },
-        React.createElement('label', { className: 'sr-label', htmlFor: `sr-${String(field.id)}` }, field.label),
-        React.createElement('div', { className: 'sr-control' },
-          React.createElement('input', {
-            id: `sr-${String(field.id)}`,
-            className: 'sr-input',
-            value: current,
-            disabled,
-            placeholder: 'a, b, c',
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) => onEdit(
-              field.set(value, e.target.value.split(',').map(part => part.trim()).filter(Boolean)),
-            ),
-          }),
-        ),
-        hint,
-      )
-    }
   }
 }
 
+/** Order-preserving multi-select: a <select> + add button feeding a removable chip list. */
+function OrderedPicker(props: {
+  candidates: Array<{ id: string; label: string }>
+  selected: string[]
+  onChange: (next: string[]) => void
+  disabled: boolean
+  placeholder: string
+}): React.ReactElement {
+  const { candidates, selected, onChange, disabled, placeholder } = props
+  const [pending, setPending] = React.useState('')
+  const available = candidates.filter(candidate => !selected.includes(candidate.id))
+  const add = (): void => {
+    if (pending === '') return
+    onChange([...selected, pending])
+    setPending('')
+  }
+  const remove = (id: string): void => {
+    onChange(selected.filter(item => item !== id))
+  }
+  return React.createElement('div', { className: 'sr-picker' },
+    React.createElement('div', { className: 'sr-picker-row' },
+      React.createElement('select', {
+        className: 'sr-input',
+        value: pending,
+        disabled: disabled || available.length === 0,
+        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setPending(e.target.value),
+      },
+        React.createElement('option', { value: '' }, disabled ? placeholder : available.length === 0 ? '无可选项' : placeholder),
+        ...available.map(candidate => React.createElement('option', { key: candidate.id, value: candidate.id }, candidate.label)),
+      ),
+      React.createElement('button', {
+        className: 'sr-btn-add',
+        type: 'button',
+        disabled: disabled || pending === '',
+        onClick: add,
+      }, '添加'),
+    ),
+    selected.length > 0
+      ? React.createElement('div', { className: 'sr-chip-list' },
+        ...selected.map(id => {
+          const label = candidates.find(candidate => candidate.id === id)?.label ?? id
+          return React.createElement('span', { className: 'sr-chip', key: id },
+            label,
+            React.createElement('button', {
+              className: 'sr-chip-remove',
+              type: 'button',
+              disabled,
+              'aria-label': `移除 ${label}`,
+              onClick: () => remove(id),
+            }, '×'),
+          )
+        }),
+      )
+      : null,
+  )
+}
+
 /** The settings Plugins-section card for dsh-subagent-router. */
-function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElement {
-  const { scope } = props
+function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }): React.ReactElement {
+  const { scope, api } = props
   const [snapshot, setSnapshot] = React.useState<SettingsScopeSnapshot<Section>>(scope.getSnapshot())
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState<Section | null>(null)
   const [saved, setSaved] = React.useState(false)
+  const [catalog, setCatalog] = React.useState<Catalog>({ status: 'loading', groups: [] })
   React.useEffect(() => scope.subscribe(() => setSnapshot(scope.getSnapshot())), [scope])
+  React.useEffect(() => {
+    let alive = true
+    if (api?.llm?.models === undefined) {
+      setCatalog({ status: 'error', groups: [] })
+      return
+    }
+    void api.llm.models({}).then(
+      (resolved) => {
+        if (!alive) return
+        setCatalog({
+          status: 'ready',
+          groups: resolved.groups.map(group => ({
+            id: group.id,
+            name: group.name,
+            models: group.models.map(model => ({ id: model.id, name: model.name })),
+          })),
+        })
+      },
+      () => { if (alive) setCatalog({ status: 'error', groups: [] }) },
+    )
+    return () => { alive = false }
+  }, [api])
   const committed = snapshot.value ?? ({} as Section)
   // Editing view = draft when present (unsaved edits), else the committed value.
   const value = draft ?? committed
@@ -271,6 +352,12 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
     setSaved(true)
   }
   const onCancel = (): void => { setDraft(null); setSaved(false) }
+  // Catalog-derived candidates for the pickers (provider ids and model ids).
+  const providerCandidates = catalog.groups.map(group => ({ id: group.id, label: group.name }))
+  // Models deduped by id (the same model id may be advertised by several providers).
+  const modelCandidates = [...new Map(
+    catalog.groups.flatMap(group => group.models.map(model => [model.id, { id: model.id, label: model.name }] as const)),
+  ).values()]
   const chevron = React.createElement('svg', {
     className: 'sr-chevron',
     viewBox: '0 0 16 16',
@@ -329,27 +416,38 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
             )
           }))
           nodes.push(...TIER_LABELS.map(([tier, label]) => {
-            const current = (value.autoTierPicks?.[tier] ?? []).join(', ')
             return React.createElement('div', { className: 'sr-field', key: `picks-${tier}` },
-              React.createElement('label', { className: 'sr-label', htmlFor: `sr-picks-${tier}` }, `${label}任务候选模型`),
-              React.createElement('div', { className: 'sr-control' },
-                React.createElement('input', {
-                  id: `sr-picks-${tier}`,
-                  className: 'sr-input',
-                  value: current,
-                  disabled,
-                  placeholder: 'model-a, model-b（逗号分隔，优先在前）',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) => onTierPicksEdit(
-                    tier,
-                    e.target.value.split(',').map(part => part.trim()).filter(Boolean),
-                  ),
-                }),
-              ),
+              React.createElement('label', { className: 'sr-label' }, `${label}任务候选模型`),
+              React.createElement(OrderedPicker, {
+                candidates: modelCandidates,
+                selected: value.autoTierPicks?.[tier] ?? [],
+                onChange: (next) => onTierPicksEdit(tier, next),
+                disabled,
+                placeholder: '选择候选模型',
+              }),
               React.createElement('div', { className: 'sr-hint' },
-                `覆盖${label}任务选型：按序选第一个被健康提供方广告的模型（可跨提供方）。`),
+                catalog.status === 'error'
+                  ? '目录不可用，无法列出模型。'
+                  : `覆盖${label}任务选型：按序选第一个被健康提供方广告的模型（可跨提供方）。`),
             )
           }))
         } else {
+          if (group.id === 'scope') {
+            nodes.push(React.createElement('div', { className: 'sr-field', key: 'provider-order' },
+              React.createElement('label', { className: 'sr-label' }, '提供方优先级'),
+              React.createElement(OrderedPicker, {
+                candidates: providerCandidates,
+                selected: value.autoProviderOrder ?? [],
+                onChange: (next) => onEdit({ autoProviderOrder: next }),
+                disabled,
+                placeholder: '选择提供方路由',
+              }),
+              React.createElement('div', { className: 'sr-hint' },
+                catalog.status === 'error'
+                  ? '目录不可用，无法列出提供方。'
+                  : '在列表靠前的提供方优先使用；留空 = 按注册表顺序。'),
+            ))
+          }
           nodes.push(...FIELDS.filter(field => field.group === group.id).map(field => {
             // 联动灰显：关闭「失败时升级」后，升级档数上限无意义，禁用。
             const fieldDisabled = disabled
@@ -385,7 +483,7 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
 
 export const name = 'dsh-subagent-router'
 
-export const inject = ['slots', 'settingsScope']
+export const inject = ['slots', 'settingsScope', 'connection']
 
 /** Client entry: register the settings Plugins-section card for the namespace. */
 export function apply(ctx: ClientContext): void {
@@ -395,8 +493,12 @@ export function apply(ctx: ClientContext): void {
     settingsScope: { bind(spec: { namespace: string }): SettingsScope<Section> }
   }).settingsScope
   const scope = settingsScope.bind({ namespace: 'subagent-router' })
+  // Host model-directory wire face (`llm.models`, session-independent) — feeds
+  // the provider/model pickers so users never hand-type ids. `connection` is
+  // the client wire handle; `.api` carries the host API proxy faces.
+  const api = (ctx as unknown as { connection?: { api?: CatalogApi } }).connection?.api
   ctx.slots.inject('settings.plugin.item', () => ctx.slots.register(
     { name: 'settings.plugin.item', key: 'subagent-router' } as never,
-    () => React.createElement(SettingsCard, { scope }),
+    () => React.createElement(SettingsCard, { scope, api }),
   ) as never)
 }
