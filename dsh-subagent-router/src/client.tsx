@@ -60,8 +60,9 @@ const CSS = `
 .sr-field{display:flex;flex-direction:column;gap:4px}
 .sr-label{font-size:13px;font-weight:500;line-height:19.5px;color:var(--dsw-alias-label-primary,#f9fafb)}
 .sr-hint{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8)}
-.sr-group{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#999);margin-top:12px;margin-bottom:2px}
-.sr-group:first-of-type{margin-top:0}
+.sr-group{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--dsw-alias-label-primary,#f9fafb);margin-top:18px;margin-bottom:6px;padding-top:14px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.sr-group::before{content:'';flex:none;width:3px;height:14px;border-radius:2px;background:var(--dsw-alias-state-primary,#4c8dff)}
+.sr-group:first-of-type{margin-top:0;padding-top:0;border-top:none}
 .sr-control{display:flex;align-items:center;gap:8px}
 .sr-input{flex:1;min-width:0;height:32px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:8px;background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#f9fafb);font-size:13px;font-weight:400;box-sizing:border-box}
 .sr-input:focus{outline:2px solid var(--dsw-alias-state-primary,#4c8dff);outline-offset:1px}
