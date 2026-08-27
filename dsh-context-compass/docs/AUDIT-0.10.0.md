@@ -48,7 +48,7 @@
 **OV-5 排序规则 host/client 双份实现，仅靠注释约定同源**
 - 位置：`src/overview.ts:56,76-91` vs `src/client.tsx:843,916-929`
 - 建议：抽共享纯模块（client bundle 构建可打包 host 源码的纯函数）。
-- 状态：recorded（当前逐行等价；client 拆分已落地（55d116e），抽共享排序模块留作后续）
+- 状态：**fixed（本轮：抽 `src/overview-sort.ts` 单源模块——SEVERITY_RANK / rankOf / activityRankOf / sortOverviewRows 收敛一处；host `overview.ts` re-export 保持 public 出口不变（rankOf / sortOverviewRows）、`buildOverview` 内部同源调用；client `overview.tsx` severity 模式直接委托 `sortOverviewRows`，删除双份 SEVERITY_RANK / activityRankOf。client esbuild bundle 直接打包本模块，与 util/types/knowledge 同为纯源码零 host 依赖）**
 
 **OV-6 severity 缓存对阈值变更加零感知**
 - 位置：coldCache 60s + projection 持久缓存
