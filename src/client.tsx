@@ -60,9 +60,9 @@ const CSS = `
 .sr-open .sr-body{display:flex;flex-direction:column;padding:16px 16px 16px}
 .sr-field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .sr-field:last-of-type{margin-bottom:0}
-.sr-label{font-size:13px;font-weight:500;line-height:19.5px;color:var(--dsw-alias-label-primary,#f9fafb)}
-.sr-hint{font-size:13px;font-weight:400;line-height:19px;color:var(--dsw-alias-label-secondary,#adb2b8)}
-.sr-group{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;line-height:20px;color:var(--dsw-alias-label-primary,#f9fafb);margin-top:20px;margin-bottom:10px;padding-top:16px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.sr-label{font-size:13px;font-weight:500;line-height:19.5px;color:var(--dsw-alias-label-secondary,#adb2b8)}
+.sr-hint{font-size:13px;font-weight:400;line-height:19px;color:var(--dsw-alias-label-tertiary,#8a8f96)}
+.sr-group{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;line-height:21px;color:var(--dsw-alias-label-primary,#f9fafb);margin-top:20px;margin-bottom:12px;padding-top:16px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
 .sr-group::before{content:'';flex:none;width:3px;height:16px;border-radius:2px;background:var(--dsw-alias-state-business,#4c8dff)}
 .sr-group:first-of-type{margin-top:0;padding-top:0;border-top:none}
 .sr-control{display:flex;align-items:center;gap:8px}
