@@ -26,6 +26,7 @@ import { fixedConfig } from './config.ts'
 import { classifyFailure, failureLabel, sanitizeFailureDetail } from './failure.ts'
 import type { FailureClass } from './failure.ts'
 import { RouteHealthStore } from './health.ts'
+import { modelMeta } from './meta.ts'
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
 function outputValueText(values: JsonValue[]): string {
@@ -1128,9 +1129,10 @@ export function registerModelPickerTools(
     disposers.push(ctx.tools.register(defineTool({
       name: fixedConfig.modelsToolName,
       description: 'List the live LLM provider routes registered on this harness and, for each, the model '
-        + 'catalog its adapter advertises. Advisory: catalog membership never gates requests — a provider '
-        + 'may still accept model ids outside its listing — but this is the authoritative way to see what '
-        + '`' + fixedConfig.toolName + '` can target. Pass `provider` to narrow to one route.',
+        + 'catalog its adapter advertises, annotated with derived metadata (cost/speed/strength/specialty, '
+        + 'and contextWindow when the model id is known). Advisory: catalog membership never gates requests '
+        + '— a provider may still accept model ids outside its listing — but this is the authoritative way '
+        + 'to see what `' + fixedConfig.toolName + '` can target. Pass `provider` to narrow to one route.',
       parameters: {
         provider: {
           type: 'string',
@@ -1150,7 +1152,7 @@ export function registerModelPickerTools(
         type ProviderCatalogEntry = {
           provider: string
           name: string
-          models: Array<{ id: string; name: string }>
+          models: Array<{ id: string; name: string; cost: string; speed: string; strength: string; specialty: string[]; contextWindow?: string }>
           error?: string
           health?: string
           failingClass?: string
@@ -1161,10 +1163,14 @@ export function registerModelPickerTools(
         const providers: ProviderCatalogEntry[] = []
         for (const route of routes) {
           if (wanted !== undefined && route.id !== wanted) continue
-          let models: Array<{ id: string; name: string }> = []
+          let models: ProviderCatalogEntry['models'] = []
           let error: string | undefined
           try {
-            models = (await llm.listModels(route.id)).map(model => ({ id: model.id, name: model.name }))
+            models = (await llm.listModels(route.id)).map(model => ({
+              id: model.id,
+              name: model.name,
+              ...modelMeta(model.id),
+            }))
           } catch (cause) {
             error = String(cause)
           }
