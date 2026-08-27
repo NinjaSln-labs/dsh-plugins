@@ -20,7 +20,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ModelMeta } from './meta.ts'
-import { classifyFailure, failureLabel } from './failure.ts'
+import { classifyFailure, failureLabel, sanitizeFailureDetail } from './failure.ts'
 import type { RouteHealthStore } from './health.ts'
 import type { ResolvedModelPickerConfig } from './index.ts'
 import { buildSelectionScope, normalizeModelId } from './selection.ts'
@@ -405,9 +405,11 @@ async function classifyViaLlm(
 function degradationNote(error: unknown, timeoutMs: number, timeoutError: boolean): string {
   if (timeoutError) return `classifier timed out after ${timeoutMs}ms; fell back to heuristic`
   const cls = classifyFailure(error)
-  return cls === 'other'
-    ? 'classifier unavailable; fell back to heuristic'
-    : `${failureLabel(cls)}; fell back to heuristic`
+  if (cls === 'other') {
+    const detail = sanitizeFailureDetail(error)
+    return `classifier unavailable (${detail}); fell back to heuristic`
+  }
+  return `${failureLabel(cls)}; fell back to heuristic`
 }
 
 /** Build a core result, stamping the top pick as the explicit `recommended` default. */
