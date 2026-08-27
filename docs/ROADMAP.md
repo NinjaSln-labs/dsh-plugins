@@ -64,14 +64,15 @@
 |---|---|---|
 | B1 | 知识库自动写回（2b 强联动） | dsh-knowledge-sqlite 需开放公开、带门控的写入服务（跨仓库协作） |
 | B2 | 推荐引擎调用小模型分类器 | 需确认 harness 允许插件内发起轻量 LLM 调用（或复用 L1 扩展的服务化通道） |
+| B3 | **死锚检测的「运行时失败」盲区**（1e 实测发现，2026-08-27） | dsh-subagent 故意把子代理「运行时」失败压成 `stopReason:'error'`（`dsh-tool-subagent:59` 渲染为 `subagent run failed`），底层 `LlmFailure`（code/status/retry-after）留在子代理日志、不跨进程传回 tool 层 → router 的 `classifyFailure` 只能判 `other`（瞬态）而非终态 `quota`/`rate-limit`。**死锚+换路对「start 拒绝」（基础设施，能暴露 LlmError/HTTP）有效，对「子代理运行时 quota/限流」盲区**。根治需 harness 改动：`dsh-subagent` 在子代理结算时把失败分类作为结构化字段回传父层（harness 暂不动，仅记录） |
 
 ## 排期建议
 
 | 版本 | 内容 |
 |---|---|
-| **0.2.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· ✅ 1b 设置页配置 UI（host+client 化）· 1a continuable 实测 · 1c 目录元数据 · 1d 余项（阈值/预算）· 1e 真实环境验证 |
-| **0.3.x** | 2a subagent_recommend（1c 就绪后）· 2b 反馈闭环 · 2c 多 route 感知 · 2d 决策历史 |
-| **后续** | 3a–3d · B1/B2（等依赖就绪） |
+| **0.2.x / 0.3.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· ✅ 1b 设置页配置 UI · ✅ 1a continuable 实测 · ✅ 1c 目录元数据 · ✅ 1e 真实环境验证（发现 bug `a3b0e34` + seam 盲区 B3）· 配置面瘦身+枚举化 |
+| **0.4.x** | 2a subagent_recommend（1c 就绪后）· 2b 反馈闭环 · 2c 多 route 感知 · 2d 决策历史 |
+| **后续** | 3a–3d · B1/B2/B3（等依赖就绪；B3 需 dsh-subagent 暴露失败分类） |
 
 ## 明确不做
 
