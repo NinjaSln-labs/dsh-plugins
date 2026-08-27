@@ -44,8 +44,8 @@ export const Config = z.object({
     standard: z.array(z.string()).required(false),
     complex: z.array(z.string()).required(false),
   }).required(false),
-  /** Classifier timeout for `subagent_recommend`'s one-shot LLM call, in milliseconds (default 4000). Past it the tool degrades to the naming heuristic. */
-  recommendTimeoutMs: z.number().min(100).default(4000),
+  /** Classifier timeout for `subagent_recommend`'s one-shot LLM call, in milliseconds (default 10000). Past it the tool degrades to the naming heuristic. */
+  recommendTimeoutMs: z.number().min(100).default(10000),
 })
 
 /**

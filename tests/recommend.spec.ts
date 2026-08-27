@@ -128,6 +128,15 @@ describe('pickClassifier', () => {
   it('returns undefined for an empty candidate list', () => {
     expect(pickClassifier([])).toBeUndefined()
   })
+
+  it('prefers a listed provider over cost tier order', () => {
+    const candidates: Candidate[] = [
+      { provider: 'slow-route', model: 'flash-x', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
+      { provider: 'fast-route', model: 'pro-x', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
+    ]
+    // providerOrder 把 fast-route 排前面——即使它的模型更贵也优先选它
+    expect(pickClassifier(candidates, ['fast-route'])).toEqual({ provider: 'fast-route', model: 'pro-x' })
+  })
 })
 
 describe('heuristicRecommend', () => {
