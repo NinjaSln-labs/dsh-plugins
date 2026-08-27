@@ -179,16 +179,24 @@ export class ScopeStore {
  * ranked — a dead-slow route nudged to the tail of the order does not get
  * picked as the classifier host. Unlisted providers rank after listed ones.
  */
+/** Models too light to reliably emit structured JSON — skip as the classifier host. */
+const TOO_LIGHT = /\b(lite|mini|nano|tiny|micro|small)\b/i
+
 export function pickClassifier(
   candidates: readonly SelectionEntry[],
   providerOrder: readonly string[] = [],
 ): { provider: string; model: string } | undefined {
-  const order = [...providerOrder, ...candidates.map(candidate => candidate.provider)]
+  // Skip ultra-light models for the classifier: they often return empty text
+  // for an unfamiliar task. Fall back to the full pool only if every candidate
+  // is ultra-light.
+  const eligible = candidates.filter(candidate => !TOO_LIGHT.test(candidate.model))
+  const pool = eligible.length > 0 ? eligible : candidates
+  const order = [...providerOrder, ...pool.map(candidate => candidate.provider)]
   const rank = new Map<string, number>()
   order.forEach((id, index) => {
     if (!rank.has(id)) rank.set(id, index)
   })
-  const sorted = [...candidates].sort((a, b) => {
+  const sorted = [...pool].sort((a, b) => {
     const ra = rank.get(a.provider) ?? Number.MAX_SAFE_INTEGER
     const rb = rank.get(b.provider) ?? Number.MAX_SAFE_INTEGER
     if (ra !== rb) return ra - rb
