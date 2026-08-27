@@ -2,8 +2,16 @@
  * dsh-subagent-router — plugin config schema.
  *
  * The exported schemastery `Config` documents the config shape for the
- * Loader and the settings UI (设置 → 插件配置). Every field is optional with
- * a sane default, matching `resolveConfig` in index.ts.
+ * settings UI (设置 → 插件配置). Only LIVE fields are configurable: they are
+ * re-read on every tool call (`getConfig()`), so a settings write takes effect
+ * on the next call without a restart.
+ *
+ * Registration-time knobs (subagent provider, tool names, background mode,
+ * depth cap, feature toggles) are NOT configurable — they are fixed module
+ * constants with sane defaults in index.ts / tools.ts (see the "fixed" block
+ * there). Making them configurable earlier produced a settings surface where
+ * "saves" silently did not apply (注册期快照, see HANDOFF 坑 10), so they were
+ * removed from the config face entirely.
  *
  * *** 双源警告 ***：此 schema 的 `.default()` 值与 index.ts 中
  * `resolveConfig` 的 `??` 回退必须保持同步——Loader 路径走 schema 归一化，
@@ -16,35 +24,21 @@ const autoTierPolicyMode = z.union([z.const('anchor'), z.const('cheapest'), z.co
 
 /** Schemastery schema: documents the shape for the Loader and settings UI. */
 export const Config = z.object({
-  /** The `ctx.subagents` provider name to start runs on (default `spawn`). */
-  subagentProvider: z.string().default('spawn'),
-  /** Model-facing delegation tool name (default `subagent_model`). */
-  toolName: z.string().default('subagent_model'),
-  /** Model-facing catalog tool name (default `subagent_models`). */
-  modelsToolName: z.string().default('subagent_models'),
-  /** Expose `run_in_background` on the delegation tool (default true). */
-  enableRunInBackground: z.boolean().default(true),
-  /** Background policy (default `one-shot`); `continuable` needs the provider's `prepareContinuable`. */
-  backgroundMode: z.union([z.const('one-shot'), z.const('continuable')]).default('one-shot'),
-  /** Register the `subagent_models` catalog tool (default true). */
-  enableModelList: z.boolean().default(true),
-  /** Accept `model: "auto"` on the delegation tool (default true). */
-  enableAuto: z.boolean().default(true),
   /** After a failed foreground run, retry once on the next auto tier (default true). */
   autoEscalate: z.boolean().default(true),
   /** Reroute to a healthy provider route when the auto-chosen route fails terminally (quota/auth) (default true). */
   autoReroute: z.boolean().default(true),
   /** Max escalation steps on the same provider after repeated transient failures (default 1). */
   autoEscalationTiers: z.number().min(0).default(1),
-  /** Provider priority order for `model: "auto"` provider resolution (default: registry order). */
+  /** Provider priority order for `model: "auto"` provider resolution (default: registry order). Unlisted providers sort after listed ones. */
   autoProviderOrder: z.array(z.string()).default([]),
-  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic. */
+  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic (trivial→cheapest, standard→anchor, complex→strongest). */
   autoTierPolicy: z.object({
     trivial: autoTierPolicyMode.required(false),
     standard: autoTierPolicyMode.required(false),
     complex: autoTierPolicyMode.required(false),
   }).required(false),
-  /** Per-tier explicit candidate list, in priority order; fully overrides the tier policy for that tier. */
+  /** Per-tier explicit candidate list, in priority order; when present, fully overrides the tier policy for that tier. */
   autoTierPicks: z.object({
     trivial: z.array(z.string()).required(false),
     standard: z.array(z.string()).required(false),
@@ -52,6 +46,30 @@ export const Config = z.object({
   }).required(false),
   /** Hard ceiling: `model: "auto"` never picks a model stronger than this id (budget cap). */
   autoCeiling: z.string().required(false),
-  /** Child depth cap (default 3; `'provider-managed'` sends no cap). */
-  maxDepth: z.union([z.number().min(0), z.const('provider-managed')]).default(3),
 })
+
+/**
+ * 注册期固定配置（单一权威来源）：这些槽位曾是配置项，但都是「注册时快照」
+ * ——设置页改了既不生效也不报错（见 HANDOFF 坑 10 的 backgroundMode 案例），
+ * 对用户是个坑。现全部固定为合理默认，不再暴露给用户配置：
+ *
+ * - subagentProvider: 'spawn' —— dsh 主程序的默认可续子代理提供方
+ * - toolName / modelsToolName —— 标准工具名（改名没有场景价值）
+ * - enableRunInBackground: true + backgroundMode: 'continuable'
+ *   —— 与 dsh harness 原生 subagent 工具语义一致（后台默认 + 持久 subagentId +
+ *   可续聊；显式 run_in_background: false 仍可前台等待）；continuable 要求提供方
+ *   具备 prepareContinuable（挂载时 fail-loud）
+ * - enableModelList / enableAuto —— 功能开关固定打开（关闭场景无价值）
+ * - maxDepth: 'provider-managed' —— 深度上限交给提供方管理（不要求 depthLimit
+ *   能力，任何提供方可挂载）
+ */
+export const fixedConfig = {
+  subagentProvider: 'spawn',
+  toolName: 'subagent_model',
+  modelsToolName: 'subagent_models',
+  enableRunInBackground: true,
+  backgroundMode: 'continuable',
+  enableModelList: true,
+  enableAuto: true,
+  maxDepth: 'provider-managed',
+} as const

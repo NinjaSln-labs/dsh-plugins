@@ -49,23 +49,16 @@ The bundle inserts one composition row (`subagent-router`). It consumes the host
 
 **Settings UI**: the plugin ships a client half, so its configuration can be
 edited directly under **Settings → Plugins** (the `subagent-router` card).
-Edits write to the user settings layer (`subagent-router` section of
-`~/.dsh/settings.yaml`) immediately — the next `subagent_model` call picks
-them up **without a restart**; clearing a field falls back to the
-composition-row value below.
+**Every configurable field is live** — edits write to the user settings layer
+(`subagent-router` section of `~/.dsh/settings.yaml`) and the next
+`subagent_model` call picks them up **without a restart**; clearing a field
+falls back to the composition-row value below.
 
 Alternatively, configure via the composition row's `config` (the base layer,
 overridden by the settings UI user layer):
 
 | Field | Default | Meaning |
 |---|---|---|
-| `subagentProvider` | `spawn` | The `ctx.subagents` provider that starts children. |
-| `toolName` | `subagent_model` | Model-facing delegation tool name. |
-| `modelsToolName` | `subagent_models` | Model-facing catalog tool name. |
-| `enableRunInBackground` | `true` | Expose `run_in_background` on the delegation tool. |
-| `backgroundMode` | `one-shot` | `one-shot` defaults calls to foreground; `continuable` defaults them to background, returns durable child ids, and requires a provider with the `prepareContinuable` capability. |
-| `enableModelList` | `true` | Register the `subagent_models` catalog tool. |
-| `enableAuto` | `true` | Accept `model: "auto"` on the delegation tool. |
 | `autoEscalate` | `true` | After a failed foreground run, retry on the next auto tier. |
 | `autoReroute` | `true` | On a terminal failure (quota/auth), reroute to a healthy provider route. |
 | `autoEscalationTiers` | `1` | Max escalation steps on the same provider after transient failures (`0` disables escalation). |
@@ -73,17 +66,25 @@ overridden by the settings UI user layer):
 | `autoTierPolicy` | — | **Per-tier selection mode**: `{ trivial\|standard\|complex: 'anchor'\|'cheapest'\|'strongest' }`. `anchor` keeps the parent model when its route is healthy; `cheapest`/`strongest` pick by naming score. Omitted tiers keep the built-in heuristic. |
 | `autoTierPicks` | — | **Per-tier explicit candidate order**: `{ trivial\|standard\|complex: [modelId, ...] }`, fully overrides that tier; candidates are a global model priority — the first one any healthy provider advertises wins (may cross providers). |
 | `autoCeiling` | — | **Budget cap**: `model: "auto"` never picks a model stronger than this id. Ignored when not in the catalog. |
-| `maxDepth` | `3` | Child depth cap; `'provider-managed'` sends no cap (requires the provider's `depthLimit` capability for numeric values). |
+
+**Fixed defaults (not configurable)**: registration-time behavior is fixed to
+sane defaults and no longer exposed as config — earlier versions made these
+fields configurable but their "saves" did not take effect (registration
+snapshot), a trap:
+
+| Slot | Fixed value | Why |
+|---|---|---|
+| Subagent provider | `spawn` | The dsh default continuable subagent provider. |
+| Tool names | `subagent_model` / `subagent_models` | Standard naming; renaming has no use case. |
+| Background mode | `continuable` | Matches the harness-native subagent semantics: **background by default, immediately returns a durable subagent id, same-session continuation**; pass `run_in_background: false` to wait for the result. Requires the provider's `prepareContinuable` (fail-loud at mount otherwise). |
+| Feature toggles | all on (`run_in_background` / `model: "auto"` / catalog tool) | No use case for disabling. |
+| Depth cap | `provider-managed` | Leaves the recursion budget to the provider — any provider mounts (no `depthLimit` capability requirement). |
 
 Example row:
 
 ```yaml
 - id: subagent-router
   name: 'dsh-subagent-router'
-  config:
-    subagentProvider: spawn
-    toolName: subagent_model
-    backgroundMode: one-shot
 ```
 
 With model-routing priorities (configure to your own provider preferences):

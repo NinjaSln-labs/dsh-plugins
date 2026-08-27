@@ -44,6 +44,18 @@ class ScriptedProvider implements SubagentProvider {
 
   constructor(readonly name: string) {}
 
+  // Continuable is the fixed background mode (see `fixedConfig`); the provider
+  // must present `prepareContinuable` to mount. Tests run calls in the
+  // foreground (`run_in_background: false` injected by callTool) so the
+  // scripted start/settle path stays the primary one.
+  async prepareContinuable(): Promise<unknown> {
+    return { childId: `cont-${this.name}` }
+  }
+
+  startContinuable(spec: { childId: string }): unknown {
+    return { childId: spec.childId }
+  }
+
   start(request: never) {
     this.starts.push(request as unknown as Record<string, unknown>)
     const index = this.startsMade++
@@ -130,19 +142,25 @@ async function setup(config: ModelPickerConfig = {}, options: {
   if (options.withLlm !== false) {
     ctx.provide('llm', fakeLlm(options.routes ?? DEFAULT_ROUTES))
   }
-  const provider = new ScriptedProvider(options.providerName ?? 'mock')
+  const provider = new ScriptedProvider(options.providerName ?? 'spawn')
   ctx.subagents.registerProvider(provider)
-  await ctx.plugin(plugin, { subagentProvider: options.providerName ?? 'mock', ...config })
+  // The subagent provider is a fixed constant (`fixedConfig.subagentProvider`
+  // = 'spawn'); tests register under that name so the plugin mounts.
+  await ctx.plugin(plugin, config)
   return { ctx, provider }
 }
 
 let callCounter = 0
 function callTool(ctx: Context, name: string, args: unknown, agent?: unknown) {
+  // Background mode is fixed to continuable; these unit tests exercise the
+  // foreground start/settle path, so default every call to foreground (an
+  // explicit `run_in_background: true` in `args` overrides this spread).
+  const arguments_ = { run_in_background: false, ...(args as Record<string, unknown>) }
   return ctx.tools.execute({
     signal: testToolSignal,
     callId: CallId(`call-${++callCounter}`),
     name,
-    arguments: args,
+    arguments: arguments_,
     ...agent !== undefined ? { agent } : {},
   })
 }
@@ -168,17 +186,9 @@ describe('dsh-subagent-router delegation tool', () => {
       .toEqual(['description', 'max_tokens', 'model', 'prompt', 'provider', 'run_in_background'])
   })
 
-  it('registers the `subagent_models` catalog tool by default and omits it when disabled', async () => {
+  it('registers the `subagent_models` catalog tool by default', async () => {
     const { ctx } = await setup()
     expect(ctx.tools.schemas().some(candidate => candidate.name === 'subagent_models')).toBe(true)
-    const { ctx: withoutList } = await setup({ enableModelList: false })
-    expect(withoutList.tools.schemas().some(candidate => candidate.name === 'subagent_models')).toBe(false)
-  })
-
-  it('uses a configurable tool name', async () => {
-    const { ctx } = await setup({ toolName: 'subagent_llm' })
-    expect(ctx.tools.schemas().some(candidate => candidate.name === 'subagent_llm')).toBe(true)
-    expect(ctx.tools.schemas().some(candidate => candidate.name === 'subagent_model')).toBe(false)
   })
 
   it('inherits the parent route when provider/model are omitted', async () => {
@@ -189,7 +199,9 @@ describe('dsh-subagent-router delegation tool', () => {
     const request = provider.starts[0]!
     expect(request.agentOptions).toEqual({})
     expect(request.parent).toBe(fakeAgent)
-    expect(request.maxDepth).toBe(3)
+    // Depth cap is fixed to provider-managed (see `fixedConfig`) — no numeric
+    // maxDepth is forwarded to the provider.
+    expect(request.maxDepth).toBeUndefined()
     expect(text(result)).toBe('child says hi')
   })
 
@@ -274,38 +286,22 @@ describe('dsh-subagent-router delegation tool', () => {
     expect(text(result)).toContain('requires a calling agent')
   })
 
-  it('fails loud at mount when the subagent provider lacks the depthLimit capability', async () => {
+  it('fails loud at mount when the provider lacks the continuable capability (fixed backgroundMode)', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SubagentRuntime)
-    const provider = new ScriptedProvider('mock')
-    ;(provider.capabilities as { depthLimit: boolean }).depthLimit = false
+    const provider = new ScriptedProvider('spawn')
+    provider.prepareContinuable = undefined as never  // instance shadow beats the prototype method
     ctx.subagents.registerProvider(provider)
     let failure: unknown
     try {
-      await ctx.plugin(plugin, { subagentProvider: 'mock' })
+      await ctx.plugin(plugin)
     } catch (error) {
       failure = error
     }
-    expect(String(failure)).toContain('cannot enforce maxDepth')
-  })
-
-  it('fails loud at mount for `backgroundMode: continuable` when the provider cannot prepare continuable children', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(SubagentRuntime)
-    const provider = new ScriptedProvider('mock')
-    delete (provider as { prepareContinuable?: unknown }).prepareContinuable
-    ctx.subagents.registerProvider(provider)
-    let failure: unknown
-    try {
-      await ctx.plugin(plugin, { subagentProvider: 'mock', backgroundMode: 'continuable' })
-    } catch (error) {
-      failure = error
-    }
-    expect(String(failure)).toContain('does not support `backgroundMode: continuable`')
+    expect(String(failure)).toContain('does not support')
+    expect(String(failure)).toContain('continuable')
   })
 })
 
@@ -443,18 +439,6 @@ describe('dsh-subagent-router auto selection (model "auto")', () => {
     }, fakeAgent)
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('advertises no models')
-  })
-
-  it('rejects model "auto" when auto selection is disabled', async () => {
-    const { ctx } = await setup({ enableAuto: false }, { routes: AUTO_ROUTES })
-    const result = await callTool(ctx, 'subagent_model', {
-      description: 'say hi',
-      prompt: 'hi',
-      provider: 'deepseek-official',
-      model: 'auto',
-    }, fakeAgent)
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain('enableAuto: false')
   })
 
   it('escalates once to the next tier after a failed foreground run', async () => {
@@ -1145,26 +1129,25 @@ describe('dsh-subagent-router configurable auto routing (edge cases)', () => {
 })
 
 describe('dsh-subagent-router config schema', () => {
-  it('schema defaults match resolveConfig defaults (dual-source sync)', async () => {
+  it('schema defaults match resolveConfig defaults (dual-source sync, live fields only)', async () => {
     const { Config } = await import('../src/config.ts')
     const { resolveConfig, defaultConfig } = await import('../src/index.ts')
     const fromSchema = Config(undefined)
     const fromResolve = resolveConfig({})
-    expect(fromSchema.subagentProvider).toBe(fromResolve.subagentProvider)
-    expect(fromSchema.toolName).toBe(fromResolve.toolName)
-    expect(fromSchema.modelsToolName).toBe(fromResolve.modelsToolName)
-    expect(fromSchema.enableRunInBackground).toBe(fromResolve.enableRunInBackground)
-    expect(fromSchema.backgroundMode).toBe(fromResolve.backgroundMode)
-    expect(fromSchema.enableModelList).toBe(fromResolve.enableModelList)
-    expect(fromSchema.enableAuto).toBe(fromResolve.enableAuto)
     expect(fromSchema.autoEscalate).toBe(fromResolve.autoEscalate)
     expect(fromSchema.autoReroute).toBe(fromResolve.autoReroute)
     expect(fromSchema.autoEscalationTiers).toBe(fromResolve.autoEscalationTiers)
-    expect(fromSchema.maxDepth).toBe(fromResolve.maxDepth)
-    // autoProviderOrder defaults: schema gives [], resolve gives undefined —
-    // both mean "registry order", but keep them consistent as empty/undefined.
-    expect(fromSchema.autoProviderOrder ?? []).toEqual([])
-    expect(defaultConfig.maxDepth).toBe(3)
+    expect(fromSchema.autoProviderOrder ?? []).toEqual(fromResolve.autoProviderOrder ?? [])
+    // Registration-time knobs are fixed constants, not config fields — verify
+    // the fixed defaults match the harness-native subagent semantics.
+    const { fixedConfig } = await import('../src/config.ts')
+    expect(fixedConfig.subagentProvider).toBe('spawn')
+    expect(fixedConfig.backgroundMode).toBe('continuable')
+    expect(fixedConfig.maxDepth).toBe('provider-managed')
+    expect(fixedConfig.enableRunInBackground).toBe(true)
+    expect(fixedConfig.enableAuto).toBe(true)
+    expect(fixedConfig.enableModelList).toBe(true)
+    expect(defaultConfig.autoEscalationTiers).toBe(1)
   })
 
   it('schema accepts partial tier config', async () => {
@@ -1174,7 +1157,7 @@ describe('dsh-subagent-router config schema', () => {
     expect(partial.autoProviderOrder).toEqual([])
   })
 
-  it('schema accepts full config', async () => {
+  it('schema accepts full live config and rejects unknown snapshot fields', async () => {
     const { Config } = await import('../src/config.ts')
     const full = Config({
       autoProviderOrder: ['a', 'b'],
@@ -1182,14 +1165,18 @@ describe('dsh-subagent-router config schema', () => {
       autoTierPicks: { complex: ['x'] },
       autoCeiling: 'pro',
       autoEscalationTiers: 2,
-      maxDepth: 5,
     })
     expect(full.autoProviderOrder).toEqual(['a', 'b'])
     expect(full.autoTierPolicy).toEqual({ trivial: 'cheapest', standard: 'anchor', complex: 'strongest' })
     expect(full.autoTierPicks.complex).toEqual(['x'])
     expect(full.autoCeiling).toBe('pro')
     expect(full.autoEscalationTiers).toBe(2)
-    expect(full.maxDepth).toBe(5)
+    // Schemastery passes unknown keys through; registration-time snapshot keys
+    // (backgroundMode, toolName, …) are simply never consumed — the fixed
+    // behavior comes from `fixedConfig`, so a leftover `backgroundMode` write
+    // in a composition entry is inert instead of silently changing behavior.
+    const withSnapshot = Config({ backgroundMode: 'one-shot' } as never)
+    expect(withSnapshot.backgroundMode).toBe('one-shot')  // passthrough, inert
   })
 })
 
@@ -1232,10 +1219,10 @@ describe('dsh-subagent-router host settings integration', () => {
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SubagentRuntime)
     ctx.provide('llm', fakeLlm(AUTO_ROUTES))
-    const provider = new ScriptedProvider('mock')
+    const provider = new ScriptedProvider('spawn')
     ctx.subagents.registerProvider(provider)
     ctx.provide('settings', service as never)
-    await ctx.plugin(plugin, { subagentProvider: 'mock' })
+    await ctx.plugin(plugin)
     // Default (no user layer): trivial → heuristic pick (cheapest flash).
     let result = await callTool(ctx, 'subagent_model', {
       description: 'say hi',

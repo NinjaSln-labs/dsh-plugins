@@ -42,12 +42,11 @@
  * `subagents` / `llm` 注册表，不发布服务，因此无需 isolate realm）。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { assertSubagentMaxDepth } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { registerModelPickerTools } from './tools.ts'
-import { Config } from './config.ts'
+import { Config, fixedConfig } from './config.ts'
 export { Config } from './config.ts'
 
 /** Prompt order after bounded delegation policy and before child reporting. */
@@ -60,23 +59,11 @@ export type AutoTierPolicyMode = 'anchor' | 'cheapest' | 'strongest'
 export type AutoTierPolicy = Partial<Record<'trivial' | 'standard' | 'complex', AutoTierPolicyMode>>
 
 /**
- * Plugin config; every field optional with a sane default.
+ * Plugin config; every field optional with a sane default. Only LIVE fields
+ * (re-read on every tool call) live here — registration-time knobs are fixed
+ * module constants in `fixedConfig` (see config.ts), not configurable.
  */
 export interface ModelPickerConfig {
-  /** The `ctx.subagents` provider name to start runs on (default `spawn`). */
-  subagentProvider?: string
-  /** Model-facing delegation tool name (default `subagent_model`). */
-  toolName?: string
-  /** Model-facing catalog tool name (default `subagent_models`). */
-  modelsToolName?: string
-  /** Expose `run_in_background` on the delegation tool (default true). */
-  enableRunInBackground?: boolean
-  /** Background policy (default `one-shot`); `continuable` needs the provider's `prepareContinuable`. */
-  backgroundMode?: 'one-shot' | 'continuable'
-  /** Register the `subagent_models` catalog tool (default true). */
-  enableModelList?: boolean
-  /** Accept `model: "auto"` on the delegation tool (default true). */
-  enableAuto?: boolean
   /** After a failed foreground run, retry once on the next auto tier (default true). */
   autoEscalate?: boolean
   /** Reroute to a healthy provider route when the auto-chosen route fails terminally (quota/auth) (default true). */
@@ -91,49 +78,32 @@ export interface ModelPickerConfig {
   autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
   /** Hard ceiling: `model: "auto"` never picks a model stronger than this id (budget cap). */
   autoCeiling?: string
-  /** Child depth cap (default 3; `'provider-managed'` sends no cap). */
-  maxDepth?: number | 'provider-managed'
 }
 
 export const name = 'dsh-subagent-router'
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
 export const defaultConfig = {
-  subagentProvider: 'spawn',
-  toolName: 'subagent_model',
-  modelsToolName: 'subagent_models',
-  enableRunInBackground: true,
-  backgroundMode: 'one-shot',
-  enableModelList: true,
-  enableAuto: true,
   autoEscalate: true,
   autoReroute: true,
   autoEscalationTiers: 1,
-  maxDepth: 3,
-} as const satisfies Omit<Required<ModelPickerConfig>, 'autoProviderOrder' | 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>
+  autoProviderOrder: [] as string[],
+} as const satisfies Required<Pick<ModelPickerConfig, 'autoEscalate' | 'autoReroute' | 'autoEscalationTiers' | 'autoProviderOrder'>>
 
-/** The fully resolved config after defaults: the four priority fields stay optional, everything else required. */
+/** The fully resolved config after defaults: per-tier picks, policy, and ceiling stay optional. */
 export type ResolvedModelPickerConfig =
-  Required<Omit<ModelPickerConfig, 'autoProviderOrder' | 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>>
-  & Pick<ModelPickerConfig, 'autoProviderOrder' | 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>
+  Required<Omit<ModelPickerConfig, 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>>
+  & Pick<ModelPickerConfig, 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>
 
 export function resolveConfig(config: ModelPickerConfig): ResolvedModelPickerConfig {
   return {
-    subagentProvider: config.subagentProvider ?? defaultConfig.subagentProvider,
-    toolName: config.toolName ?? defaultConfig.toolName,
-    modelsToolName: config.modelsToolName ?? defaultConfig.modelsToolName,
-    enableRunInBackground: config.enableRunInBackground ?? defaultConfig.enableRunInBackground,
-    backgroundMode: config.backgroundMode ?? defaultConfig.backgroundMode,
-    enableModelList: config.enableModelList ?? defaultConfig.enableModelList,
-    enableAuto: config.enableAuto ?? defaultConfig.enableAuto,
     autoEscalate: config.autoEscalate ?? defaultConfig.autoEscalate,
     autoReroute: config.autoReroute ?? defaultConfig.autoReroute,
     autoEscalationTiers: config.autoEscalationTiers ?? defaultConfig.autoEscalationTiers,
-    autoProviderOrder: config.autoProviderOrder,
+    autoProviderOrder: config.autoProviderOrder ?? defaultConfig.autoProviderOrder,
     autoTierPolicy: config.autoTierPolicy,
     autoTierPicks: config.autoTierPicks,
     autoCeiling: config.autoCeiling,
-    maxDepth: config.maxDepth ?? defaultConfig.maxDepth,
   }
 }
 
@@ -161,49 +131,44 @@ export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
       if (readScope !== undefined) resolved = resolveConfig(readScope())
     },
   })
-  // Direct apply() bypasses any schema defaults; validate here like the
-  // shipped tool does.
-  if (resolved.maxDepth !== 'provider-managed') assertSubagentMaxDepth(resolved.maxDepth)
-  const backgroundEnabled = resolved.enableRunInBackground
-  const continuable = resolved.backgroundMode === 'continuable'
+  // Registration-time knobs are fixed constants (see `fixedConfig` in
+  // config.ts): the subagent provider, tool names, background mode
+  // (continuable — matches the harness-native subagent semantics), feature
+  // toggles, and the depth cap (provider-managed — no capability requirement).
+  const backgroundEnabled = fixedConfig.enableRunInBackground
+  const continuable = fixedConfig.backgroundMode === 'continuable'
 
   // Mirror provider lifecycle: sibling load order and HMR replacement can
   // change provider availability while this fiber stays active.
   let disposeTools: (() => void) | undefined
   const mount = (provider: SubagentProvider): void => {
-    // A numeric cap the provider cannot enforce is a misconfiguration — fail
-    // at mount (the earliest point capabilities are known), not on delegation.
-    if (typeof resolved.maxDepth === 'number' && !provider.capabilities.depthLimit) {
-      throw new Error(
-        `dsh-subagent-router: provider "${provider.name}" cannot enforce maxDepth `
-        + `(no depthLimit capability) — set maxDepth: 'provider-managed' to leave the recursion `
-        + 'budget to the provider',
-      )
-    }
+    // Continuable is the fixed background mode; a provider without
+    // `prepareContinuable` cannot host children at all — fail at mount (the
+    // earliest point capabilities are known), not on delegation.
     if (continuable && provider.prepareContinuable === undefined) {
       throw new Error(
         `dsh-subagent-router: provider "${provider.name}" does not support `
-        + '`backgroundMode: continuable`',
+        + 'the fixed `backgroundMode: continuable` (no prepareContinuable capability)',
       )
     }
     disposeTools = registerModelPickerTools(ctx, getResolved)
   }
 
   ctx.on('subagent/provider-added', (provider) => {
-    if (provider.name === resolved.subagentProvider && disposeTools === undefined) mount(provider)
+    if (provider.name === fixedConfig.subagentProvider && disposeTools === undefined) mount(provider)
   })
   ctx.on('subagent/provider-removed', (name) => {
-    if (name !== resolved.subagentProvider || disposeTools === undefined) return
+    if (name !== fixedConfig.subagentProvider || disposeTools === undefined) return
     disposeTools()
     disposeTools = undefined
   })
-  const present = ctx.subagents.getProvider(resolved.subagentProvider)
+  const present = ctx.subagents.getProvider(fixedConfig.subagentProvider)
   if (present !== undefined) {
     mount(present)
   } else {
     ctx.logger.info(
-      `dsh-subagent-router: subagent provider "${resolved.subagentProvider}" not registered yet; `
-      + `the "${resolved.toolName}" tool will register when it appears`,
+      `dsh-subagent-router: subagent provider "${fixedConfig.subagentProvider}" not registered yet; `
+      + `the "${fixedConfig.toolName}" tool will register when it appears`,
     )
   }
 
@@ -211,11 +176,11 @@ export function apply(ctx: Context, config: ModelPickerConfig = {}): void {
     // The section follows provider availability without its own manual
     // lifecycle: empty text is omitted while the tool is absent.
     ctx.systemPrompt.section({
-      name: `tool:${resolved.toolName}`,
+      name: `tool:${fixedConfig.toolName}`,
       order: SUBAGENT_SECTION_ORDER,
-      text: context => disposeTools === undefined || ctx.tools.get(resolved.toolName, context.scope) === undefined
+      text: context => disposeTools === undefined || ctx.tools.get(fixedConfig.toolName, context.scope) === undefined
         ? ''
-        : `Use ${resolved.toolName} in the background by default. Start independent delegations together in one assistant message and continue useful work while they run. Set \`run_in_background: false\` only when your next action depends on that subagent's result. When a background run settles, the runtime sends you a notice containing its outcome and any final assistant message.`,
+        : `Use ${fixedConfig.toolName} in the background by default. Start independent delegations together in one assistant message and continue useful work while they run. Set \`run_in_background: false\` only when your next action depends on that subagent's result. When a background run settles, the runtime sends you a notice containing its outcome and any final assistant message.`,
     })
   }
 }
