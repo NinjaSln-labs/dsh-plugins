@@ -359,10 +359,24 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
   const onCancel = (): void => { setDraft(null); setSaved(false) }
   // Catalog-derived candidates for the pickers (provider ids and model ids).
   const providerCandidates = catalog.groups.map(group => ({ id: group.id, label: group.name }))
-  // Models deduped by id (the same model id may be advertised by several providers).
-  const modelCandidates = [...new Map(
-    catalog.groups.flatMap(group => group.models.map(model => [model.id, { id: model.id, label: model.name }] as const)),
-  ).values()]
+  // Models deduped by id (autoTierPicks stores model ids, not provider-bound
+  // selections): annotate each with its provider(s) so the same id advertised
+  // by several providers is recognizable.
+  const modelProviders = new Map<string, { name: string; providers: string[] }>()
+  for (const group of catalog.groups) {
+    for (const model of group.models) {
+      const entry = modelProviders.get(model.id)
+      if (entry === undefined) {
+        modelProviders.set(model.id, { name: model.name, providers: [group.name] })
+      } else if (!entry.providers.includes(group.name)) {
+        entry.providers.push(group.name)
+      }
+    }
+  }
+  const modelCandidates = [...modelProviders].map(([id, { name, providers }]) => ({
+    id,
+    label: providers.length > 1 ? `${name}（${providers.join(' / ')}）` : `${name}（${providers[0]}）`,
+  }))
   const chevron = React.createElement('svg', {
     className: 'sr-chevron',
     viewBox: '0 0 16 16',
