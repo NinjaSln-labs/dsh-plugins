@@ -1,18 +1,27 @@
 # 发布记录：dsh-subagent-router
 
-**已发布**（GitHub + npm）：`dsh-subagent-router@0.2.0`（latest，git CI 自动发布）。旧名 `dsh-subagent-model-picker`（0.1.0 / 0.1.1）已 deprecate 指向本包。
+**已发布**（GitHub + npm）：`dsh-subagent-router@0.3.0`（latest，git CI 自动发布）。旧名 `dsh-subagent-model-picker`（0.1.0 / 0.1.1）已 deprecate 指向本包。
 
 ## 发布状态（2026-08-27 更新）
 
 | 项 | 状态 |
 |---|---|
-| npm | ✅ `dsh-subagent-router@0.2.0`（latest，CI 自动发布 run completed success）· `0.1.1` · `0.1.0`（手动首发 bootstrap） |
-| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main，tag `subagent-router-v0.2.0` |
+| npm | ✅ `dsh-subagent-router@0.3.0`（latest，CI 自动发布）· `0.2.0` · `0.1.1` · `0.1.0`（手动首发 bootstrap） |
+| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main，tag `subagent-router-v0.3.0` |
 | 旧包 | ✅ `dsh-subagent-model-picker` 0.1.0/0.1.1 deprecated（Renamed to dsh-subagent-router） |
-| profile | `~/.dsh/profiles/web` 仍为 `file:/mnt/e/...` 本地链接（发版后可选切回 npm `^0.2.0`，见 HANDOFF §3.1） |
-| 发布管道 | ✅ tag → 版本守卫 → 验证链 → 人工审批 → publish（0.1.1 首次跑通；0.2.0 第二次） |
+| profile | `~/.dsh/profiles/web` 仍为 `file:/mnt/e/...` 本地链接（发版后可选切回 npm `^0.3.0`，见 HANDOFF §3.1） |
+| 发布管道 | ✅ tag → 版本守卫 → 验证链 → 人工审批 → publish（0.1.1 首次跑通；0.3.0 第三次） |
 
 ## 版本历史
+
+- **0.3.0** — **配置面瘦身 + 枚举化 + 1c 目录元数据**（接手会话配置体验闭环，breaking）：
+  - 配置面瘦身：注册快照 8 项（subagentProvider/toolName/modelsToolName/enableRunInBackground/backgroundMode/enableModelList/enableAuto/maxDepth）剔除、固定为 `fixedConfig`（spawn / continuable / provider-managed）；只留 live 字段——「保存即生效」对所有可见配置成立
+  - 枚举化候选：`autoProviderOrder`/`autoTierPicks` 改真实目录下拉（client `connection.api.llm.models` 全局目录，OrderedPicker 有序多选，归一化聚合 + 供应商标注）
+  - **移除 autoCeiling**（最后一处手填模型 id，语义与 tierPolicy 重叠）；autoTierPicks 改按 `autoProviderOrder` 顺序找
+  - ROADMAP 1c：`subagent_models` 每个模型加派生元数据（cost/speed/strength/specialty/contextWindow，`src/meta.ts`）
+  - 设置页 UX：分组标题/层次、触控目标、`:focus-visible`、保存反馈、tier policy 保存修复（stale 闭包 + patch 冗余值根因）
+  - 配置面最终：**6 个 live 字段**；67/67 vitest
+  - 发布前置（承接）：client build 干净安装缺陷已在前版修复（`500933b`，ui-slots devDep pin）
 
 - **0.2.0** — **健康感知 + 配置化 + 设置页 UI**（HANDOFF 会话三大功能块）：
   - 内容：失败分类脱敏透传、死锚检测（RouteHealthStore）、终态换路（autoReroute）、升级参数化（autoEscalationTiers）、目录健康标注、模型路由优先级配置化四层（autoProviderOrder/autoTierPolicy/autoTierPicks/autoCeiling）、设置页配置 UI（host+client 化，settings 命名空间 + 插件卡片）
