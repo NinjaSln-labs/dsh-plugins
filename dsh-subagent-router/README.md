@@ -13,6 +13,7 @@
 |---|---|
 | `subagent_model` | 委派任务给子代理，并在本次调用中指定 `provider` / `model` / `max_tokens`。省略的字段继承调用方代理的路由。传 `model: "auto"` 可把模型选择交给内置自动策略。 |
 | `subagent_models` | 只读目录：列出当前 `ctx.llm` 上注册的 provider 路由（`listProviders()`）及每个 provider 广告的模型列表，并为每个模型标注**派生元数据**（`cost` 成本档 / `speed` 速度档 / `strength` 强度档 / `specialty` 特长 / `contextWindow` 已知模型的上下文窗口）+ 每个路由的 `health` 状态。 |
+| `subagent_recommend` | 智能推荐：任务描述 → 返回排名靠前的 provider/model 建议（top-n，默认 3）。首选一次轻量 LLM 分类（`ctx.llm.stream()`，**锚定父模型**、失败多候选重试），并把全量目录精简成一个「模型选型范围」（≤12 = cheapest/medium/strong/best 四档各 3、去版本归一、多 provider 按优先级去重）喂给分类器；分类失败即降级到命名启发式并说明原因。结果带 `recommended`（系统默认首选）与 `tier` 四档。 |
 
 ### 模型选择如何工作
 
@@ -32,7 +33,7 @@
 5. **失败恢复**（仅前台调用）：
    - **瞬态失败升级**（`autoEscalate` + `autoEscalationTiers`）：`rate-limit` / `server` / `timeout` / `transport` / 未分类失败时，用下一档重试（`trivial → standard → complex`，默认最多 1 次），但仅当该选择**严格更强**于当前模型时才升级 —— 锚定的强父模型永远不会被降级。重试结果记录 `escalatedFrom`。
    - **终态失败换路**（`autoReroute`）：`quota` / `auth`（配额耗尽 / 凭据失效）重试同一 provider 无意义 —— 直接换到目录里第一个健康的 provider 路由重启（`reroutedFrom` + `rerouteReason`）。升级中若撞上终态失败也会停止继续升级该 provider。
-6. **健康感知（死锚检测）**：插件在会话内记录每个 provider 路由的失败分类。一旦父模型所在路由被判定不健康（`quota` / `auth` 为终态、瞬时类 60 秒 TTL），后续 `model: "auto"` 调用**不再锚定**该父路由，而是直接改挑健康 provider —— 避免把子代理一直钉在坏路由上。`subagent_models` 目录工具也会为每个 provider 标注 `health: healthy/unhealthy` + `failingClass` + `retryAfterSec`。
+6. **健康感知（死锚检测）**：插件在会话内记录每个 provider 路由的失败分类。一旦父模型所在路由被判定不健康，后续 `model: "auto"` 调用**不再锚定**该父路由，而是直接改挑健康 provider —— 避免把子代理一直钉在坏路由上。过期时间**按失败类型分档**：`auth` 终态（不过期）· 不支持模型 24h · `rate-limit` 用 retry-after（无则约 35s，RPM 假设）· `quota` 下一整点 · `server`/`timeout`/`transport`/`context` 60s · 未分类默认 5min。`subagent_models` 目录工具也会为每个 provider 标注 `health: healthy/unhealthy` + `failingClass` + `retryAfterSec`。
 7. **失败详情透传**：子代理失败不再只是「subagent run failed」——能观测到的失败（`start` 拒绝、基础设施故障）会被分类（quota / rate-limit / auth / context / server / timeout / transport）并**脱敏**后拼进工具结果（含 HTTP 状态码与 retry-after），调用方直接看到「provider rate-limited (http 429)」而不是误判成执行失败。
 
 策略刻意保守：默认沿用调用方自己的模型，只有任务明显超出弱父模型能力时才升级，从不隐藏自己的决策理由，并且一旦路由被证实不健康就果断换路而不是盲目重试。
