@@ -35,15 +35,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Serialized config shape the host namespace resolves (mirrors src/config.ts). */
+/** Serialized config shape the host namespace resolves (mirrors src/config.ts — live fields only). */
 type Section = {
-  subagentProvider?: string
-  toolName?: string
-  modelsToolName?: string
-  enableRunInBackground?: boolean
-  backgroundMode?: 'one-shot' | 'continuable'
-  enableModelList?: boolean
-  enableAuto?: boolean
   autoEscalate?: boolean
   autoReroute?: boolean
   autoEscalationTiers?: number
@@ -51,7 +44,6 @@ type Section = {
   autoTierPolicy?: Partial<Record<'trivial' | 'standard' | 'complex', 'anchor' | 'cheapest' | 'strongest'>>
   autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
   autoCeiling?: string
-  maxDepth?: number | 'provider-managed'
 }
 
 const CSS = `
@@ -86,27 +78,18 @@ const CSS = `
 
 /** One typed field: id, label, kind, and the render control's value type. */
 type Field =
-  | { id: keyof Section; label: string; hint?: string; kind: 'text'; get: (s: Section) => string | undefined; set: (s: Section, v: string) => Section }
-  | { id: keyof Section; label: string; hint?: string; kind: 'number'; get: (s: Section) => number | undefined; set: (s: Section, v: number) => Section }
+  | { id: keyof Section; label: string; hint?: string; kind: 'number'; min?: number; get: (s: Section) => number | undefined; set: (s: Section, v: number) => Section }
   | { id: keyof Section; label: string; hint?: string; kind: 'boolean'; get: (s: Section) => boolean | undefined; set: (s: Section, v: boolean) => Section }
-  | { id: keyof Section; label: string; hint?: string; kind: 'enum'; options: string[]; get: (s: Section) => string | undefined; set: (s: Section, v: string) => Section }
+  | { id: keyof Section; label: string; hint?: string; kind: 'text'; get: (s: Section) => string | undefined; set: (s: Section, v: string) => Section }
   | { id: keyof Section; label: string; hint?: string; kind: 'array'; get: (s: Section) => string[] | undefined; set: (s: Section, v: string[]) => Section }
 
 /** Declarative field list — single source for the form (mirrors src/config.ts). */
 const FIELDS: Field[] = [
-  { id: 'subagentProvider', label: '子代理提供方', hint: '启动子代理的 ctx.subagents 提供方（默认 spawn）。', kind: 'text', get: s => s.subagentProvider, set: (s, v) => ({ ...s, subagentProvider: v }) },
-  { id: 'toolName', label: '委派工具名', hint: '面向模型的委派工具（默认 subagent_model）。', kind: 'text', get: s => s.toolName, set: (s, v) => ({ ...s, toolName: v }) },
-  { id: 'modelsToolName', label: '目录工具名', hint: '面向模型的目录工具（默认 subagent_models）。', kind: 'text', get: s => s.modelsToolName, set: (s, v) => ({ ...s, modelsToolName: v }) },
-  { id: 'enableRunInBackground', label: '启用 run_in_background', hint: '暴露 run_in_background 参数。', kind: 'boolean', get: s => s.enableRunInBackground, set: (s, v) => ({ ...s, enableRunInBackground: v }) },
-  { id: 'backgroundMode', label: '后台模式', hint: 'one-shot 前台等待；continuable 返回持久子代理 id。', kind: 'enum', options: ['one-shot', 'continuable'], get: s => s.backgroundMode, set: (s, v) => ({ ...s, backgroundMode: v as 'one-shot' | 'continuable' }) },
-  { id: 'enableModelList', label: '启用目录工具', hint: '注册 subagent_models。', kind: 'boolean', get: s => s.enableModelList, set: (s, v) => ({ ...s, enableModelList: v }) },
-  { id: 'enableAuto', label: '启用 model: "auto"', hint: '委派工具接受 model: "auto"。', kind: 'boolean', get: s => s.enableAuto, set: (s, v) => ({ ...s, enableAuto: v }) },
-  { id: 'autoEscalate', label: '失败时升级', hint: '运行失败后沿下一档自动重试。', kind: 'boolean', get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
+  { id: 'autoEscalate', label: '失败时升级', hint: '运行失败后沿下一档自动重试（仅前台时）。', kind: 'boolean', get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
   { id: 'autoReroute', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
-  { id: 'autoEscalationTiers', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
-  { id: 'autoProviderOrder', label: '提供方优先级', hint: '逗号分隔的提供方路由 id，优先的在前。', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
-  { id: 'autoCeiling', label: '预算封顶', hint: '绝不选择比该模型更强的模型。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
-  { id: 'maxDepth', label: '最大深度', hint: '子代理深度上限；provider-managed 表示不设限。', kind: 'enum', options: ['3', '4', '5', 'provider-managed'], get: s => s.maxDepth === undefined ? undefined : String(s.maxDepth), set: (s, v) => ({ ...s, maxDepth: v === 'provider-managed' ? 'provider-managed' : Number(v) }) },
+  { id: 'autoEscalationTiers', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', min: 0, get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
+  { id: 'autoProviderOrder', label: '提供方优先级', hint: '逗号分隔的提供方路由 id，优先的在前；未列出的排在其后。', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
+  { id: 'autoCeiling', label: '预算封顶', hint: '绝不选择比该模型更强的模型（不在目录时忽略）。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
 ]
 
 const TIER_LABELS: Array<['trivial' | 'standard' | 'complex', string]> = [
@@ -114,8 +97,9 @@ const TIER_LABELS: Array<['trivial' | 'standard' | 'complex', string]> = [
   ['standard', '普通'],
   ['complex', '复杂'],
 ]
-const MODE_OPTIONS = ['anchor', 'cheapest', 'strongest']
+const MODE_OPTIONS = ['', 'anchor', 'cheapest', 'strongest']
 const MODE_LABELS: Record<string, string> = {
+  '': '默认（内置启发式）',
   anchor: '锚定父模型',
   cheapest: '最便宜',
   strongest: '最强',
@@ -156,11 +140,12 @@ function FieldControl(props: {
             id: `sr-${String(field.id)}`,
             className: 'sr-input',
             type: 'number',
+            ...(field.min !== undefined ? { min: field.min } : {}),
             value: current === undefined ? '' : String(current),
             disabled,
             onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
               const n = Number(e.target.value)
-              if (!Number.isNaN(n)) onEdit(field.set(value, n))
+              if (!Number.isNaN(n) && (field.min === undefined || n >= field.min)) onEdit(field.set(value, n))
             },
           }),
         ),
@@ -182,23 +167,6 @@ function FieldControl(props: {
           }),
           hint,
         ),
-      )
-    }
-    case 'enum': {
-      const current = field.get(value) ?? ''
-      return React.createElement('div', { className: 'sr-field' },
-        React.createElement('label', { className: 'sr-label', htmlFor: `sr-${String(field.id)}` }, field.label),
-        React.createElement('div', { className: 'sr-control' },
-          React.createElement('select', {
-            id: `sr-${String(field.id)}`,
-            className: 'sr-input',
-            value: current,
-            disabled,
-            onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onEdit(field.set(value, e.target.value)),
-          }, field.options.map(option =>
-            React.createElement('option', { key: option, value: option }, option))),
-        ),
-        hint,
       )
     }
     case 'array': {
@@ -247,8 +215,25 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
   }
   const onTierEdit = (tier: 'trivial' | 'standard' | 'complex', mode: string): void => {
     const base = draft ?? committed
-    const next = { ...(base.autoTierPolicy ?? {}), [tier]: mode }
-    setDraft({ ...base, autoTierPolicy: next })
+    const current = base.autoTierPolicy ?? {}
+    const next = { ...current }
+    if (mode === '') {
+      delete next[tier]
+    } else {
+      next[tier] = mode as 'anchor' | 'cheapest' | 'strongest'
+    }
+    setDraft({ ...base, autoTierPolicy: Object.keys(next).length > 0 ? next : undefined })
+  }
+  const onTierPicksEdit = (tier: 'trivial' | 'standard' | 'complex', parts: string[]): void => {
+    const base = draft ?? committed
+    const current = base.autoTierPicks ?? {}
+    const next = { ...current }
+    if (parts.length === 0) {
+      delete next[tier]
+    } else {
+      next[tier] = parts
+    }
+    setDraft({ ...base, autoTierPicks: Object.keys(next).length > 0 ? next : undefined })
   }
   const onSave = (): void => {
     if (draft === null) return
@@ -319,7 +304,28 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
               React.createElement('option', { key: option, value: option }, MODE_LABELS[option] ?? option))),
           ),
           React.createElement('div', { className: 'sr-hint' },
-            `${label}任务的选型模式（空 = 内置启发式）。`),
+            `${label}任务的选型模式（默认 = 内置启发式）。`),
+        )
+      }),
+      ...TIER_LABELS.map(([tier, label]) => {
+        const current = (value.autoTierPicks?.[tier] ?? []).join(', ')
+        return React.createElement('div', { className: 'sr-field', key: `picks-${tier}` },
+          React.createElement('label', { className: 'sr-label', htmlFor: `sr-picks-${tier}` }, `${label}任务候选模型`),
+          React.createElement('div', { className: 'sr-control' },
+            React.createElement('input', {
+              id: `sr-picks-${tier}`,
+              className: 'sr-input',
+              value: current,
+              disabled,
+              placeholder: 'model-a, model-b（逗号分隔，优先在前）',
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onTierPicksEdit(
+                tier,
+                e.target.value.split(',').map(part => part.trim()).filter(Boolean),
+              ),
+            }),
+          ),
+          React.createElement('div', { className: 'sr-hint' },
+            `覆盖${label}任务选型：按序选第一个被健康提供方广告的模型（可跨提供方）。`),
         )
       }),
       React.createElement('div', { className: 'sr-actions' },

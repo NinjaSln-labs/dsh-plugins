@@ -47,37 +47,35 @@ bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools`
 
 ## 配置
 
-**设置页 UI**：插件提供 client half，配置可在 **设置 → 插件配置** 里直接编辑（`subagent-router` 卡片）。编辑即时写入用户设置层（`~/.dsh/settings.yaml` 的 `subagent-router` 段），**无需重启**即对下一次 `subagent_model` 调用生效；清除字段回退到下方组合行配置。
+**设置页 UI**：插件提供 client half，配置可在 **设置 → 插件配置** 里直接编辑（`subagent-router` 卡片）。**全部可配置项都是 live 字段**——编辑即时写入用户设置层（`~/.dsh/settings.yaml` 的 `subagent-router` 段），**保存后下一次 `subagent_model` 调用即生效，无需重启**；清除字段回退到下方组合行配置。
 
 也可以写在组合行的 `config` 里（作为 base 层，被设置页 user 层覆盖）：
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
-| `subagentProvider` | `spawn` | 启动子代理的 `ctx.subagents` provider。 |
-| `toolName` | `subagent_model` | 面向模型的委派工具名。 |
-| `modelsToolName` | `subagent_models` | 面向模型的目录工具名。 |
-| `enableRunInBackground` | `true` | 是否暴露 `run_in_background` 参数。 |
-| `backgroundMode` | `one-shot` | `one-shot` 默认前台等待；`continuable` 默认后台执行、返回持久子代理 id，并要求 provider 具备 `prepareContinuable` 能力。 |
-| `enableModelList` | `true` | 是否注册 `subagent_models` 目录工具。 |
-| `enableAuto` | `true` | 是否接受委派工具上的 `model: "auto"`。 |
 | `autoEscalate` | `true` | 前台运行失败后是否用高一档自动重试一次。 |
 | `autoReroute` | `true` | 终态失败（quota/auth）时是否换到健康 provider 路由重试。 |
 | `autoEscalationTiers` | `1` | 同一 provider 上瞬态失败的最大升级次数（`0` 表示不升级）。 |
 | `autoProviderOrder` | — | **provider 优先级**：`model: "auto"` 按此顺序解析 provider（未列出的排在之后）；父路由不健康或缺失时用它兜底。不配则用注册表顺序。 |
-| `autoTierPolicy` | — | **每档选型模式**：`{ trivial|standard|complex: 'anchor'\|'cheapest'\|'strongest' }`。`anchor`=父路由健康时沿用父模型；`cheapest`=目录里命名分最低；`strongest`=最高。未配的档位保持内置启发式。 |
-| `autoTierPicks` | — | **每档显式候选序**：`{ trivial|standard|complex: [modelId, ...] }`，完全覆盖该档选型；候选是全局模型优先级，第一个被任意健康 provider 广告的模型胜出（可跨 provider）。 |
+| `autoTierPolicy` | — | **每档选型模式**：`{ trivial\|standard\|complex: 'anchor'\|'cheapest'\|'strongest' }`。`anchor`=父路由健康时沿用父模型；`cheapest`=目录里命名分最低；`strongest`=最高。未配的档位保持内置启发式。 |
+| `autoTierPicks` | — | **每档显式候选序**：`{ trivial\|standard\|complex: [modelId, ...] }`，完全覆盖该档选型；候选是全局模型优先级，第一个被任意健康 provider 广告的模型胜出（可跨 provider）。 |
 | `autoCeiling` | — | **预算封顶**：`model: "auto"` 永不超过该模型强度（命名分更高时截断到它）。不在目录时忽略。 |
-| `maxDepth` | `3` | 子代理深度上限；`'provider-managed'` 表示不设上限（数值上限要求 provider 具备 `depthLimit` 能力）。 |
+
+**固定默认（不可配置）**：注册期行为固定为合理默认，不再暴露为配置项（早期版本这些字段可配但「保存」不生效，是陷阱）：
+
+| 槽位 | 固定值 | 理由 |
+|---|---|---|
+| 子代理提供方 | `spawn` | dsh 主程序的默认可续子代理提供方。 |
+| 委派/目录工具名 | `subagent_model` / `subagent_models` | 标准命名，改名无场景价值。 |
+| 后台模式 | `continuable` | 与 dsh harness 原生 subagent 语义一致：**默认后台、立即返回持久子代理 id、同会话可续聊**；需要前台等待时显式传 `run_in_background: false`。要求提供方具备 `prepareContinuable`（不支持则挂载时 fail-loud）。 |
+| 功能开关 | 全开（`run_in_background` / `model: "auto"` / 目录工具） | 关闭无场景价值。 |
+| 深度上限 | `provider-managed` | 交给提供方管理递归预算，任何提供方可挂载（不要求 `depthLimit` 能力）。 |
 
 示例行：
 
 ```yaml
 - id: subagent-router
   name: 'dsh-subagent-router'
-  config:
-    subagentProvider: spawn
-    toolName: subagent_model
-    backgroundMode: one-shot
 ```
 
 带模型路由优先级的示例（按你自己的供应商偏好配置）：

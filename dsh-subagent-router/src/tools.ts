@@ -22,6 +22,7 @@ import type { SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type { ResolvedModelPickerConfig } from './index.ts'
 import type { AutoTierPolicyMode } from './index.ts'
+import { fixedConfig } from './config.ts'
 import { classifyFailure, failureLabel, sanitizeFailureDetail } from './failure.ts'
 import type { FailureClass } from './failure.ts'
 import { RouteHealthStore } from './health.ts'
@@ -774,7 +775,7 @@ async function runForegroundWithRecovery(
   const attemptLabels: Array<{ model: string; provider: string; detail: string }> = []
   const labelFor = (options: Record<string, unknown>): { model: string; provider: string } => ({
     model: String(options.model ?? autoSelection?.decision.model ?? '(inherited)'),
-    provider: String(options.provider ?? autoSelection?.decision.provider ?? config.subagentProvider),
+    provider: String(options.provider ?? autoSelection?.decision.provider ?? fixedConfig.subagentProvider),
   })
   const recordAttempt = (options: Record<string, unknown>, error: unknown): void => {
     failures.push(error)
@@ -805,7 +806,7 @@ async function runForegroundWithRecovery(
         })
       }
     }
-    throw buildFailureAggregate(config.toolName, failures, attemptLabels)
+    throw buildFailureAggregate(fixedConfig.toolName, failures, attemptLabels)
   }
 
   try {
@@ -865,7 +866,7 @@ async function runForegroundWithRecovery(
         }
       }
     }
-    throw buildFailureAggregate(config.toolName, failures, attemptLabels)
+    throw buildFailureAggregate(fixedConfig.toolName, failures, attemptLabels)
   }
 }
 
@@ -877,19 +878,20 @@ export function registerModelPickerTools(
   ctx: Context,
   getConfig: () => ResolvedModelPickerConfig,
 ): () => void {
-  // Registration-time snapshot: tool name, schema, and descriptions stay
-  // stable for the fiber's lifetime. Live decisions read `getConfig()` again
-  // so a settings write (设置 → 插件配置) takes effect without re-registering.
-  const baseConfig = getConfig()
-  const backgroundEnabled = baseConfig.enableRunInBackground
-  const continuable = baseConfig.backgroundMode === 'continuable'
-  const maxDepth = typeof baseConfig.maxDepth === 'number' ? baseConfig.maxDepth : undefined
-  const enableAuto = baseConfig.enableAuto
+  // Registration-time knobs are fixed module constants (`fixedConfig` in
+  // config.ts): tool names, background semantics (continuable by default,
+  // matching the harness-native subagent tool), and feature toggles. Live
+  // decisions read `getConfig()` on every call so a settings write
+  // (设置 → 插件配置) takes effect without re-registering.
+  const backgroundEnabled = fixedConfig.enableRunInBackground
+  const continuable = fixedConfig.backgroundMode === 'continuable'
+  const maxDepth = typeof fixedConfig.maxDepth === 'number' ? fixedConfig.maxDepth : undefined
+  const enableAuto = fixedConfig.enableAuto
   const health = new RouteHealthStore()
   const disposers: Array<() => void> = []
 
   disposers.push(ctx.tools.register(defineTool({
-    name: baseConfig.toolName,
+    name: fixedConfig.toolName,
     description: 'Delegate a self-contained task to a subagent (a separate agent that works in its own '
       + 'context) and choose the LLM route the child runs on. Unlike the plain subagent tool, the child '
       + 'does not have to inherit this agent\'s model: pass `provider` (an LLM provider route) and `model` '
@@ -901,7 +903,7 @@ export function registerModelPickerTools(
       + 'failed foreground run. The policy is health-aware: routes that recently failed with quota/auth '
       + 'are treated as unhealthy — the anchor is dropped and the child reroutes to a healthy provider '
       + 'instead of repeatedly failing on the broken route. Failure details are classified and sanitized '
-      + 'into the result (e.g. "provider rate-limited", "provider quota exhausted"). Query `' + baseConfig.modelsToolName + '` for the live provider '
+      + 'into the result (e.g. "provider rate-limited", "provider quota exhausted"). Query `' + fixedConfig.modelsToolName + '` for the live provider '
       + 'routes and their model catalogs before choosing. The child returns its result, not its '
       + 'intermediate steps. Give it a complete, standalone prompt: it does not see this conversation.'
       + (backgroundEnabled
@@ -922,11 +924,11 @@ export function registerModelPickerTools(
       },
       provider: {
         type: 'string',
-        description: 'LLM provider route the child runs on (e.g. deepseek-official). Defaults to this agent\'s provider. Must be a registered route; query ' + baseConfig.modelsToolName + ' for the live list.',
+        description: 'LLM provider route the child runs on (e.g. deepseek-official). Defaults to this agent\'s provider. Must be a registered route; query ' + fixedConfig.modelsToolName + ' for the live list.',
       },
       model: {
         type: 'string',
-        description: 'Model id the child runs on (e.g. deepseek-v4-flash), or `"auto"` to let the built-in auto policy choose (requires the llm service): it defaults to this agent\'s own model, upgrading to a stronger catalog model only for heavy tasks on a weak parent model, and records its reason on the result. Defaults to this agent\'s model. Must be a model the chosen provider accepts; query ' + baseConfig.modelsToolName + ' for the provider\'s catalog.',
+        description: 'Model id the child runs on (e.g. deepseek-v4-flash), or `"auto"` to let the built-in auto policy choose (requires the llm service): it defaults to this agent\'s own model, upgrading to a stronger catalog model only for heavy tasks on a weak parent model, and records its reason on the result. Defaults to this agent\'s model. Must be a model the chosen provider accepts; query ' + fixedConfig.modelsToolName + ' for the provider\'s catalog.',
       },
       max_tokens: {
         type: 'integer',
@@ -997,7 +999,7 @@ export function registerModelPickerTools(
     }, exec): Promise<DelegationToolResult> {
       const parent = exec.agent
       if (!parent) {
-        throw new Error(`${baseConfig.toolName} tool requires a calling agent (exec.agent was undefined)`)
+        throw new Error(`${fixedConfig.toolName} tool requires a calling agent (exec.agent was undefined)`)
       }
       // Live config: read the latest settings-backed value on every call so a
       // 设置 → 插件配置 write takes effect without re-registering the tool.
@@ -1008,14 +1010,14 @@ export function registerModelPickerTools(
       let autoSelection: AutoSelection | undefined
       if (args.model === 'auto') {
         if (!enableAuto) {
-          throw new Error(`${baseConfig.toolName}: model "auto" is disabled on this instance (enableAuto: false)`)
+          throw new Error(`${fixedConfig.toolName}: model "auto" is disabled on this instance (enableAuto: false)`)
         }
         autoSelection = await resolveAutoSelection(
           ctx,
           args,
           parent.options?.provider,
           parent.options?.model,
-          baseConfig.toolName,
+          fixedConfig.toolName,
           health,
           liveConfig,
         )
@@ -1025,25 +1027,25 @@ export function registerModelPickerTools(
         if (args.provider !== undefined) {
           const llm = ctx.get('llm')
           if (llm === undefined) {
-            throw new Error(`${baseConfig.toolName}: provider selection requires the llm service (no ctx.llm registered)`)
+            throw new Error(`${fixedConfig.toolName}: provider selection requires the llm service (no ctx.llm registered)`)
           }
           const routes = llm.listProviders()
           if (!routes.some(route => route.id === args.provider)) {
             const known = routes.map(route => route.id).join(', ')
             throw new Error(
-              `${baseConfig.toolName}: unknown provider "${args.provider}" — registered provider routes: ${known || '(none)'}`,
+              `${fixedConfig.toolName}: unknown provider "${args.provider}" — registered provider routes: ${known || '(none)'}`,
             )
           }
           agentOptions.provider = args.provider
         }
         if (args.model !== undefined) {
-          if (args.model.length === 0) throw new Error(`${baseConfig.toolName}: model must be a non-empty string`)
+          if (args.model.length === 0) throw new Error(`${fixedConfig.toolName}: model must be a non-empty string`)
           agentOptions.model = args.model
         }
       }
       if (args.max_tokens !== undefined) {
         if (!Number.isSafeInteger(args.max_tokens) || args.max_tokens <= 0) {
-          throw new Error(`${baseConfig.toolName}: max_tokens must be a positive integer`)
+          throw new Error(`${fixedConfig.toolName}: max_tokens must be a positive integer`)
         }
         agentOptions.maxTokens = args.max_tokens
       }
@@ -1063,7 +1065,7 @@ export function registerModelPickerTools(
           // Resolves at inbox acceptance: the child owns its own turns from
           // there, so this call neither waits for nor collects a result.
           const started = await ctx.subagents.startContinuable({
-            provider: liveConfig.subagentProvider,
+            provider: fixedConfig.subagentProvider,
             label: args.description,
             request,
             signal: exec.signal,
@@ -1084,12 +1086,12 @@ export function registerModelPickerTools(
           owner: parent,
           run: () => {
             const controller = new AbortController()
-            const start = ctx.subagents.start(liveConfig.subagentProvider, { ...request, signal: controller.signal })
+            const start = ctx.subagents.start(fixedConfig.subagentProvider, { ...request, signal: controller.signal })
             return {
               cancel: (reason?: string) => {
                 controller.abort(reason ?? 'background subagent task killed')
               },
-              done: settleStart(start, controller.signal, health, liveConfig.subagentProvider),
+              done: settleStart(start, controller.signal, health, fixedConfig.subagentProvider),
             }
           },
         })
@@ -1100,7 +1102,7 @@ export function registerModelPickerTools(
       const attempt = await runForegroundWithRecovery(
         ctx,
         liveConfig,
-        (options: Record<string, unknown>) => ctx.subagents.start(liveConfig.subagentProvider, {
+        (options: Record<string, unknown>) => ctx.subagents.start(fixedConfig.subagentProvider, {
           ...request,
           agentOptions: { ...request.agentOptions, ...options },
           signal: exec.signal,
@@ -1122,13 +1124,13 @@ export function registerModelPickerTools(
     },
   })))
 
-  if (baseConfig.enableModelList) {
+  if (fixedConfig.enableModelList) {
     disposers.push(ctx.tools.register(defineTool({
-      name: baseConfig.modelsToolName,
+      name: fixedConfig.modelsToolName,
       description: 'List the live LLM provider routes registered on this harness and, for each, the model '
         + 'catalog its adapter advertises. Advisory: catalog membership never gates requests — a provider '
         + 'may still accept model ids outside its listing — but this is the authoritative way to see what '
-        + '`' + baseConfig.toolName + '` can target. Pass `provider` to narrow to one route.',
+        + '`' + fixedConfig.toolName + '` can target. Pass `provider` to narrow to one route.',
       parameters: {
         provider: {
           type: 'string',
