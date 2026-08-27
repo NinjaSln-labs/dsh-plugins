@@ -23,7 +23,7 @@ import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type { ResolvedModelPickerConfig } from './index.ts'
 import type { AutoTierPolicyMode } from './index.ts'
 import { fixedConfig } from './config.ts'
-import { classifyFailure, failureLabel, sanitizeFailureDetail } from './failure.ts'
+import { classifyFailure, failureLabel, sanitizeFailureDetail, extractFailureEvidence } from './failure.ts'
 import type { FailureClass } from './failure.ts'
 import { RouteHealthStore } from './health.ts'
 import { modelMeta } from './meta.ts'
@@ -53,7 +53,7 @@ async function settleStart(
     if (signal.aborted) {
       return { status: 'killed' }
     }
-    health?.record(provider, classifyFailure(error))
+    health?.record(provider, extractFailureEvidence(error))
     return { status: 'failed', detail: failureDetail(error) }
   }
 }
@@ -595,7 +595,7 @@ async function settleForegroundRun(
     // The run.result rejection carries the infrastructure cause — record the
     // failure class and surface the sanitized detail to the caller. Preserve
     // the cause so the caller can still classify and route on it.
-    health?.record(provider, classifyFailure(execution.reason))
+    health?.record(provider, extractFailureEvidence(execution.reason))
     const detail = failureDetail(execution.reason)
     if (disposal.status === 'rejected') {
       throw new AggregateError(
@@ -775,7 +775,7 @@ async function runForegroundWithRecovery(
     if (signal.aborted) throw firstError
     const cls = classifyFailure(firstError)
     recordAttempt(initialAgentOptions, firstError)
-    health.record(labelFor(initialAgentOptions).provider, cls)
+    health.record(labelFor(initialAgentOptions).provider, extractFailureEvidence(firstError))
     // Terminal class → reroute to a healthy provider route. A reroute failure
     // throws (it is NOT a silent fallback) — surface it with the original.
     if (autoSelection !== undefined && config.autoReroute && (cls === 'quota' || cls === 'auth')) {

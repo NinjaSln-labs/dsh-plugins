@@ -19,7 +19,7 @@ import { CallId, LlmError } from '@deepseek-ai/dsh-llm'
 import plugin from '../src/index.ts'
 import type { ModelPickerConfig } from '../src/index.ts'
 import { classifyFailure, failureLabel, sanitizeFailureDetail } from '../src/failure.ts'
-import { RouteHealthStore, DEFAULT_TRANSIENT_TTL_MS } from '../src/health.ts'
+import { RouteHealthStore, DEFAULT_TRANSIENT_TTL_MS, DEFAULT_UNCLASSIFIED_TTL_MS } from '../src/health.ts'
 
 const testToolSignal = new AbortController().signal
 
@@ -622,27 +622,33 @@ describe('dsh-subagent-router route health store', () => {
     vi.useRealTimers()
   })
 
-  it('treats quota/auth as terminal (never expires)', () => {
+  it('keeps auth as terminal (never expires) but expires quota at the next hour boundary', () => {
     vi.useFakeTimers()
     const store = new RouteHealthStore()
-    store.record('a', 'quota')
+    // auth → terminal
+    store.record('a', 'auth')
     expect(store.isHealthy('a')).toBe(false)
     expect(store.health('a').retryAfterSec).toBeUndefined()
     vi.advanceTimersByTime(DEFAULT_TRANSIENT_TTL_MS * 10)
     expect(store.isHealthy('a')).toBe(false)
+    // quota → next hour boundary (bounded, with a retry-after)
+    store.record('b', 'quota')
+    expect(store.isHealthy('b')).toBe(false)
+    expect(store.health('b').retryAfterSec).toBeDefined()
+    expect(store.health('b').retryAfterSec!).toBeGreaterThan(0)
+    vi.advanceTimersByTime(60 * 60 * 1000 + 1000) // past any hour boundary
+    expect(store.isHealthy('b')).toBe(true)
     vi.useRealTimers()
   })
 
-  it('treats unclassified other failures as transient route-failure signals', () => {
+  it('expires unclassified other failures after the default TTL', () => {
     vi.useFakeTimers()
     const store = new RouteHealthStore()
     store.record('a', 'other')
-    // 'other' marks the route unhealthy for the transient TTL...
     expect(store.isHealthy('a')).toBe(false)
     expect(store.health('a').failingClass).toBe('other')
     expect(store.health('a').retryAfterSec).toBeDefined()
-    // ...then expires.
-    vi.advanceTimersByTime(DEFAULT_TRANSIENT_TTL_MS + 1000)
+    vi.advanceTimersByTime(DEFAULT_UNCLASSIFIED_TTL_MS + 1000)
     expect(store.isHealthy('a')).toBe(true)
     vi.useRealTimers()
   })
