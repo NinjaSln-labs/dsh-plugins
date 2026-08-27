@@ -44,7 +44,7 @@
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason | P1 | 比命名启发式准一个量级；复用 knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级） | 1c |
+| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason —— **✅ 代码+单测完成（2026-08-27）**：`src/recommend.ts`（候选池 + 分类器 one-shot `ctx.llm.stream()` + 归一化 LRU 缓存 + 超时/幻觉降级到命名启发式）+ `tests/recommend.spec.ts`（19 项，套件 87/87 全绿）+ 工具挂 `fixedConfig.recommendToolName`；**待真实环境实测**（重启 dsh 后调用工具验证 llm/heuristic 双路径） | P1 | 比命名启发式准一个量级；复用 knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级）——**B2 已解除**：harness 直接暴露 `ctx.llm.stream()`，插件内可自足发起辅助分类调用，无需跨仓库配合 | 1c |
 | 2b | **失败反馈闭环**：按 任务类型×模型 记录成功/失败/耗时，反哺策略与推荐 | P1 | 长期差异化；轻量自存或对接 dsh-knowledge-sqlite | 2a |
 | 2c | **同模型多 route 感知**：同一 model id 在多个 provider 注册时按成本/延迟选 route | P2 | 自动选择不应忽略路由维度（如 deepseek-v4-pro 在 deepseek-official 与 opencode-go 都有） | 1c |
 | 2d | **预算仪表**：auto 决策历史（每任务选了谁、花了多少、升级几次）可查 | P2 | 可审计性从单次升级到全局 | 1d |
@@ -63,7 +63,6 @@
 | # | 项 | 卡点 |
 |---|---|---|
 | B1 | 知识库自动写回（2b 强联动） | dsh-knowledge-sqlite 需开放公开、带门控的写入服务（跨仓库协作） |
-| B2 | 推荐引擎调用小模型分类器 | 需确认 harness 允许插件内发起轻量 LLM 调用（或复用 L1 扩展的服务化通道） |
 | B3 | **死锚检测的「运行时失败」盲区**（1e 实测发现，2026-08-27） | dsh-subagent 故意把子代理「运行时」失败压成 `stopReason:'error'`（`dsh-tool-subagent:59` 渲染为 `subagent run failed`），底层 `LlmFailure`（code/status/retry-after）留在子代理日志、不跨进程传回 tool 层 → router 的 `classifyFailure` 只能判 `other`（瞬态）而非终态 `quota`/`rate-limit`。**死锚+换路对「start 拒绝」（基础设施，能暴露 LlmError/HTTP）有效，对「子代理运行时 quota/限流」盲区**。根治需 harness 改动：`dsh-subagent` 在子代理结算时把失败分类作为结构化字段回传父层（harness 暂不动，仅记录） |
 
 ## 排期建议
