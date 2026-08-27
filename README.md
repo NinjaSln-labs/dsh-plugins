@@ -58,8 +58,7 @@ bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools`
 | `autoEscalationTiers` | `1` | 同一 provider 上瞬态失败的最大升级次数（`0` 表示不升级）。 |
 | `autoProviderOrder` | — | **provider 优先级**：`model: "auto"` 按此顺序解析 provider（未列出的排在之后）；父路由不健康或缺失时用它兜底。不配则用注册表顺序。 |
 | `autoTierPolicy` | — | **每档选型模式**：`{ trivial\|standard\|complex: 'anchor'\|'cheapest'\|'strongest' }`。`anchor`=父路由健康时沿用父模型；`cheapest`=目录里命名分最低；`strongest`=最高。未配的档位保持内置启发式。 |
-| `autoTierPicks` | — | **每档显式候选序**：`{ trivial\|standard\|complex: [modelId, ...] }`，完全覆盖该档选型；候选是全局模型优先级，第一个被任意健康 provider 广告的模型胜出（可跨 provider）。 |
-| `autoCeiling` | — | **预算封顶**：`model: "auto"` 永不超过该模型强度（命名分更高时截断到它）。不在目录时忽略。 |
+| `autoTierPicks` | — | **每档显式候选序**：`{ trivial\|standard\|complex: [modelId, ...] }`，完全覆盖该档选型；候选是全局模型优先级，按 provider 优先级顺序找，第一个被健康 provider 广告的模型胜出（可跨 provider）。 |
 
 **固定默认（不可配置）**：注册期行为固定为合理默认，不再暴露为配置项（早期版本这些字段可配但「保存」不生效，是陷阱）：
 
@@ -91,7 +90,6 @@ bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools`
       complex: strongest       # 重任务用最强模型
     autoTierPicks:
       complex: [deepseek-v4-pro, pi-3-maxi]  # 可选：重任务显式候选序
-    autoCeiling: deepseek-v4-pro  # 可选：预算封顶
 ```
 
 ## 典型模型流程

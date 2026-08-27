@@ -1013,23 +1013,6 @@ describe('dsh-subagent-router configurable auto routing', () => {
     expect(options.model).toBe('deepseek-v4-flash')
   })
 
-  it('autoCeiling caps the strongest pick', async () => {
-    const { ctx, provider } = await setup(
-      { autoCeiling: 'deepseek-v4-std' },
-      { routes: AUTO_ROUTES },
-    )
-    const result = await callTool(ctx, 'subagent_model', {
-      description: 'deep code review',
-      prompt: '```ts\nfunction f() { return 1 }\n```\nAnalyze this code, design a refactor, and evaluate the complexity tradeoffs in depth.',
-      provider: 'deepseek-official',
-      model: 'auto',
-    }, fakeAgent)
-    expect(result.isError).toBe(false)
-    const options = provider.starts[0]!.agentOptions as { provider?: string; model?: string }
-    expect(options.model).toBe('deepseek-v4-std')
-    expect(text(result)).toContain('autoCeiling')
-  })
-
   it('autoTierPicks can cross provider boundaries', async () => {
     const { ctx, provider } = await setup(
       {
@@ -1092,24 +1075,6 @@ describe('dsh-subagent-router configurable auto routing', () => {
 })
 
 describe('dsh-subagent-router configurable auto routing (edge cases)', () => {
-  it('autoCeiling is ignored when the ceiling model is not in the catalog', async () => {
-    const { ctx, provider } = await setup(
-      { autoCeiling: 'ghost-ceiling' },
-      { routes: AUTO_ROUTES },
-    )
-    const result = await callTool(ctx, 'subagent_model', {
-      description: 'deep code review',
-      prompt: '```ts\nfunction f() { return 1 }\n```\nAnalyze this code, design a refactor, and evaluate the complexity tradeoffs in depth.',
-      provider: 'deepseek-official',
-      model: 'auto',
-    }, fakeAgent)
-    expect(result.isError).toBe(false)
-    const options = provider.starts[0]!.agentOptions as { model?: string }
-    // ghost-ceiling not in catalog → no cap, strongest pick stands.
-    expect(options.model).toBe('deepseek-v4-pro')
-    expect(text(result)).not.toContain('autoCeiling')
-  })
-
   it('autoTierPolicy.anchor keeps the parent model when the route is healthy', async () => {
     const { ctx, provider } = await setup(
       { autoTierPolicy: { trivial: 'anchor' } },
@@ -1163,13 +1128,11 @@ describe('dsh-subagent-router config schema', () => {
       autoProviderOrder: ['a', 'b'],
       autoTierPolicy: { trivial: 'cheapest', standard: 'anchor', complex: 'strongest' },
       autoTierPicks: { complex: ['x'] },
-      autoCeiling: 'pro',
       autoEscalationTiers: 2,
     })
     expect(full.autoProviderOrder).toEqual(['a', 'b'])
     expect(full.autoTierPolicy).toEqual({ trivial: 'cheapest', standard: 'anchor', complex: 'strongest' })
     expect(full.autoTierPicks.complex).toEqual(['x'])
-    expect(full.autoCeiling).toBe('pro')
     expect(full.autoEscalationTiers).toBe(2)
     // Schemastery passes unknown keys through; registration-time snapshot keys
     // (backgroundMode, toolName, …) are simply never consumed — the fixed

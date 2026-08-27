@@ -64,8 +64,7 @@ overridden by the settings UI user layer):
 | `autoEscalationTiers` | `1` | Max escalation steps on the same provider after transient failures (`0` disables escalation). |
 | `autoProviderOrder` | — | **Provider priority**: `model: "auto"` resolves the provider in this order (unlisted ones sort after); it also backs the parent route when unhealthy or absent. Default: registry order. |
 | `autoTierPolicy` | — | **Per-tier selection mode**: `{ trivial\|standard\|complex: 'anchor'\|'cheapest'\|'strongest' }`. `anchor` keeps the parent model when its route is healthy; `cheapest`/`strongest` pick by naming score. Omitted tiers keep the built-in heuristic. |
-| `autoTierPicks` | — | **Per-tier explicit candidate order**: `{ trivial\|standard\|complex: [modelId, ...] }`, fully overrides that tier; candidates are a global model priority — the first one any healthy provider advertises wins (may cross providers). |
-| `autoCeiling` | — | **Budget cap**: `model: "auto"` never picks a model stronger than this id. Ignored when not in the catalog. |
+| `autoTierPicks` | — | **Per-tier explicit candidate order**: `{ trivial\|standard\|complex: [modelId, ...] }`, fully overrides that tier; candidates are a global model priority resolved in provider-priority order — the first one a healthy provider advertises wins (may cross providers). |
 
 **Fixed defaults (not configurable)**: registration-time behavior is fixed to
 sane defaults and no longer exposed as config — earlier versions made these
@@ -100,7 +99,6 @@ With model-routing priorities (configure to your own provider preferences):
       complex: strongest       # heavy tasks use the strongest model
     autoTierPicks:
       complex: [deepseek-v4-pro, pi-3-maxi]  # optional: explicit heavy-task candidates
-    autoCeiling: deepseek-v4-pro  # optional: budget cap
 ```
 
 ## Example model flow

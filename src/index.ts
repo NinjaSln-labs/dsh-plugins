@@ -76,8 +76,6 @@ export interface ModelPickerConfig {
   autoTierPolicy?: AutoTierPolicy
   /** Per-tier explicit candidate list, in priority order; when present, fully overrides the tier policy for that tier. */
   autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
-  /** Hard ceiling: `model: "auto"` never picks a model stronger than this id (budget cap). */
-  autoCeiling?: string
 }
 
 export const name = 'dsh-subagent-router'
@@ -90,10 +88,10 @@ export const defaultConfig = {
   autoProviderOrder: [] as string[],
 } as const satisfies Required<Pick<ModelPickerConfig, 'autoEscalate' | 'autoReroute' | 'autoEscalationTiers' | 'autoProviderOrder'>>
 
-/** The fully resolved config after defaults: per-tier picks, policy, and ceiling stay optional. */
+/** The fully resolved config after defaults: per-tier picks and policy stay optional. */
 export type ResolvedModelPickerConfig =
-  Required<Omit<ModelPickerConfig, 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>>
-  & Pick<ModelPickerConfig, 'autoTierPolicy' | 'autoTierPicks' | 'autoCeiling'>
+  Required<Omit<ModelPickerConfig, 'autoTierPolicy' | 'autoTierPicks'>>
+  & Pick<ModelPickerConfig, 'autoTierPolicy' | 'autoTierPicks'>
 
 export function resolveConfig(config: ModelPickerConfig): ResolvedModelPickerConfig {
   return {
@@ -103,7 +101,6 @@ export function resolveConfig(config: ModelPickerConfig): ResolvedModelPickerCon
     autoProviderOrder: config.autoProviderOrder ?? defaultConfig.autoProviderOrder,
     autoTierPolicy: config.autoTierPolicy,
     autoTierPicks: config.autoTierPicks,
-    autoCeiling: config.autoCeiling,
   }
 }
 
