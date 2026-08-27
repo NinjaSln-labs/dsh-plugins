@@ -44,7 +44,7 @@
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason —— **✅ 代码+单测完成（2026-08-27）**：`src/recommend.ts`（候选池 + 分类器 one-shot `ctx.llm.stream()` + 归一化 LRU 缓存 + 超时/幻觉降级到命名启发式）+ `tests/recommend.spec.ts`（19 项，套件 87/87 全绿）+ 工具挂 `fixedConfig.recommendToolName`；**待真实环境实测**（重启 dsh 后调用工具验证 llm/heuristic 双路径） | P1 | 比命名启发式准一个量级；复用 knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级）——**B2 已解除**：harness 直接暴露 `ctx.llm.stream()`，插件内可自足发起辅助分类调用，无需跨仓库配合 | 1c |
+| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason —— **✅ 已完成（2026-08-27，实测）**：`src/recommend.ts`（候选池 + 分类器 one-shot `ctx.llm.stream()` + 归一化 LRU 缓存 + 超时/幻觉降级到命名启发式）+ `tests/recommend.spec.ts`（20 项，套件 88/88 全绿）。**实测揪出并修复**：① 分类器 `pickClassifier` 死守 `listProviders` 顺序选中 `autoProviderOrder` 末尾慢 route（deepseek-official），叠加 4000ms 超时 → llm 路径必然超时降级（`084df22` 修复：超时 4000→10000 + pickClassifier 尊重 autoProviderOrder）；② 分类器非确定性——偶发全幻觉返回候选池外 model id，`validatePicks` 全部过滤 → 降级 heuristic（兜底正确，但 llm 命中率约 50%，prompt 稳定性留作后续调优） | P1 | 比命名启发式准一个量级；复用 knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级）——**B2 已解除**：harness 直接暴露 `ctx.llm.stream()`，插件内可自足发起辅助分类调用，无需跨仓库配合 | 1c |
 | 2b | **失败反馈闭环**：按 任务类型×模型 记录成功/失败/耗时，反哺策略与推荐 | P1 | 长期差异化；轻量自存或对接 dsh-knowledge-sqlite | 2a |
 | 2c | **同模型多 route 感知**：同一 model id 在多个 provider 注册时按成本/延迟选 route | P2 | 自动选择不应忽略路由维度（如 deepseek-v4-pro 在 deepseek-official 与 opencode-go 都有） | 1c |
 | 2d | **预算仪表**：auto 决策历史（每任务选了谁、花了多少、升级几次）可查 | P2 | 可审计性从单次升级到全局 | 1d |
