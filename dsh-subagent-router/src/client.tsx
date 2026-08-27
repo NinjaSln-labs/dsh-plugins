@@ -50,33 +50,40 @@ const CSS = `
 .sr-card{display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-3,#353638);border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:12px;box-sizing:border-box;width:100%;overflow:hidden}
 .sr-header{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:transparent;border:none;cursor:pointer;color:var(--dsw-alias-label-primary,#f9fafb);text-align:left;font:inherit}
 .sr-header:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.06))}
+.sr-header:focus-visible{outline:2px solid var(--dsw-alias-state-business,#4c8dff);outline-offset:-2px;border-radius:12px}
 .sr-headText{display:flex;flex-direction:column;gap:2px;min-width:0}
 .sr-name{font-size:15px;font-weight:600;line-height:21px;color:var(--dsw-alias-label-primary,#f9fafb)}
 .sr-description{font-size:13px;font-weight:400;line-height:19.5px;color:var(--dsw-alias-label-secondary,#adb2b8)}
-.sr-chevron{flex:none;width:14px;height:14px;color:var(--dsw-alias-label-tertiary,#999);transition:transform .15s ease;transform:rotate(0deg)}
+.sr-chevron{flex:none;width:16px;height:16px;color:var(--dsw-alias-label-tertiary,#999);transition:transform .15s ease;transform:rotate(0deg)}
 .sr-open .sr-chevron{transform:rotate(90deg)}
-.sr-body{display:none;padding:0 0 8px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
-.sr-open .sr-body{display:flex;flex-direction:column;padding:12px 16px 8px}
-.sr-field{display:flex;flex-direction:column;gap:4px}
+.sr-body{display:none;padding:0 0 16px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.sr-open .sr-body{display:flex;flex-direction:column;padding:16px 16px 16px}
+.sr-field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.sr-field:last-of-type{margin-bottom:0}
 .sr-label{font-size:13px;font-weight:500;line-height:19.5px;color:var(--dsw-alias-label-primary,#f9fafb)}
-.sr-hint{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8)}
-.sr-group{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--dsw-alias-label-primary,#f9fafb);margin-top:18px;margin-bottom:6px;padding-top:14px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
-.sr-group::before{content:'';flex:none;width:3px;height:14px;border-radius:2px;background:var(--dsw-alias-state-primary,#4c8dff)}
+.sr-hint{font-size:13px;font-weight:400;line-height:19px;color:var(--dsw-alias-label-secondary,#adb2b8)}
+.sr-group{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;line-height:20px;color:var(--dsw-alias-label-primary,#f9fafb);margin-top:20px;margin-bottom:10px;padding-top:16px;border-top:1px solid var(--dsw-alias-border-l2,#ffffff1f)}
+.sr-group::before{content:'';flex:none;width:3px;height:16px;border-radius:2px;background:var(--dsw-alias-state-business,#4c8dff)}
 .sr-group:first-of-type{margin-top:0;padding-top:0;border-top:none}
 .sr-control{display:flex;align-items:center;gap:8px}
-.sr-input{flex:1;min-width:0;height:32px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:8px;background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#f9fafb);font-size:13px;font-weight:400;box-sizing:border-box}
-.sr-input:focus{outline:2px solid var(--dsw-alias-state-primary,#4c8dff);outline-offset:1px}
-.sr-check{accent-color:var(--dsw-alias-state-primary,#4c8dff)}
+.sr-input{flex:1;min-width:0;height:36px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:8px;background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#f9fafb);font-size:13px;font-weight:400;box-sizing:border-box}
+.sr-input:focus-visible{outline:2px solid var(--dsw-alias-state-business,#4c8dff);outline-offset:1px;border-color:var(--dsw-alias-state-business,#4c8dff)}
+.sr-check{accent-color:var(--dsw-alias-state-business,#4c8dff);width:16px;height:16px}
+.sr-check:focus-visible{outline:2px solid var(--dsw-alias-state-business,#4c8dff);outline-offset:2px}
 .sr-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.sr-note{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8)}
-.sr-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-.sr-btn{display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:400;line-height:19.5px;cursor:pointer;box-sizing:border-box;transition:background .12s ease}
+.sr-note{font-size:13px;font-weight:400;line-height:19px;color:var(--dsw-alias-label-secondary,#adb2b8);margin-bottom:4px}
+.sr-note-dirty{color:var(--dsw-alias-state-warn,#e2a33c)}
+.sr-note-done{color:var(--dsw-alias-state-success,#4cc38a)}
+.sr-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.sr-btn{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 16px;border-radius:8px;font-size:13px;font-weight:500;line-height:19.5px;cursor:pointer;box-sizing:border-box;transition:background .12s ease,filter .12s ease}
 .sr-btn:disabled{opacity:.45;cursor:not-allowed}
+.sr-btn:focus-visible{outline:2px solid var(--dsw-alias-state-business,#4c8dff);outline-offset:2px}
 .sr-btn-default{background:transparent;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);color:var(--dsw-alias-label-secondary,#cfd3d6)}
 .sr-btn-default:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.06))}
 .sr-btn-primary{background:var(--dsw-alias-label-primary,#f9fafb);border:1px solid transparent;color:var(--dsw-alias-bg-layer-3,#353638)}
 .sr-btn-primary:hover:not(:disabled){filter:brightness(0.92)}
-.sr-unavailable{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8);padding:14px 16px}
+.sr-btn-primary:active:not(:disabled){filter:brightness(0.85)}
+.sr-unavailable{font-size:13px;font-weight:400;line-height:19px;color:var(--dsw-alias-label-secondary,#adb2b8);padding:14px 16px}
 `
 
 /** Form grouping: recovery = failure handling, scope = model selection range, tier = per-tier strategy. */
@@ -210,6 +217,7 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
   const [snapshot, setSnapshot] = React.useState<SettingsScopeSnapshot<Section>>(scope.getSnapshot())
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState<Section | null>(null)
+  const [saved, setSaved] = React.useState(false)
   React.useEffect(() => scope.subscribe(() => setSnapshot(scope.getSnapshot())), [scope])
   const committed = snapshot.value ?? ({} as Section)
   // Editing view = draft when present (unsaved edits), else the committed value.
@@ -224,6 +232,7 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
     )
   }
   const onEdit = (patch: Section): void => {
+    setSaved(false)
     setDraft(prev => ({ ...(prev ?? committed), ...patch }))
   }
   const onTierEdit = (tier: 'trivial' | 'standard' | 'complex', mode: string): void => {
@@ -259,8 +268,9 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
       }
     }
     setDraft(null)
+    setSaved(true)
   }
-  const onCancel = (): void => setDraft(null)
+  const onCancel = (): void => { setDraft(null); setSaved(false) }
   const chevron = React.createElement('svg', {
     className: 'sr-chevron',
     viewBox: '0 0 16 16',
@@ -293,8 +303,8 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
       chevron,
     ),
     React.createElement('div', { className: 'sr-body' },
-      React.createElement('div', { className: 'sr-note' },
-        dirty ? '有未保存的修改。' : '修改保存后，下一次 subagent_model 调用即生效（无需重启）。'),
+      React.createElement('div', { className: 'sr-note' + (dirty ? ' sr-note-dirty' : saved ? ' sr-note-done' : '') },
+        dirty ? '有未保存的修改。' : saved ? '已保存，下一次调用生效。' : '修改保存后，下一次 subagent_model 调用即生效（无需重启）。'),
       ...GROUPS.map(group => {
         const nodes: React.ReactNode[] = [
           React.createElement('div', { className: 'sr-group', key: `group-${group.id}` }, group.title),
