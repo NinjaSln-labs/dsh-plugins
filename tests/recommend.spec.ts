@@ -263,4 +263,34 @@ describe('recommend', () => {
     const llm = fakeLlm({ routes: ROUTES })
     await expect(runRecommend(llm, { task: '   ' })).rejects.toThrow('non-empty')
   })
+
+  it('anchors the classifier to the calling agent\'s own model', async () => {
+    const seen: Array<{ provider: string; model: string }> = []
+    const llm = {
+      listProviders: () => ROUTES.map(route => ({ id: route.id, name: route.id })),
+      listModels: async (provider: string) => {
+        const route = ROUTES.find(r => r.id === provider)
+        return (route?.models ?? []).map(id => ({ id, name: id }))
+      },
+      stream: (options: { provider: string; model: string }) => {
+        seen.push({ provider: options.provider, model: options.model })
+        return (async function* () {
+          yield { type: 'text-delta', index: 0, text: '{"picks":[{"provider":"deepseek-official","model":"deepseek-v4-pro","reason":"x"}]}' }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        })()
+      },
+    }
+    const result = await recommend(
+      mockCtx(llm),
+      { task: 'do a thing' },
+      { signal: undefined, agent: { options: { provider: 'parent-route', model: 'parent-model' } } },
+      new RouteHealthStore(),
+      () => resolveConfig({}),
+      new LruCache<string, RecommendationCore>(128),
+      new ScopeStore(),
+    )
+    // 父模型作为分类器首选（锚定），而不是候选池里的 cheap 模型
+    expect(seen[0]).toEqual({ provider: 'parent-route', model: 'parent-model' })
+    expect(result.recommendations[0]?.model).toBe('deepseek-v4-pro')
+  })
 })
