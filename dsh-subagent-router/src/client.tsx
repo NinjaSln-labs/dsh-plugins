@@ -43,7 +43,6 @@ type Section = {
   autoProviderOrder?: string[]
   autoTierPolicy?: Partial<Record<'trivial' | 'standard' | 'complex', 'anchor' | 'cheapest' | 'strongest'>>
   autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
-  autoCeiling?: string
 }
 
 /** Host model-directory wire face (session-independent; `llm.models`). */
@@ -141,7 +140,6 @@ const FIELDS: Field[] = [
   { id: 'autoEscalate', group: 'recovery', label: '失败时升级', hint: '前台运行失败后沿下一档自动重试一次。', kind: 'boolean', default: true, get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
   { id: 'autoReroute', group: 'recovery', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', default: true, get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
   { id: 'autoEscalationTiers', group: 'recovery', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', min: 0, get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
-  { id: 'autoCeiling', group: 'scope', label: '预算封顶', hint: '绝不选择比该模型更强的模型（不在目录时忽略）。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
 ]
 
 /** Group titles, in render order. */
@@ -370,7 +368,7 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
     void (async () => {
       for (const key of Object.keys(draft) as Array<keyof Section>) {
         const next = draft[key]
-        if (next === undefined || next === '' || (Array.isArray(next) && next.length === 0) || isEmptyObject(next)) {
+        if (next === undefined || (Array.isArray(next) && next.length === 0) || isEmptyObject(next)) {
           await scope.unset(key as string)
         } else {
           await scope.set(key as string, next as unknown)

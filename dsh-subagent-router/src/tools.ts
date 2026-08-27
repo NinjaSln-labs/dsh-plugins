@@ -512,30 +512,16 @@ async function resolveAutoSelection(
     throw new Error(`${toolName}: model "auto": provider "${effectiveProvider}" advertises no models`)
   }
 
-  // Layer 4: ceiling — never pick a model stronger than the configured cap.
-  let ceilingApplied = false
-  if (config.autoCeiling !== undefined && config.autoCeiling.length > 0) {
-    const ceilingScore = modelScore(config.autoCeiling)
-    if (pick.score > ceilingScore) {
-      const capped = pickFromOrdered(models, [config.autoCeiling])
-      if (capped !== undefined) {
-        pick = capped
-        ceilingApplied = true
-      }
-    }
-  }
-
   const rerouteNote = reroute === undefined
     ? ''
     : `; rerouted from "${reroute.from}" because its route is unhealthy (${reroute.reason})`
-  const ceilingNote = ceilingApplied ? ` (capped by autoCeiling "${config.autoCeiling}")` : ''
   const reason = anchored
-    ? `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; defaulted to the parent's own model "${pick.id}" on provider "${effectiveProvider}"${rerouteNote}${ceilingNote}`
+    ? `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; defaulted to the parent's own model "${pick.id}" on provider "${effectiveProvider}"${rerouteNote}`
     : effectiveAnchor !== undefined
-      ? `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; upgraded from the parent's model "${effectiveAnchor}" to "${pick.id}" on provider "${effectiveProvider}"${rerouteNote}${ceilingNote}`
+      ? `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; upgraded from the parent's model "${effectiveAnchor}" to "${pick.id}" on provider "${effectiveProvider}"${rerouteNote}`
       : reroute !== undefined
-        ? `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; rerouted from "${reroute.from}" (${reroute.reason}) to "${pick.id}" on provider "${effectiveProvider}"${ceilingNote}`
-        : `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; picked "${pick.id}" from provider "${effectiveProvider}"${ceilingNote}`
+        ? `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; rerouted from "${reroute.from}" (${reroute.reason}) to "${pick.id}" on provider "${effectiveProvider}"`
+        : `auto policy: task classified "${tier}" (${tierNote(tier)}); policy=${policyUsed}; picked "${pick.id}" from provider "${effectiveProvider}"`
   const decision: AutoDecision = {
     provider: effectiveProvider,
     model: pick.id,
