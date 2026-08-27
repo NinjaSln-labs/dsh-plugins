@@ -38,7 +38,7 @@
 | 1b | ~~profile 级 config 覆盖实测~~ → **✅ 已完成**：设置页 UI（设置 → 插件配置）实现并验证（host settings 命名空间 + client 卡片 + 实时生效，见 PLAN-settings-ui.md） | P1 | 配置面闭环，堵静默失效 | — |
 | 1c | ~~目录元数据~~ → **✅ 已完成（2026-08-27，`a9012eb`）**：`subagent_models` 每个模型加派生元数据（`cost` 成本档 / `speed` 速度档 / `strength` 强度档 / `specialty` 特长 / `contextWindow` 已知模型上下文窗口）——零外部依赖，命名启发式 + 内置已知映射（`src/meta.ts`）；无法推断的字段省略不猜，精确值留 3c | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
 | 1d | **auto 策略参数化（余项）**：档位阈值（字符数/markers）、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数上限已交付（`autoEscalationTiers`） | — |
-| 1e | **真实环境健康感知验证**：clinepass 配额耗尽场景下 auto 换路 / 目录标注实跑 | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
+| 1e | ~~真实环境健康感知验证~~ → **✅ 已实测（2026-08-27，`a3b0e34`）**：teamorouter/deepseek-v4-flash-free 委派失败复现。**发现两个问题**：① bug（已修）`initialAgentOptions` 传空 `{}` → 失败/健康记录 provider 记为 `spawn` 而非实际 llm provider；② **seam 局限（依赖 dsh-subagent）**——子代理「运行时」配额耗尽被 dsh-subagent 压缩成 `stopReason:'error'`（`dsh-tool-subagent` 渲染为 ``subagent run failed``），底层 LlmFailure/quota 证据不跨进程传回 tool 层，classifyFailure 只能判 `other`（瞬态 60s），死锚无法识别为终态 quota。**死锚+换路对「start 拒绝」（基础设施，能暴露 LlmError/HTTP）仍有效；对「运行时 quota」盲区需 dsh-subagent 暴露失败分类** | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
 
 ### Phase 2 — 智能推荐（v0.3.x，中期）
 
