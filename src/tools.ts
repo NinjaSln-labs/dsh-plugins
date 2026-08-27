@@ -27,6 +27,8 @@ import { classifyFailure, failureLabel, sanitizeFailureDetail } from './failure.
 import type { FailureClass } from './failure.ts'
 import { RouteHealthStore } from './health.ts'
 import { modelMeta } from './meta.ts'
+import { recommend, LruCache, RECOMMEND_CACHE_CAPACITY } from './recommend.ts'
+import type { RecommendationCore } from './recommend.ts'
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
 function outputValueText(values: JsonValue[]): string {
@@ -872,6 +874,7 @@ export function registerModelPickerTools(
   const maxDepth = typeof fixedConfig.maxDepth === 'number' ? fixedConfig.maxDepth : undefined
   const enableAuto = fixedConfig.enableAuto
   const health = new RouteHealthStore()
+  const recommendCache = new LruCache<string, RecommendationCore>(RECOMMEND_CACHE_CAPACITY)
   const disposers: Array<() => void> = []
 
   disposers.push(ctx.tools.register(defineTool({
@@ -1180,6 +1183,42 @@ export function registerModelPickerTools(
       },
     })))
   }
+
+  // recommend tool (ROADMAP 2a): task → ranked provider/model suggestion.
+  disposers.push(ctx.tools.register(defineTool({
+    name: fixedConfig.recommendToolName,
+    description: 'Recommend the most suitable LLM provider/model routes for a task. Prefers a lightweight '
+      + 'classifier (best-effort: a one-shot LLM call choosing from the live catalog) and degrades to a '
+      + 'naming heuristic when the catalog is empty or the classifier times out/fails — it never throws on '
+      + 'a classifier fault. Returns a ranked list (default top 3) with a per-pick reason plus derived '
+      + 'cost/speed/strength/specialty metadata, a `source` field (`llm` or `heuristic`), and an optional '
+      + '`note` explaining any degradation. Pass `provider` to restrict candidates to one route; pass `n` '
+      + `to change the result count. Advisory only: feed the top pick's provider/model into `
+      + `'${fixedConfig.toolName}'.`,
+    parameters: {
+      task: {
+        type: 'string',
+        required: true,
+        description: 'A description of the task you want to delegate (e.g. "refactor this TypeScript module" or "summarize a long PDF"). Used to match model capabilities.',
+      },
+      provider: {
+        type: 'string',
+        description: 'Restrict candidates to this single LLM provider route; omit to consider every registered route.',
+      },
+      n: {
+        type: 'integer',
+        description: 'How many ranked recommendations to return (default 3, max 10).',
+      },
+    },
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+    },
+    isConcurrencySafe: () => true,
+    async execute(args: { task: string; provider?: string; n?: number }, exec) {
+      return recommend(ctx, args, exec, health, getConfig, recommendCache)
+    },
+  })))
 
   return () => {
     for (const dispose of disposers.splice(0)) dispose()

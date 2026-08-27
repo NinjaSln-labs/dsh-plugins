@@ -191,6 +191,12 @@ describe('dsh-subagent-router delegation tool', () => {
     expect(ctx.tools.schemas().some(candidate => candidate.name === 'subagent_models')).toBe(true)
   })
 
+  it('registers the `subagent_recommend` tool with task/provider/n parameters', async () => {
+    const { ctx } = await setup()
+    expect(ctx.tools.schemas().some(candidate => candidate.name === 'subagent_recommend')).toBe(true)
+    expect(Object.keys(propsOf(ctx, 'subagent_recommend')).sort()).toEqual(['n', 'provider', 'task'])
+  })
+
   it('inherits the parent route when provider/model are omitted', async () => {
     const { ctx, provider } = await setup()
     const result = await callTool(ctx, 'subagent_model', { description: 'do a thing', prompt: 'go research X' }, fakeAgent)
