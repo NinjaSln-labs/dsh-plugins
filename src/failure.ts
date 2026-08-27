@@ -133,6 +133,77 @@ export function isTransient(cls: FailureClass): boolean {
   return cls === 'rate-limit' || cls === 'server' || cls === 'timeout' || cls === 'transport' || cls === 'other'
 }
 
+/**
+ * Conservative classifier for "this model is not available on this route"
+ * wording. Providers flatten these into the message, so we match unambiguous
+ * phrasings only — never a bare "not found".
+ */
+export function isModelNotFoundError(message: string): boolean {
+  // "model X not found" / "model X unsupported" (model followed by the signal
+  // within a short span), or a model-frame signal directly.
+  return /\bmodel\b[\s\S]{0,80}\b(not\s+found|not\s+available|unsupported|not\s+supported|does\s+not\s+exist)\b/i.test(message)
+    || /\b(unknown|no\s+such|invalid)\s+model\b/i.test(message)
+}
+
+/**
+ * The evidence the health store needs to pick an expiry: the coarse failure
+ * class, a provider-issued retry-after (milliseconds), and whether the model
+ * itself is unknown/unsupported on the route.
+ */
+export type FailureEvidence = {
+  readonly cls: FailureClass
+  readonly retryAfterMs?: number
+  readonly modelNotFound?: boolean
+}
+
+/**
+ * Extract coarse class plus retry-after / model-not-found evidence, walking
+ * the full cause chain (and AggregateError members). Never throws.
+ */
+export function extractFailureEvidence(value: unknown): FailureEvidence {
+  const cls = classifyFailure(value)
+  let retryAfterMs: number | undefined
+  let modelNotFound = false
+
+  const visited = new Set<unknown>()
+  let current: unknown = value
+  while (current !== undefined && current !== null && !visited.has(current)) {
+    visited.add(current)
+    if (current instanceof LlmError) {
+      const failure = (current as unknown as { failure?: { providerRetryAfterMs?: unknown } }).failure
+      if (typeof failure?.providerRetryAfterMs === 'number' && Number.isFinite(failure.providerRetryAfterMs)) {
+        retryAfterMs = failure.providerRetryAfterMs
+      }
+    }
+    const candidate = current as {
+      message?: unknown
+      providerRetryAfterMs?: unknown
+      cause?: unknown
+      errors?: unknown
+    }
+    if (typeof candidate?.providerRetryAfterMs === 'number' && Number.isFinite(candidate.providerRetryAfterMs)) {
+      retryAfterMs = candidate.providerRetryAfterMs
+    }
+    if (typeof candidate?.message === 'string' && isModelNotFoundError(candidate.message)) {
+      modelNotFound = true
+    }
+    if (current instanceof AggregateError && Array.isArray(candidate.errors)) {
+      for (const member of candidate.errors) {
+        const sub = extractFailureEvidence(member)
+        if (retryAfterMs === undefined && sub.retryAfterMs !== undefined) retryAfterMs = sub.retryAfterMs
+        if (sub.modelNotFound === true) modelNotFound = true
+      }
+    }
+    current = candidate.cause
+  }
+
+  return {
+    cls,
+    ...retryAfterMs !== undefined ? { retryAfterMs } : {},
+    ...modelNotFound ? { modelNotFound } : {},
+  }
+}
+
 const MAX_DETAIL_LENGTH = 400
 
 /**
