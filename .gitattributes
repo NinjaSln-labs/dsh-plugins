@@ -1,0 +1,18 @@
+# 强制 LF 行尾（2026-08-26 加入）
+#
+# 背景：仓库在 Windows 侧（/mnt/e drvfs）checkout/编辑时，文件被写成 CRLF——
+# 工作流文件（.github/workflows/*.yml）若带 CRLF 提交，GitHub Actions 的多行
+# run: bash 块会因行尾 \r 失败（版本守卫比较永远不等 / 命令 not found）。
+# 此文件让 git 对所有文本文件强制 LF 归一化：任何平台 checkout 都是 LF，
+# 工作区 CRLF 不再产生假 diff，也不会随提交进入 CI。
+#
+# 注意：已入库的 CRLF 文件需一次性 `git add --renormalize` 归一化后提交。
+* text=auto eol=lf
+
+*.yml text eol=lf
+*.yaml text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
