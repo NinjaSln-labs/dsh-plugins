@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0 已发布；AUDIT-0.10.0 审计周期完成（23 发现：P1×4/P2×6 修复 + 6 留档 + 3 测试洞补齐）；smoke/client 双重构落地；**审计修复批（e87b7ca/fd7d90d/55d116e）未发版——npm latest 仍是 0.10.0，下一版待发**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.11.0 已发布（npm latest，含 AUDIT 修复批 + smoke/client 重构）；profile 已回归干净包，待重启验证；下一步 C2 卡片或 OV-5 共享排序**
 
 ## 1. 交接元信息
 
@@ -23,9 +23,9 @@
 |---|---|
 | git 仓库 | `NinjaSln-labs/dsh-plugins`，`main` 分支 |
 | origin 对齐 | **HEAD `878c6e3`（含其它会话的提交：subagent-router 0.2.0 等）；工作区有未提交噪声：4 个 workflow 文件 CRLF 化 + `.githooks/`（其它会话产物，勿提交）** |
-| npm latest | **0.10.0**（tag `context-compass-v0.10.0`，commit `bfc9abb`；origin 上存在，已核对） |
-| HEAD | `878c6e3`（领先 npm：AUDIT 修复批 + 重构未发版） |
-| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.10.0** 已加载（bundles 完整；settings live 实测通过） |
+| npm latest | **0.11.0**（tag `context-compass-v0.11.0`，commit `30ede78`，== HEAD 已核对） |
+| HEAD | `30ede78`（== tag；仓库另有其它插件活跃提交） |
+| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.11.0** 已装入（bundles 完整；**待 harness 重启加载**） |
 | harness | 全局 dsh `0.1.1-rc.2`；文件系统映射 `/mnt/e/ninjasin-labs/...` |
 | 发布管道 | `.github/workflows/publish.yml`（含 S4 canary：prerelease → `--tag next`）+ `canary-promote.yml`（晋级 latest） |
 
@@ -62,8 +62,9 @@
 
 ### 3.1 待办（按序）
 
-- [ ] **发版下一版（0.10.1 或 0.11.0）**：审计修复批 + 重构已提交未发（npm latest 仍 0.10.0）。发前跑 `npm run release-check` 全绿 → `npm version patch|minor` → tag（== HEAD）→ push → CI 审批。可走 S4 canary：`npm version prerelease --preid=next` 先发 next 实测再 promote
-- [ ] 发布后 profile 回归干净包（手动改版本 + `pnpm install` + bundles 核对）
+- [x] **0.11.0 发版**（2026-08-26）：门禁 7 步全绿 → bump minor → tag `context-compass-v0.11.0`（== HEAD `30ede78`）→ CI 审批发布（npm latest 已确认 0.11.0）
+- [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿
+- [ ] **重启后验证**（待 harness 重启加载 0.11.0）：contract-check + 面板目视——重点 RPC 新 Host 校验不破坏浏览器同源访问、R1 去重后 sparkline 正常
 - [ ] C2 client 配置卡片（P3，ROADMAP）——开工前先出简短设计定稿
 - [ ] R3 定价同步 CI（P2 低优）
 - [ ] AUDIT recorded 项（6 项）按需：OV-5 抽 host/client 共享排序模块是唯一一致性风险点，值得优先
