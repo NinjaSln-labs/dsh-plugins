@@ -430,7 +430,7 @@ function buildCore(source: 'llm' | 'heuristic', recommendations: Recommendation[
 export async function recommend(
   ctx: Context,
   args: { task: string; provider?: string; n?: number },
-  exec: { signal?: AbortSignal },
+  exec: { signal?: AbortSignal; agent?: { options?: { provider?: string; model?: string } } },
   health: RouteHealthStore,
   getConfig: () => ResolvedModelPickerConfig,
   cache: LruCache<string, RecommendationCore>,
@@ -481,7 +481,24 @@ export async function recommend(
     note,
   })
 
-  const classifiers = pickClassifiers(candidates, config.autoProviderOrder, 3)
+  // Classifier hosts, anchored first: the calling agent's own model is always
+  // healthy (it is running right now), so try it first — this reuses the
+  // harness's "anchor to parent" auto semantics instead of hand-picking a
+  // cheap model. Fall back to the bounded selection-scope candidates with
+  // health-aware reroute after that.
+  const parent = exec.agent?.options
+  const classifiers: Array<{ provider: string; model: string }> = []
+  if (typeof parent?.provider === 'string' && typeof parent?.model === 'string') {
+    classifiers.push({ provider: parent.provider, model: parent.model })
+  }
+  const seen = new Set(classifiers.map(entry => `${entry.provider}\u0000${entry.model}`))
+  for (const c of pickClassifiers(candidates, config.autoProviderOrder, 3)) {
+    const key = `${c.provider}\u0000${c.model}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      classifiers.push(c)
+    }
+  }
   if (classifiers.length === 0) {
     return heuristic('no classifier model available; heuristic selection')
   }
