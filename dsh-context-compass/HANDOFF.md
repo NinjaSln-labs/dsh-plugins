@@ -1,17 +1,19 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0（C1 配置点接入）已发布 + 重启加载 + live 生效实测通过（settings.yaml 写 windowMid → 6 会话判定即时翻转，撤销即恢复）；下一步 C2 卡片**
+> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.10.0 已发布；AUDIT-0.10.0 审计周期完成（23 发现：P1×4/P2×6 修复 + 6 留档 + 3 测试洞补齐）；smoke/client 双重构落地；**审计修复批（e87b7ca/fd7d90d/55d116e）未发版——npm latest 仍是 0.10.0，下一版待发**
 
 ## 1. 交接元信息
 
-- **日期**：2026-08-25（0.7.17 发版 + 0.8.0 稳定性基建收尾并发版）
-- **插件包**：`dsh-context-compass@0.8.0`（npm latest），npm 用户名 `ninjasln`
+- **日期**：2026-08-26（0.9.0/0.10.0 发布 + AUDIT-0.10.0 审计重构周期）
+- **插件包**：`dsh-context-compass@0.10.0`（npm latest），npm 用户名 `ninjasln`
 - **交接原因**：会话切换
-- **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.7.11.md`
+- **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.10.0.md`（本轮审计，23 发现分级）
 - **接收方建议**：
   - 先读本文件 §2–§3；路线/待办见 `docs/ROADMAP.md`（单源）
-  - **公测阶段 harness 变化快——每次 dsh 版本变化后跑 `node scripts/contract-check.mjs` 升级体检**（基线清单在 ROADMAP 维护规则）
+  - **公测阶段 harness 变化快——每次 dsh 版本变化后跑 `node scripts/contract-check.mjs` 升级体检**
   - 发布前确认 `git rev-parse <tag> == git rev-parse HEAD`（pits 有 0.7.11 旧代码事故）
+  - 本机 `/mnt/e` 为 noexec？**否**（实测 exec 正常）——commit-msg hook 曾因 CRLF 失效，已修（LF 入库 + ps1 安装需转 LF，见 pits 2026-08-26）
+  - **注意：仓库有多会话并行工作**（subagent-router 0.2.0 等其它插件活跃提交）；工作区有其它会话产生的未提交改动（workflow CRLF 噪声 + .githooks），勿误提交
 
 ## 2. 当前状态快照
 
@@ -20,77 +22,59 @@
 | 域 | 状态 |
 |---|---|
 | git 仓库 | `NinjaSln-labs/dsh-plugins`，`main` 分支 |
-| origin 对齐 | **已对齐**（HEAD == tag `context-compass-v0.8.0`） |
-| npm latest | **0.8.0**（tag `context-compass-v0.8.0`，commit `b73b47d`） |
-| HEAD | `b73b47d`（== tag，发布前已核对） |
-| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.8.0** 已装入（bundles 6+1 条目完整；**待 harness 重启生效**，重启后跑 §3.2） |
-| harness | 全局 dsh `0.1.1-rc.2`（公测阶段，版本变化快）；**注意**：本机文件系统映射已变为 `/mnt/e/ninjasin-labs/...`（原 `/Users/sin/...` 挂载失效，node_modules 已重装） |
-| 发布管道 | `.github/workflows/publish.yml`——tag `context-compass-v*` → 验证链（含 contract 时延断言）→ `npm-publish` 审批 |
+| origin 对齐 | **HEAD `878c6e3`（含其它会话的提交：subagent-router 0.2.0 等）；工作区有未提交噪声：4 个 workflow 文件 CRLF 化 + `.githooks/`（其它会话产物，勿提交）** |
+| npm latest | **0.10.0**（tag `context-compass-v0.10.0`，commit `bfc9abb`；origin 上存在，已核对） |
+| HEAD | `878c6e3`（领先 npm：AUDIT 修复批 + 重构未发版） |
+| 本机部署 | `~/.dsh/profiles/web` 干净包 **0.10.0** 已加载（bundles 完整；settings live 实测通过） |
+| harness | 全局 dsh `0.1.1-rc.2`；文件系统映射 `/mnt/e/ninjasin-labs/...` |
+| 发布管道 | `.github/workflows/publish.yml`（含 S4 canary：prerelease → `--tag next`）+ `canary-promote.yml`（晋级 latest） |
 
 ### 2.2 功能与质量
 
 | 域 | 状态 |
 |---|---|
-| 功能 | 0.7.16 全量：徽章 + `/compass` + 工具 + 一览面板（活动列、运行中置顶排序）+ R2 压缩频率 + RPC 路由 |
-| 一览面板性能 | 轮询帧 **17-19ms**（stale-while-revalidate 生效），冷启动首帧例外（必真查一次 listSessions） |
-| 排序规则 | 运行中置顶 → 组内红→黄→蓝→绿 → 非运行中同梯 → 已加载>冷却 → 新在前（host+client 双侧同规则） |
-| 占位/未完成 | 配置点接入（C1/C2）在 ROADMAP 标记「需深入调研与设计」，未动工 |
+| 功能 | 0.10.0 全量：徽章 + `/compass` + 工具 + 一览面板（SWR ≤20ms、运行中置顶、活动列）+ R1 sparkline（stateVersion 10）+ C1 settings 配置点（live 生效）+ R2 压缩频率 + RPC 路由 |
+| 代码组织 | **重构后**：测试按域拆 `scripts/tests/*.mjs`（13 模块 + runner）；client 拆 `src/client/{styles,shared,badge,command-card,overview}`；host 核心（assess/projection/overview）稳定未动 |
+| 质量 | AUDIT-0.10.0：23 发现 → 15 fixed/resolved + 6 recorded（OV-5 抽共享排序 / OV-6 缓存盲区 / OV-8 summary 鉴权 / OV-9 contract 健壮性 / C1-6 双源 / R1-6 断言收窄） |
+| 占位/未完成 | C2 配置卡片（P3）· R3 定价同步 CI · 审计修复批未发版 |
 
 ### 2.3 测试
 
 | 套件 | 结果 |
 |---|---|
-| release-check | **7 步全绿**（0.8.0 周期 gate，含新增 S2/S3 断言） |
-| smoke | 全绿 **100 项**（+11：S2 兼容矩阵/真实 registry 集成/wire 键集合守卫 + S3 每字段配置生效） |
-| mount | 全绿 **5 项**（+1：projection.enabled=false 接线开关） |
-| contract-check | ✅（RPC 判别器 + overview ≤200ms 时延断言 + 冷启动豁免重试） |
-| visual | 6/6（darwin + linux 双平台基线入库） |
+| release-check | **7 步全绿**（本轮门禁，含 AUDIT 新增断言） |
+| smoke | 全绿 **~125 项**（分域 13 模块：util/projection/usage/assess/pricing/command/tool/overview/s2/r1/s3/c1 + 审计新用例） |
+| mount | 全绿 **8 项**（+C1 接线集成 + C1-4 re-apply 冒烟） |
+| client-mount | 全绿（4 slot + parseCompassReport/mergePressure/lagOf 入口断言） |
+| contract-check | ✅（RPC 判别器 + overview ≤200ms + 冷启动豁免） |
+| visual | 6/6（darwin + linux 基线；client 拆分后不变） |
 
 ### 2.4 最近完成（一行式——详情在 commit message）
 
-- S4 canary 发布通道：publish.yml prerelease → `--tag next`（不动 latest）+ 新增 canary-promote.yml（workflow_dispatch 晋级 latest，同审批门）；流程文档入 PUBLISHING.md
-- C1 配置点接入：installSettingsSection + source thunk（投影/工具/命令/RPC getter 化，thresholds/checks live）+ validate 三档单调 + projection.enabled live 切换 + peer `@deepseek-ai/dsh-settings ^0.1.0-rc.6`；接线 bug（`as` 强转压掉 thunk 未调用 → settings 写入静默无效）被 mount 集成测试抓到已修，见 pits 2026-08-26
-- commit-msg hook CRLF 根因修复（PowerShell 安装产物，非 noexec）+ 入库 LF 版
-- `08f2b9f` release v0.9.0（R1 占用趋势 sparkline；tag == HEAD 已核对）
-- `cd559bd` R1：pressureHistory 环形采样（stateVersion 9）+ 浮层 SVG 折线 + smoke +4
-- ℹ️ 0.8.0 周期 commit 哈希已变（内容不变，npm 0.8.0 包正常：release 现为 `3459038`、S2/S3 现为 `e7edb68`）——**有意操作**：Contributors 被 cursoragent 污染，另一会话做了历史清理（剥离 attribution trailer + `.githooks/commit-msg` hook + contributors cache 刷新）；非并行冲突
-- 更早（0.7.x 周期）：已滚动归档至 `HANDOFF-ARCHIVE/cycles.md`
+- `fd7d90d` AUDIT recorded 处置：OV-7 独立 AbortController / OV-10 注释 / 测试洞 3-5 / C1-4 冒烟验证
+- `55d116e` client.tsx 模块化拆分（src/client/ 五模块，visual 基线不变）
+- `e87b7ca` AUDIT-0.10.0 修复批（P1×4 + P2×6：OV-1~4、C1-1~3、R1-1~3 + 新测试）
+- `d3bfcdf`/`3fea699` AUDIT 文档与状态
+- 0.9.0/0.10.0 周期（R1 sparkline / C1 settings / S4 canary / smoke 拆分 / 0.7.17 发版等）已滚动归档 `HANDOFF-ARCHIVE/cycles.md`
+- 更早（0.7.x 周期）：已在归档
 
 ## 3. 下一步与验证点
 
-### 3.1 待发版（0.10.0）——推送完成，待 CI 审批
+### 3.1 待办（按序）
 
-- [x] push C1 commit（设计定稿 `docs/C1-SETTINGS-DESIGN.md` 经用户确认后实施）
-- [x] CI npm-publish 审批 → **npm latest 已确认 0.10.0**（2026-08-26）
-- [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿（26ms）
-- [x] 重启后 settings 验证——✅ 已完成（2026-08-26 19:08 重启加载 0.10.0）：settings.yaml（`~/.dsh/settings.yaml`，file provider）写入 `context-compass.thresholds.windowMid: 0.05` → 6 个有数据会话判定 green→blue 即时翻转，撤销即恢复——live 全链路（文件 publish → source → 投影 view）实测通过
+- [ ] **发版下一版（0.10.1 或 0.11.0）**：审计修复批 + 重构已提交未发（npm latest 仍 0.10.0）。发前跑 `npm run release-check` 全绿 → `npm version patch|minor` → tag（== HEAD）→ push → CI 审批。可走 S4 canary：`npm version prerelease --preid=next` 先发 next 实测再 promote
+- [ ] 发布后 profile 回归干净包（手动改版本 + `pnpm install` + bundles 核对）
+- [ ] C2 client 配置卡片（P3，ROADMAP）——开工前先出简短设计定稿
+- [ ] R3 定价同步 CI（P2 低优）
+- [ ] AUDIT recorded 项（6 项）按需：OV-5 抽 host/client 共享排序模块是唯一一致性风险点，值得优先
 
-### 3.1.1 已完成——0.9.0 发版（2026-08-26）
+### 3.2 风险提醒
 
-- [x] push R1 commit + tag `context-compass-v0.9.0`（== HEAD `08f2b9f`）
-- [x] CI npm-publish 审批 → **npm latest 已确认 0.9.0**（2026-08-26）
-- [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿（19ms）
-- [x] 重启后浮层验证——✅ 已完成（2026-08-26 15:34 重启加载 0.9.0）：wire 带 pressureHistory（重放重建满环 40 样本）；一次性 Playwright 实测浮层 `.sh-spark` 可见（110×18，aria「占用趋势（最近 40 次请求）」）
-
-### 3.1.1 已完成——0.8.0 发版（2026-08-25）
-
-- [x] push S2/S3 commit
-- [x] `npm version minor --no-git-tag-version` → tag `context-compass-v0.8.0`（== HEAD `b73b47d`）→ push → CI 审批发布（npm latest 已确认 0.8.0）
-- [x] 发布后 profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对（6 原有条目完整 + 另一会话新增 dsh-session-slm-router）
-- [x] **重启后跑 §3.2 清单**——✅ 已完成（2026-08-26，harness 12:16 重启加载 0.8.0）：contract 全绿、SWR 采样 10–16ms、15 会话排序正确；UI 零变更（visual 6/6 已在 0.8.0 构建包上过 gate）
-
-### 3.2 重启验证清单（0.7.17）——✅ 已完成（2026-08-25 晚）
-
-- [x] 一览面板打开秒出列表；运行中会话置顶且组内按缓急排（RPC 实测 running→loaded→cold；GUI 目视确认）
-- [x] 「活动」列相对时间显示；数字列表头与数据右对齐（visual 6/6 断言 + GUI 目视确认）
-- [x] `/compass` 命令、`context_compass` 工具、badge 浮层正常（client-mount 绿 + visual 6/6 + GUI 目视确认）
-- [x] `node scripts/contract-check.mjs` 全绿（overview 13ms；偶发 >200ms 尖峰为 harness 瞬时负载，连续采样 12–16ms）
-
-### 3.3 风险提醒
-
-- **harness 公测阶段 API 快速漂移**——本次 0.1.1 的 wire 契约/coldSnapshot/listSessions 三连坑都是升级暴露（详见 pits）。每次升级先跑 contract-check + 实际看面板数据，别只信 stub 测试
-- 改 host 源码后必须完整 `npm run build`（tsc+build-client）再部署/重启；只跑 tsc 的 lib/client.js 是坏的（无 `__ModuleLoader__` 注册）
-- peer 保持 `^0.1.0-rc.6` 不随升级升（策略见 ROADMAP 维护规则）；仅接入更高版本独有 API 时局部升
+- **harness 公测 API 快速漂移**——每次升级先跑 contract-check + 看面板（0.1.1 三连坑教训）
+- **审计修复批未发版**——本地代码领先 npm 3 个 commit 面，勿在旧版上继续开发（若重启加载的是 0.10.0 旧行为）
+- 改 host 源码后必须完整 `npm run build`（tsc+build-client），只跑 tsc 的 lib/client.js 是坏的
+- peer 保持 `^0.1.0-rc.6` 策略（ROADMAP 维护规则）；dsh-settings 已局部升 `^0.1.0-rc.6`
+- **多会话并行**：提交前 `git status` 确认只 add 自己的文件；hook 在 /mnt/e 曾因 CRLF 失效（已修 LF 版入库，但其它会话可能再引入 CRLF 工作区噪声）
 
 ## 4. 即时操作
 
@@ -106,26 +90,26 @@ npm run contract-check       # RPC 判别器 + overview ≤200ms（含冷启动�
 1. `pnpm peers check` 报缺 peer → 正常（profile peers 经共享层解析）
 2. 视觉测试只读不写卡（card.spec 已删）
 3. harness 冷启动后第一帧 overview 必慢（listSessions 真查一次）——contract-check 已内置预热重试豁免
-4. **新 Linux 环境首次跑 visual**：需 `npx playwright install chromium` + `npx playwright install-deps chromium`（系统库 libnspr4 等）；linux 基线已入库（`311cc1f`），无需再生成
+4. **新 Linux 环境首次跑 visual**：需 `npx playwright install chromium` + `npx playwright install-deps chromium`；linux 基线已入库无需再生成
+5. **工作区 CRLF 噪声**：其它会话在 Windows 侧操作后，`.github/workflows/*.yml` 可能整文件 CRLF 化（git diff 显示 287+/287- 纯行尾变化）——提交前确认，勿把行尾噪声混进真实改动；`file <文件>` 验证
+6. **多会话并行提交**：提交前 `git status` 核对只 add 自己的路径（仓库有 subagent-router / knowledge-sqlite / session-slm-router 等其它插件活跃）
 
 **已修并已归档的坑**（详见 `../../HANDOFF-ARCHIVE/pits.md`）：
-- 2026-08-25：node_modules 重装后缺 `@deepseek-ai/dsh-client-ui-slots` 导致 build/typecheck 失败（已入 devDep，commit `311cc1f`）
-- 2026-08-22 段：0.1.1 wire 契约 / coldSnapshot 重操作化 / listSessions 抖动 / 时延假阳性 / pnpm add 弄丢 profile bundles 条目 / cp 整目录覆盖坏 client bundle
-- 更早：0.7.11 tag 旧代码事故等（见 pits 上方段落）
+- 2026-08-26：C1 接线 `as` 强转压掉 thunk 未调用（真 bug，mount 集成测试抓到）· commit-msg hook CRLF 根因（PowerShell 安装产物，非 noexec）
+- 2026-08-25：ui-slots devDep · 0.1.1 wire 契约三连坑 · pnpm add 弄丢 bundles 等（见 pits）
 
 ## 5. 引用索引
 
 | 主题 | 路径 |
 |---|---|
-| **源码** | `src/`（index / assess / command / config / tool / projection / overview / knowledge / pricing / usage / util / schemas / types / client） |
-| **测试与门禁** | `scripts/release-check.mjs`（S0 门禁）· `scripts/contract-check.mjs`（S1 live 契约）· `scripts/smoke.mjs` · `scripts/mount.mjs` · `scripts/client-mount.mjs` · `visual/tests/{badge,panel}.spec.mjs` |
-| **设计/路线** | `docs/ROADMAP.md`（唯一权威，含稳定性基建 S0-S4 + 配置点 C1/C2 待调研）· `docs/DESIGN.md` · `docs/OPTIMIZATION-RESEARCH.md` · `docs/RESEARCH-COMPETITORS.md` · `docs/AUDIT-0.7.11.md` |
-| **发布记录** | `PUBLISHING.md` |
+| **源码** | `src/`（index / assess / command / config / tool / projection / overview / knowledge / pricing / usage / util / schemas / types）+ `src/client/`（styles / shared / badge / command-card / overview，入口 `src/client.tsx`） |
+| **测试与门禁** | `scripts/release-check.mjs`（S0 门禁）· `scripts/contract-check.mjs`（S1 live 契约）· `scripts/smoke.mjs`（runner）· `scripts/tests/`（13 域模块）· `scripts/mount.mjs` · `scripts/client-mount.mjs` · `visual/tests/{badge,panel}.spec.mjs` |
+| **设计/路线/审计** | `docs/ROADMAP.md`（唯一权威）· `docs/DESIGN.md` · `docs/C1-SETTINGS-DESIGN.md` · `docs/AUDIT-0.10.0.md`（本轮审计，23 发现分级 + 6 recorded）· `docs/AUDIT-0.7.11.md` |
+| **发布记录** | `PUBLISHING.md`（含 S4 canary 流程） |
 | **功能文档** | `README.md` + `README.en.md` |
-| **决策日志** | `docs/SESSION-LIST-DOT.md` |
-| **发布管道** | `../.github/workflows/publish.yml` |
+| **发布管道** | `../.github/workflows/publish.yml` · `canary-promote.yml` |
 | **归档** | `../../HANDOFF-ARCHIVE/pits.md`（坑）· `cycles.md`（周期 delta） |
-| **本机部署** | `~/.dsh/profiles/web/package.json`（改依赖须核对 `dsh.profile.bundles`）· `cordis.patch.yml` |
+| **本机部署** | `~/.dsh/profiles/web/package.json`（改依赖须核对 `dsh.profile.bundles`）· `~/.dsh/settings.yaml`（settings 文档，file provider） |
 | **npm** | `https://www.npmjs.com/package/dsh-context-compass` |
 
 ## 6. 维护规则
