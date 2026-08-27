@@ -43,6 +43,7 @@ type Section = {
   autoProviderOrder?: string[]
   autoTierPolicy?: Partial<Record<'trivial' | 'standard' | 'complex', 'anchor' | 'cheapest' | 'strongest'>>
   autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
+  recommendTimeoutMs?: number
 }
 
 /** Host model-directory wire face (session-independent; `llm.models`). */
@@ -140,6 +141,7 @@ const FIELDS: Field[] = [
   { id: 'autoEscalate', group: 'recovery', label: '失败时升级', hint: '前台运行失败后沿下一档自动重试一次。', kind: 'boolean', default: true, get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
   { id: 'autoReroute', group: 'recovery', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', default: true, get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
   { id: 'autoEscalationTiers', group: 'recovery', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', min: 0, get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
+  { id: 'recommendTimeoutMs', group: 'scope', label: '推荐分类超时', hint: 'subagent_recommend 分类器的一次 LLM 调用超时（毫秒，默认 10000），超时自动降级到命名启发式。', kind: 'number', min: 100, get: s => s.recommendTimeoutMs, set: (s, v) => ({ ...s, recommendTimeoutMs: v }) },
 ]
 
 /** Group titles, in render order. */
@@ -236,12 +238,14 @@ function OrderedPicker(props: {
   onChange: (next: string[]) => void
   disabled: boolean
   placeholder: string
+  max?: number
 }): React.ReactElement {
-  const { candidates, selected, onChange, disabled, placeholder } = props
+  const { candidates, selected, onChange, disabled, placeholder, max } = props
   const [pending, setPending] = React.useState('')
   const available = candidates.filter(candidate => !selected.includes(candidate.id))
+  const atMax = max !== undefined && selected.length >= max
   const add = (): void => {
-    if (pending === '') return
+    if (pending === '' || atMax) return
     onChange([...selected, pending])
     setPending('')
   }
@@ -253,16 +257,16 @@ function OrderedPicker(props: {
       React.createElement('select', {
         className: 'sr-input',
         value: pending,
-        disabled: disabled || available.length === 0,
+        disabled: disabled || available.length === 0 || atMax,
         onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setPending(e.target.value),
       },
-        React.createElement('option', { value: '' }, disabled ? placeholder : available.length === 0 ? '无可选项' : placeholder),
+        React.createElement('option', { value: '' }, disabled || atMax ? placeholder + '（已达上限）' : available.length === 0 ? '无可选项' : placeholder),
         ...available.map(candidate => React.createElement('option', { key: candidate.id, value: candidate.id }, candidate.label)),
       ),
       React.createElement('button', {
         className: 'sr-btn-add',
         type: 'button',
-        disabled: disabled || pending === '',
+        disabled: disabled || pending === '' || atMax,
         onClick: add,
       }, '添加'),
     ),
@@ -380,11 +384,17 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
   }
   const onCancel = (): void => { setDraft(null); setSaved(false) }
   // Catalog-derived candidates for the pickers (provider ids and model ids).
-  const providerCandidates = catalog.groups.map(group => ({ id: group.id, label: group.name }))
+  // Free-tier routes/models (name or id carrying "free"/"免费") sort first.
+  const isFree = (s: string): boolean => /(free|免费)/i.test(s)
+  const providerCandidates = catalog.groups
+    .map(group => ({ id: group.id, label: group.name, free: isFree(group.name) || isFree(group.id) }))
+    .sort((a, b) => (a.free === b.free ? a.label.localeCompare(b.label) : a.free ? -1 : 1))
+    .map(({ id, label }) => ({ id, label }))
   // Models collapsed by canonical id (autoTierPicks stores model ids, not
   // provider-bound selections): spelling variants across providers
   // (`deepseek-v4-flash` / `DeepSeek-V4-Flash` / `deepseek/deepseek-v4-flash`)
-  // merge into one candidate, annotated with every provider that carries it.
+  // merge into one candidate. The label is the normalized id (provider prefix
+  // stripped, lowercase) — cross-provider spelling collapsed, provider hidden.
   // The stored value is the first-seen original id of the group.
   const modelProviders = new Map<string, { name: string; providers: string[]; firstId: string }>()
   for (const group of catalog.groups) {
@@ -398,10 +408,14 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
       }
     }
   }
-  const modelCandidates = [...modelProviders].map(([, { name, providers, firstId }]) => ({
-    id: firstId,
-    label: providers.length > 1 ? `${name}（${providers.join(' / ')}）` : `${name}（${providers[0]}）`,
-  }))
+  const modelCandidates = [...modelProviders]
+    .map(([key, { providers, firstId }]) => ({
+      id: firstId,
+      label: key,
+      free: providers.some(provider => isFree(provider)) || isFree(key) || isFree(firstId),
+    }))
+    .sort((a, b) => (a.free === b.free ? a.label.localeCompare(b.label) : a.free ? -1 : 1))
+    .map(({ id, label }) => ({ id, label }))
   const chevron = React.createElement('svg', {
     className: 'sr-chevron',
     viewBox: '0 0 16 16',
@@ -468,6 +482,7 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
                 onChange: (next) => onTierPicksEdit(tier, next),
                 disabled,
                 placeholder: '选择候选模型',
+                max: 12,
               }),
               React.createElement('div', { className: 'sr-hint' },
                 catalog.status === 'error'
