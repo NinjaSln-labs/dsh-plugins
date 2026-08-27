@@ -186,7 +186,12 @@ export function pickClassifiers(
   providerOrder: readonly string[] = [],
   limit = 3,
 ): Array<{ provider: string; model: string }> {
-  const eligible = candidates.filter(candidate => !TOO_LIGHT.test(candidate.model))
+  // Prefer mid/strong models over light ones for the classifier host: a light
+  // model on a free route is fast but unreliable (empty replies / latency
+  // spikes), while a mid model on a paid route is stable enough for a one-shot
+  // 512-token structured reply. Ultra-light names are always excluded.
+  const eligible = candidates.filter(candidate =>
+    candidate.meta.strength !== 'light' && !TOO_LIGHT.test(candidate.model))
   const pool = eligible.length > 0 ? eligible : candidates
   const order = [...providerOrder, ...pool.map(candidate => candidate.provider)]
   const rank = new Map<string, number>()
@@ -195,10 +200,14 @@ export function pickClassifiers(
   })
   return [...pool]
     .sort((a, b) => {
+      // cost first (mid before strong), then provider order, then model id.
+      if (COST_ORDER[a.meta.cost] !== COST_ORDER[b.meta.cost]) {
+        return COST_ORDER[a.meta.cost] - COST_ORDER[b.meta.cost]
+      }
       const ra = rank.get(a.provider) ?? Number.MAX_SAFE_INTEGER
       const rb = rank.get(b.provider) ?? Number.MAX_SAFE_INTEGER
       if (ra !== rb) return ra - rb
-      return COST_ORDER[a.meta.cost] - COST_ORDER[b.meta.cost]
+      return a.model.localeCompare(b.model)
     })
     .slice(0, limit)
     .map(candidate => ({ provider: candidate.provider, model: candidate.model }))
