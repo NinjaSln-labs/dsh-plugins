@@ -23,7 +23,7 @@ import type { ModelMeta } from './meta.ts'
 import { classifyFailure, failureLabel } from './failure.ts'
 import type { RouteHealthStore } from './health.ts'
 import type { ResolvedModelPickerConfig } from './index.ts'
-import { buildSelectionScope } from './selection.ts'
+import { buildSelectionScope, normalizeModelId } from './selection.ts'
 import type { SelectionEntry, SelectionTier } from './selection.ts'
 
 /** The slice of the `llm` service this module consumes. */
@@ -290,10 +290,18 @@ function validatePicks(
   candidates: readonly SelectionEntry[],
   n: number,
 ): Recommendation[] {
-  const byKey = new Map(candidates.map(candidate => [`${candidate.provider}\u0000${candidate.model}`, candidate]))
+  // Two indexes: the exact provider/model key, and a lenient key (provider
+  // case-insensitive + model normalized) so a classifier that echoes the model
+  // with different casing or a version suffix still matches.
+  const byKey = new Map<string, SelectionEntry>()
+  for (const candidate of candidates) {
+    byKey.set(`${candidate.provider}\u0000${candidate.model}`, candidate)
+    byKey.set(`${candidate.provider.toLowerCase()}\u0000${normalizeModelId(candidate.model)}`, candidate)
+  }
   const out: Recommendation[] = []
   for (const pick of picks) {
     const candidate = byKey.get(`${pick.provider}\u0000${pick.model}`)
+      ?? byKey.get(`${pick.provider.toLowerCase()}\u0000${normalizeModelId(pick.model)}`)
     if (candidate === undefined) continue // id not in catalog — drop, never forward
     out.push(toRecommendation(candidate, pick.reason))
     if (out.length >= n) break
@@ -317,7 +325,7 @@ async function classifyViaLlm(
   classifier: { provider: string; model: string },
   timeoutMs: number,
   execSignal: AbortSignal | undefined,
-): Promise<RawPick[] | undefined> {
+): Promise<{ picks: RawPick[] | undefined; raw: string }> {
   const compact = candidates.map(candidate => ({
     provider: candidate.provider,
     model: candidate.model,
@@ -360,7 +368,7 @@ async function classifyViaLlm(
         }
       }
     }
-    return parsePicks(text)
+    return { picks: parsePicks(text), raw: text }
   } catch (error) {
     if (timedOut) throw new TimeoutError(timeoutMs)
     throw error
@@ -454,7 +462,7 @@ export async function recommend(
   }
 
   return classifyViaLlm(llm, args.task, candidates, classifier, config.recommendTimeoutMs, exec.signal)
-    .then(picks => {
+    .then(({ picks, raw }) => {
       if (picks !== undefined) {
         const recommendations = validatePicks(picks, candidates, n)
         if (recommendations.length > 0) {
@@ -463,10 +471,17 @@ export async function recommend(
           return core as RecommendResult
         }
       }
-      return heuristic('classifier reply failed validation; heuristic selection')
+      return heuristic(`classifier reply failed validation; heuristic selection${rawSnippet(raw)}`)
     })
     .catch((error: unknown) => {
       const timeoutError = error instanceof TimeoutError
       return heuristic(degradationNote(error, config.recommendTimeoutMs, timeoutError))
     })
+}
+
+/** A bounded, whitespace-collapsed excerpt of the classifier's raw reply, for diagnostics. */
+function rawSnippet(raw: string): string {
+  const trimmed = raw.trim().replace(/\s+/g, ' ')
+  if (trimmed.length === 0) return '（分类器无输出）'
+  return `（分类器返回：${trimmed.slice(0, 160)}${trimmed.length > 160 ? '…' : ''}）`
 }
