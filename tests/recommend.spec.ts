@@ -120,25 +120,27 @@ describe('LruCache', () => {
 })
 
 describe('pickClassifier', () => {
-  it('picks the cheapest-tier candidate', () => {
+  it('skips light models and prefers mid over strong (cost) for the classifier host', () => {
     const candidates: SelectionEntry[] = [
+      { provider: 'p', model: 'flash-x', tier: 'cheapest', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
       { provider: 'p', model: 'strong-x-pro', tier: 'strong', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
-      { provider: 'p', model: 'cheap-x-flash', tier: 'cheapest', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
+      { provider: 'p', model: 'mid-x', tier: 'medium', meta: { cost: 'mid', speed: 'normal', strength: 'mid', specialty: [] } },
     ]
-    expect(pickClassifier(candidates)).toEqual({ provider: 'p', model: 'cheap-x-flash' })
+    // light 被排除；mid（cost=mid）排在 strong（cost=high）前
+    expect(pickClassifier(candidates)).toEqual({ provider: 'p', model: 'mid-x' })
   })
 
   it('returns undefined for an empty candidate list', () => {
     expect(pickClassifier([])).toBeUndefined()
   })
 
-  it('prefers a listed provider over cost tier order', () => {
+  it('prefers a listed provider within the same cost tier', () => {
     const candidates: SelectionEntry[] = [
-      { provider: 'slow-route', model: 'flash-x', tier: 'cheapest', meta: { cost: 'low', speed: 'fast', strength: 'light', specialty: [] } },
-      { provider: 'fast-route', model: 'pro-x', tier: 'strong', meta: { cost: 'high', speed: 'normal', strength: 'strong', specialty: [] } },
+      { provider: 'slow-route', model: 'mid-x', tier: 'medium', meta: { cost: 'mid', speed: 'normal', strength: 'mid', specialty: [] } },
+      { provider: 'fast-route', model: 'mid-y', tier: 'medium', meta: { cost: 'mid', speed: 'normal', strength: 'mid', specialty: [] } },
     ]
-    // providerOrder 把 fast-route 排前面——即使它的模型更贵也优先选它
-    expect(pickClassifier(candidates, ['fast-route'])).toEqual({ provider: 'fast-route', model: 'pro-x' })
+    // 同 cost 档内，providerOrder 靠前的优先
+    expect(pickClassifier(candidates, ['fast-route'])).toEqual({ provider: 'fast-route', model: 'mid-y' })
   })
 })
 
