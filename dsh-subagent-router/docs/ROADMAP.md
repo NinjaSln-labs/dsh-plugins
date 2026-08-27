@@ -36,7 +36,7 @@
 |---|---|---|---|---|
 | 1a | ~~`backgroundMode: continuable` 运行时实测~~ → **✅ 已完成（2026-08-27）**：base 层（profile cordis.patch.yml）`backgroundMode: continuable` + 重启 → `subagent_model` 默认返回 `kind:'continuable'` + 持久 `subagentId` → `send_message` 同会话续聊成功（第二轮回执「send_message 续聊 OK」）· spawn provider `prepareContinuable` 前提✅ · 前台路径✅ · one-shot 后台 jobs 通道✅ · 工具描述✅ · **关键机制发现**：`backgroundMode` 是注册期快照，`installSettingsSection` 的 `setSource` 异步注入晚于 `apply()` 冻结——用户层/设置页对该字段无效，**必须写 base 层**（详见 HANDOFF §4 坑 10） | P0 | 后台委派是主力场景，不能只靠单测；验证 startContinuable 路径 + 工具描述 | — |
 | 1b | ~~profile 级 config 覆盖实测~~ → **✅ 已完成**：设置页 UI（设置 → 插件配置）实现并验证（host settings 命名空间 + client 卡片 + 实时生效，见 PLAN-settings-ui.md） | P1 | 配置面闭环，堵静默失效 | — |
-| 1c | **目录元数据**：`subagent_models` 输出加 cost 档 / 速度 / 特长 / 上下文窗口标注 | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
+| 1c | ~~目录元数据~~ → **✅ 已完成（2026-08-27，`a9012eb`）**：`subagent_models` 每个模型加派生元数据（`cost` 成本档 / `speed` 速度档 / `strength` 强度档 / `specialty` 特长 / `contextWindow` 已知模型上下文窗口）——零外部依赖，命名启发式 + 内置已知映射（`src/meta.ts`）；无法推断的字段省略不猜，精确值留 3c | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
 | 1d | **auto 策略参数化（余项）**：档位阈值（字符数/markers）、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数上限已交付（`autoEscalationTiers`） | — |
 | 1e | **真实环境健康感知验证**：clinepass 配额耗尽场景下 auto 换路 / 目录标注实跑 | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
 
