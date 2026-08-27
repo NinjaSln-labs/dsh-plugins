@@ -4,16 +4,17 @@
 
 ## 1. 交接元信息
 
-- **日期**：2026-08-26（0.9.0/0.10.0 发布 + AUDIT-0.10.0 审计重构周期）
-- **插件包**：`dsh-context-compass@0.10.0`（npm latest），npm 用户名 `ninjasln`
+- **日期**：2026-08-27（0.9.0→0.11.0 发布 + AUDIT-0.10.0 审计重构周期）
+- **插件包**：`dsh-context-compass@0.11.0`（npm latest），npm 用户名 `ninjasln`
 - **交接原因**：会话切换
-- **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.10.0.md`（本轮审计，23 发现分级）
+- **文档入口链**：`README.md` → `PUBLISHING.md` → `docs/ROADMAP.md`（路线图唯一权威）· `docs/DESIGN.md` · `docs/AUDIT-0.10.0.md`（23 发现分级，15 fixed/resolved + 6 recorded）· `docs/C1-SETTINGS-DESIGN.md`
 - **接收方建议**：
   - 先读本文件 §2–§3；路线/待办见 `docs/ROADMAP.md`（单源）
   - **公测阶段 harness 变化快——每次 dsh 版本变化后跑 `node scripts/contract-check.mjs` 升级体检**
   - 发布前确认 `git rev-parse <tag> == git rev-parse HEAD`（pits 有 0.7.11 旧代码事故）
-  - 本机 `/mnt/e` 为 noexec？**否**（实测 exec 正常）——commit-msg hook 曾因 CRLF 失效，已修（LF 入库 + ps1 安装需转 LF，见 pits 2026-08-26）
-  - **注意：仓库有多会话并行工作**（subagent-router 0.2.0 等其它插件活跃提交）；工作区有其它会话产生的未提交改动（workflow CRLF 噪声 + .githooks），勿误提交
+  - 本机 `/mnt/e` 非 noexec（实测 exec 正常）；commit-msg hook 曾因 CRLF 失效，已修（LF 入库；仓库 `.gitattributes` 已统一行尾，见 pits 2026-08-26/27）
+  - **注意：仓库有多会话并行工作**（subagent-router / knowledge-sqlite 等其它插件活跃提交）；提交前 `git status` 核对只 add 自己的路径
+  - **行尾已根治**：仓库根 `.gitattributes` 强制 LF（`40ff448`）——任何平台 checkout/add 都是 LF，CRLF 不会再进仓库（见 pits 2026-08-27）
 
 ## 2. 当前状态快照
 
@@ -92,7 +93,7 @@ npm run contract-check       # RPC 判别器 + overview ≤200ms（含冷启动�
 2. 视觉测试只读不写卡（card.spec 已删）
 3. harness 冷启动后第一帧 overview 必慢（listSessions 真查一次）——contract-check 已内置预热重试豁免
 4. **新 Linux 环境首次跑 visual**：需 `npx playwright install chromium` + `npx playwright install-deps chromium`；linux 基线已入库无需再生成
-5. **工作区 CRLF 噪声**：其它会话在 Windows 侧操作后，`.github/workflows/*.yml` 可能整文件 CRLF 化（git diff 显示 287+/287- 纯行尾变化）——提交前确认，勿把行尾噪声混进真实改动；`file <文件>` 验证
+5. ~~工作区 CRLF 噪声~~ **已根治（gitattributes 强制 LF，见 pits 2026-08-27）**——Windows 侧 checkout 不再产生假 diff，无需再人工核对行尾
 6. **多会话并行提交**：提交前 `git status` 核对只 add 自己的路径（仓库有 subagent-router / knowledge-sqlite / session-slm-router 等其它插件活跃）
 
 **已修并已归档的坑**（详见 `../../HANDOFF-ARCHIVE/pits.md`）：
