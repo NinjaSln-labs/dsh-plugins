@@ -235,7 +235,7 @@ async function pickFromOrderedAcrossProviders(
   health: RouteHealthStore,
   config: ResolvedModelPickerConfig,
   candidates: readonly string[],
-  skip: string,
+  skip?: string,
 ): Promise<{ model: string; provider: string } | undefined> {
   const order = [
     ...(config.autoProviderOrder ?? []),
@@ -449,28 +449,25 @@ async function resolveAutoSelection(
   let policyUsed = 'heuristic'
 
   // Layer 1: explicit per-tier candidate list (fully overrides). The list is
-  // a GLOBAL model priority — the first candidate any healthy provider
-  // advertises wins, so a pick may land on a different provider than the one
-  // resolved above.
+  // a GLOBAL model priority resolved in provider-priority order
+  // (`autoProviderOrder` first, then registry order): the first candidate any
+  // healthy provider advertises wins, so a pick may land on a different
+  // provider than the one resolved above.
   const tierPicks = config.autoTierPicks?.[tier]
   if (tierPicks !== undefined && tierPicks.length > 0) {
-    const local = pickFromOrdered(models, tierPicks)
-    if (local !== undefined) {
-      pick = local
+    const across = await pickFromOrderedAcrossProviders(llm, routes, health, config, tierPicks)
+    if (across !== undefined) {
+      pick = { id: across.model, score: modelScore(across.model) }
+      const previousProvider = effectiveProvider
+      effectiveProvider = across.provider
       policyUsed = 'picks'
-    } else {
-      const across = await pickFromOrderedAcrossProviders(llm, routes, health, config, tierPicks, effectiveProvider)
-      if (across !== undefined) {
-        pick = { id: across.model, score: modelScore(across.model) }
-        const previousProvider = effectiveProvider
-        effectiveProvider = across.provider
-        policyUsed = 'picks'
-        if (reroute === undefined && previousProvider !== across.provider) {
-          reroute = {
-            from: previousProvider,
-            reason: `autoTierPicks placed "${across.model}" on provider "${across.provider}"`,
-          }
+      if (reroute === undefined && previousProvider !== across.provider) {
+        reroute = {
+          from: previousProvider,
+          reason: `autoTierPicks placed "${across.model}" on provider "${across.provider}" (provider order)`,
         }
+      }
+      if (previousProvider !== across.provider) {
         try {
           models = await llm.listModels(across.provider)
         } catch {
@@ -479,8 +476,8 @@ async function resolveAutoSelection(
           models = []
         }
       }
-      // Neither local nor across: fall through to the next layer.
     }
+    // No healthy provider advertises any candidate: fall through to the next layer.
   }
   if (pick === undefined) {
     // Layer 2: per-tier policy mode.

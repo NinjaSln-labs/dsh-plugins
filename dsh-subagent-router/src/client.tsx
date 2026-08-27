@@ -337,39 +337,48 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
     setDraft(prev => ({ ...(prev ?? committed), ...patch }))
   }
   const onTierEdit = (tier: 'trivial' | 'standard' | 'complex', mode: string): void => {
-    const base = draft ?? committed
-    const current = base.autoTierPolicy ?? {}
-    const next = { ...current }
-    if (mode === '') {
-      delete next[tier]
-    } else {
-      next[tier] = mode as 'anchor' | 'cheapest' | 'strongest'
-    }
-    setDraft({ ...base, autoTierPolicy: Object.keys(next).length > 0 ? next : undefined })
+    setDraft(prev => {
+      const base = prev ?? committed
+      const current = base.autoTierPolicy ?? {}
+      const next = { ...current }
+      if (mode === '') {
+        delete next[tier]
+      } else {
+        next[tier] = mode as 'anchor' | 'cheapest' | 'strongest'
+      }
+      return { ...base, autoTierPolicy: Object.keys(next).length > 0 ? next : undefined }
+    })
   }
   const onTierPicksEdit = (tier: 'trivial' | 'standard' | 'complex', parts: string[]): void => {
-    const base = draft ?? committed
-    const current = base.autoTierPicks ?? {}
-    const next = { ...current }
-    if (parts.length === 0) {
-      delete next[tier]
-    } else {
-      next[tier] = parts
-    }
-    setDraft({ ...base, autoTierPicks: Object.keys(next).length > 0 ? next : undefined })
+    setDraft(prev => {
+      const base = prev ?? committed
+      const current = base.autoTierPicks ?? {}
+      const next = { ...current }
+      if (parts.length === 0) {
+        delete next[tier]
+      } else {
+        next[tier] = parts
+      }
+      return { ...base, autoTierPicks: Object.keys(next).length > 0 ? next : undefined }
+    })
   }
   const onSave = (): void => {
     if (draft === null) return
-    for (const key of Object.keys(draft) as Array<keyof Section>) {
-      const next = draft[key]
-      if (next === undefined || next === '' || (Array.isArray(next) && next.length === 0)) {
-        void scope.unset(key as string)
-      } else {
-        void scope.set(key as string, next as unknown)
+    const isEmptyObject = (value: unknown): boolean =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+      && Object.values(value as Record<string, unknown>).every(entry => Array.isArray(entry) && entry.length === 0)
+    void (async () => {
+      for (const key of Object.keys(draft) as Array<keyof Section>) {
+        const next = draft[key]
+        if (next === undefined || next === '' || (Array.isArray(next) && next.length === 0) || isEmptyObject(next)) {
+          await scope.unset(key as string)
+        } else {
+          await scope.set(key as string, next as unknown)
+        }
       }
-    }
-    setDraft(null)
-    setSaved(true)
+      setDraft(null)
+      setSaved(true)
+    })()
   }
   const onCancel = (): void => { setDraft(null); setSaved(false) }
   // Catalog-derived candidates for the pickers (provider ids and model ids).
