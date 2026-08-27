@@ -158,9 +158,28 @@ async function collectCandidates(
   return out
 }
 
-/** Pick the cheapest healthy candidate to run the classifier on. */
-export function pickClassifier(candidates: readonly Candidate[]): { provider: string; model: string } | undefined {
-  const sorted = [...candidates].sort((a, b) => COST_ORDER[a.meta.cost] - COST_ORDER[b.meta.cost])
+/**
+ * Pick the candidate to run the classifier on: the cheapest tier, preferring
+ * providers the caller lists first in `providerOrder` (typically
+ * `autoProviderOrder`) so the classifier runs on a route the user already
+ * ranked — a dead-slow route nudged to the tail of the order does not get
+ * picked as the classifier host. Unlisted providers rank after listed ones.
+ */
+export function pickClassifier(
+  candidates: readonly Candidate[],
+  providerOrder: readonly string[] = [],
+): { provider: string; model: string } | undefined {
+  const order = [...providerOrder, ...candidates.map(candidate => candidate.provider)]
+  const rank = new Map<string, number>()
+  order.forEach((id, index) => {
+    if (!rank.has(id)) rank.set(id, index)
+  })
+  const sorted = [...candidates].sort((a, b) => {
+    const ra = rank.get(a.provider) ?? Number.MAX_SAFE_INTEGER
+    const rb = rank.get(b.provider) ?? Number.MAX_SAFE_INTEGER
+    if (ra !== rb) return ra - rb
+    return COST_ORDER[a.meta.cost] - COST_ORDER[b.meta.cost]
+  })
   const first = sorted[0]
   return first === undefined ? undefined : { provider: first.provider, model: first.model }
 }
@@ -394,7 +413,7 @@ export async function recommend(
     note,
   })
 
-  const classifier = pickClassifier(candidates)
+  const classifier = pickClassifier(candidates, config.autoProviderOrder)
   if (classifier === undefined) {
     return heuristic('no classifier model available; heuristic selection')
   }
