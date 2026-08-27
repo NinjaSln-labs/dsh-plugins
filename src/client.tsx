@@ -60,6 +60,8 @@ const CSS = `
 .sr-field{display:flex;flex-direction:column;gap:4px}
 .sr-label{font-size:13px;font-weight:500;line-height:19.5px;color:var(--dsw-alias-label-primary,#f9fafb)}
 .sr-hint{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8)}
+.sr-group{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#999);margin-top:12px;margin-bottom:2px}
+.sr-group:first-of-type{margin-top:0}
 .sr-control{display:flex;align-items:center;gap:8px}
 .sr-input{flex:1;min-width:0;height:32px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#ffffff1f);border-radius:8px;background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#f9fafb);font-size:13px;font-weight:400;box-sizing:border-box}
 .sr-input:focus{outline:2px solid var(--dsw-alias-state-primary,#4c8dff);outline-offset:1px}
@@ -76,20 +78,30 @@ const CSS = `
 .sr-unavailable{font-size:12px;font-weight:400;line-height:18px;color:var(--dsw-alias-label-secondary,#adb2b8);padding:14px 16px}
 `
 
-/** One typed field: id, label, kind, and the render control's value type. */
+/** Form grouping: recovery = failure handling, scope = model selection range, tier = per-tier strategy. */
+type FieldGroup = 'recovery' | 'scope'
+
+/** One typed field: id, label, kind, group, and the render control's value type. */
 type Field =
-  | { id: keyof Section; label: string; hint?: string; kind: 'number'; min?: number; get: (s: Section) => number | undefined; set: (s: Section, v: number) => Section }
-  | { id: keyof Section; label: string; hint?: string; kind: 'boolean'; get: (s: Section) => boolean | undefined; set: (s: Section, v: boolean) => Section }
-  | { id: keyof Section; label: string; hint?: string; kind: 'text'; get: (s: Section) => string | undefined; set: (s: Section, v: string) => Section }
-  | { id: keyof Section; label: string; hint?: string; kind: 'array'; get: (s: Section) => string[] | undefined; set: (s: Section, v: string[]) => Section }
+  | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'number'; min?: number; get: (s: Section) => number | undefined; set: (s: Section, v: number) => Section }
+  | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'boolean'; default?: boolean; get: (s: Section) => boolean | undefined; set: (s: Section, v: boolean) => Section }
+  | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'text'; get: (s: Section) => string | undefined; set: (s: Section, v: string) => Section }
+  | { id: keyof Section; group: FieldGroup; label: string; hint?: string; kind: 'array'; get: (s: Section) => string[] | undefined; set: (s: Section, v: string[]) => Section }
 
 /** Declarative field list — single source for the form (mirrors src/config.ts). */
 const FIELDS: Field[] = [
-  { id: 'autoEscalate', label: '失败时升级', hint: '运行失败后沿下一档自动重试（仅前台时）。', kind: 'boolean', get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
-  { id: 'autoReroute', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
-  { id: 'autoEscalationTiers', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', min: 0, get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
-  { id: 'autoProviderOrder', label: '提供方优先级', hint: '逗号分隔的提供方路由 id，优先的在前；未列出的排在其后。', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
-  { id: 'autoCeiling', label: '预算封顶', hint: '绝不选择比该模型更强的模型（不在目录时忽略）。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
+  { id: 'autoEscalate', group: 'recovery', label: '失败时升级', hint: '前台运行失败后沿下一档自动重试一次。', kind: 'boolean', default: true, get: s => s.autoEscalate, set: (s, v) => ({ ...s, autoEscalate: v }) },
+  { id: 'autoReroute', group: 'recovery', label: '终态失败换路', hint: '配额/鉴权失败时切换到健康提供方。', kind: 'boolean', default: true, get: s => s.autoReroute, set: (s, v) => ({ ...s, autoReroute: v }) },
+  { id: 'autoEscalationTiers', group: 'recovery', label: '升级档数上限', hint: '同一提供方最多升级几步（0 表示不升级）。', kind: 'number', min: 0, get: s => s.autoEscalationTiers, set: (s, v) => ({ ...s, autoEscalationTiers: v }) },
+  { id: 'autoProviderOrder', group: 'scope', label: '提供方优先级', hint: '逗号分隔的提供方路由 id，优先的在前（id 见 subagent_models 目录）。', kind: 'array', get: s => s.autoProviderOrder, set: (s, v) => ({ ...s, autoProviderOrder: v }) },
+  { id: 'autoCeiling', group: 'scope', label: '预算封顶', hint: '绝不选择比该模型更强的模型（不在目录时忽略）。', kind: 'text', get: s => s.autoCeiling, set: (s, v) => ({ ...s, autoCeiling: v }) },
+]
+
+/** Group titles, in render order. */
+const GROUPS: Array<{ id: FieldGroup | 'tier'; title: string }> = [
+  { id: 'recovery', title: '失败恢复' },
+  { id: 'scope', title: '模型选型范围' },
+  { id: 'tier', title: '分档策略' },
 ]
 
 const TIER_LABELS: Array<['trivial' | 'standard' | 'complex', string]> = [
@@ -153,7 +165,7 @@ function FieldControl(props: {
       )
     }
     case 'boolean': {
-      const current = field.get(value) ?? false
+      const current = field.get(value) ?? field.default ?? false
       return React.createElement('div', { className: 'sr-row' },
         React.createElement('label', { className: 'sr-label', htmlFor: `sr-${String(field.id)}` }, field.label),
         React.createElement('div', { className: 'sr-control' },
@@ -282,51 +294,65 @@ function SettingsCard(props: { scope: SettingsScope<Section> }): React.ReactElem
     React.createElement('div', { className: 'sr-body' },
       React.createElement('div', { className: 'sr-note' },
         dirty ? '有未保存的修改。' : '修改保存后，下一次 subagent_model 调用即生效（无需重启）。'),
-      ...FIELDS.map(field => React.createElement(FieldControl, {
-        key: String(field.id),
-        field,
-        value,
-        disabled,
-        onEdit,
-      })),
-      ...TIER_LABELS.map(([tier, label]) => {
-        const current = value.autoTierPolicy?.[tier] ?? ''
-        return React.createElement('div', { className: 'sr-field', key: `tier-${tier}` },
-          React.createElement('label', { className: 'sr-label', htmlFor: `sr-tier-${tier}` }, `${label}任务选型模式`),
-          React.createElement('div', { className: 'sr-control' },
-            React.createElement('select', {
-              id: `sr-tier-${tier}`,
-              className: 'sr-input',
-              value: current,
-              disabled,
-              onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onTierEdit(tier, e.target.value),
-            }, MODE_OPTIONS.map(option =>
-              React.createElement('option', { key: option, value: option }, MODE_LABELS[option] ?? option))),
-          ),
-          React.createElement('div', { className: 'sr-hint' },
-            `${label}任务的选型模式（默认 = 内置启发式）。`),
-        )
-      }),
-      ...TIER_LABELS.map(([tier, label]) => {
-        const current = (value.autoTierPicks?.[tier] ?? []).join(', ')
-        return React.createElement('div', { className: 'sr-field', key: `picks-${tier}` },
-          React.createElement('label', { className: 'sr-label', htmlFor: `sr-picks-${tier}` }, `${label}任务候选模型`),
-          React.createElement('div', { className: 'sr-control' },
-            React.createElement('input', {
-              id: `sr-picks-${tier}`,
-              className: 'sr-input',
-              value: current,
-              disabled,
-              placeholder: 'model-a, model-b（逗号分隔，优先在前）',
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) => onTierPicksEdit(
-                tier,
-                e.target.value.split(',').map(part => part.trim()).filter(Boolean),
+      ...GROUPS.map(group => {
+        const nodes: React.ReactNode[] = [
+          React.createElement('div', { className: 'sr-group', key: `group-${group.id}` }, group.title),
+        ]
+        if (group.id === 'tier') {
+          nodes.push(...TIER_LABELS.map(([tier, label]) => {
+            const current = value.autoTierPolicy?.[tier] ?? ''
+            return React.createElement('div', { className: 'sr-field', key: `tier-${tier}` },
+              React.createElement('label', { className: 'sr-label', htmlFor: `sr-tier-${tier}` }, `${label}任务选型模式`),
+              React.createElement('div', { className: 'sr-control' },
+                React.createElement('select', {
+                  id: `sr-tier-${tier}`,
+                  className: 'sr-input',
+                  value: current,
+                  disabled,
+                  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onTierEdit(tier, e.target.value),
+                }, MODE_OPTIONS.map(option =>
+                  React.createElement('option', { key: option, value: option }, MODE_LABELS[option] ?? option))),
               ),
-            }),
-          ),
-          React.createElement('div', { className: 'sr-hint' },
-            `覆盖${label}任务选型：按序选第一个被健康提供方广告的模型（可跨提供方）。`),
-        )
+              React.createElement('div', { className: 'sr-hint' },
+                `${label}任务的选型模式（默认 = 内置启发式）。`),
+            )
+          }))
+          nodes.push(...TIER_LABELS.map(([tier, label]) => {
+            const current = (value.autoTierPicks?.[tier] ?? []).join(', ')
+            return React.createElement('div', { className: 'sr-field', key: `picks-${tier}` },
+              React.createElement('label', { className: 'sr-label', htmlFor: `sr-picks-${tier}` }, `${label}任务候选模型`),
+              React.createElement('div', { className: 'sr-control' },
+                React.createElement('input', {
+                  id: `sr-picks-${tier}`,
+                  className: 'sr-input',
+                  value: current,
+                  disabled,
+                  placeholder: 'model-a, model-b（逗号分隔，优先在前）',
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) => onTierPicksEdit(
+                    tier,
+                    e.target.value.split(',').map(part => part.trim()).filter(Boolean),
+                  ),
+                }),
+              ),
+              React.createElement('div', { className: 'sr-hint' },
+                `覆盖${label}任务选型：按序选第一个被健康提供方广告的模型（可跨提供方）。`),
+            )
+          }))
+        } else {
+          nodes.push(...FIELDS.filter(field => field.group === group.id).map(field => {
+            // 联动灰显：关闭「失败时升级」后，升级档数上限无意义，禁用。
+            const fieldDisabled = disabled
+              || (field.id === 'autoEscalationTiers' && (value.autoEscalate ?? true) === false)
+            return React.createElement(FieldControl, {
+              key: String(field.id),
+              field,
+              value,
+              disabled: fieldDisabled,
+              onEdit,
+            })
+          }))
+        }
+        return nodes
       }),
       React.createElement('div', { className: 'sr-actions' },
         React.createElement('button', {
