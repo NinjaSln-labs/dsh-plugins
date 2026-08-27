@@ -44,8 +44,6 @@ export const Config = z.object({
     standard: z.array(z.string()).required(false),
     complex: z.array(z.string()).required(false),
   }).required(false),
-  /** Hard ceiling: `model: "auto"` never picks a model stronger than this id (budget cap). */
-  autoCeiling: z.string().required(false),
 })
 
 /**
