@@ -19,11 +19,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { modelMeta } from './meta.ts'
 import type { ModelMeta } from './meta.ts'
 import { classifyFailure, failureLabel } from './failure.ts'
 import type { RouteHealthStore } from './health.ts'
 import type { ResolvedModelPickerConfig } from './index.ts'
+import { buildSelectionScope } from './selection.ts'
+import type { SelectionEntry, SelectionTier } from './selection.ts'
 
 /** The slice of the `llm` service this module consumes. */
 type LlmService = {
@@ -36,6 +37,7 @@ type LlmService = {
 export type Recommendation = {
   readonly provider: string
   readonly model: string
+  readonly tier: SelectionTier
   readonly reason: string
   readonly cost: ModelMeta['cost']
   readonly speed: ModelMeta['speed']
@@ -56,13 +58,6 @@ export type RecommendationCore = {
 /** The tool result: the core plus an optional audit/degradation note. */
 export type RecommendResult = RecommendationCore & {
   readonly note?: string
-}
-
-/** One candidate model drawn from the live catalog, with derived metadata. */
-export type Candidate = {
-  readonly provider: string
-  readonly model: string
-  readonly meta: ModelMeta
 }
 
 /** A classifier reply pick, pre-validation. */
@@ -139,26 +134,42 @@ export class LruCache<K, V> {
  * provider filter and the route health store (unhealthy routes are excluded:
  * recommending a dead route would just fail again).
  */
-async function collectCandidates(
+async function collectScope(
   llm: LlmService,
   providerFilter: string | undefined,
-  health: RouteHealthStore,
-): Promise<Candidate[]> {
-  const out: Candidate[] = []
+  providerOrder: readonly string[],
+): Promise<SelectionEntry[]> {
+  const models: Array<{ id: string; name: string; provider: string }> = []
   for (const route of llm.listProviders()) {
     if (providerFilter !== undefined && route.id !== providerFilter) continue
-    if (!health.isHealthy(route.id)) continue
-    let models: Array<{ id: string; name: string }>
+    let listed: Array<{ id: string; name: string }>
     try {
-      models = await llm.listModels(route.id)
+      listed = await llm.listModels(route.id)
     } catch {
       continue // provider unusable right now — skip it
     }
-    for (const model of models) {
-      out.push({ provider: route.id, model: model.id, meta: modelMeta(model.id) })
+    for (const model of listed) {
+      models.push({ id: model.id, name: model.name, provider: route.id })
     }
   }
-  return out
+  return buildSelectionScope(models, providerOrder)
+}
+
+/** Bounded selection-scope cache, invalidated when the provider topology changes. */
+export class ScopeStore {
+  private scope: SelectionEntry[] | undefined
+
+  get(): SelectionEntry[] | undefined {
+    return this.scope
+  }
+
+  set(value: SelectionEntry[]): void {
+    this.scope = value
+  }
+
+  invalidate(): void {
+    this.scope = undefined
+  }
 }
 
 /**
@@ -169,7 +180,7 @@ async function collectCandidates(
  * picked as the classifier host. Unlisted providers rank after listed ones.
  */
 export function pickClassifier(
-  candidates: readonly Candidate[],
+  candidates: readonly SelectionEntry[],
   providerOrder: readonly string[] = [],
 ): { provider: string; model: string } | undefined {
   const order = [...providerOrder, ...candidates.map(candidate => candidate.provider)]
@@ -188,7 +199,7 @@ export function pickClassifier(
 }
 
 /** Per-candidate heuristic score (higher = more suitable). */
-function heuristicScore(task: string, candidate: Candidate): number {
+function heuristicScore(task: string, candidate: SelectionEntry): number {
   const meta = candidate.meta
   let score = meta.strength === 'strong' ? 2 : meta.strength === 'mid' ? 1 : 0
   for (const signal of SPECIALTY_SIGNALS) {
@@ -198,7 +209,7 @@ function heuristicScore(task: string, candidate: Candidate): number {
 }
 
 /** One-line reason for a heuristic pick. */
-function heuristicReason(task: string, candidate: Candidate): string {
+function heuristicReason(task: string, candidate: SelectionEntry): string {
   const parts: string[] = []
   parts.push(candidate.meta.strength === 'strong' ? 'strong tier' : candidate.meta.strength === 'mid' ? 'mid tier' : 'light/fast tier')
   for (const signal of SPECIALTY_SIGNALS) {
@@ -210,11 +221,12 @@ function heuristicReason(task: string, candidate: Candidate): string {
 }
 
 /** Render a candidate into a Recommendation leaf. */
-function toRecommendation(candidate: Candidate, reason: string): Recommendation {
+function toRecommendation(candidate: SelectionEntry, reason: string): Recommendation {
   const { meta } = candidate
   return {
     provider: candidate.provider,
     model: candidate.model,
+    tier: candidate.tier,
     reason,
     cost: meta.cost,
     speed: meta.speed,
@@ -225,7 +237,7 @@ function toRecommendation(candidate: Candidate, reason: string): Recommendation 
 }
 
 /** Heuristic fallback: rank candidates by naming signal, take the top n. */
-export function heuristicRecommend(task: string, candidates: readonly Candidate[], n: number): Recommendation[] {
+export function heuristicRecommend(task: string, candidates: readonly SelectionEntry[], n: number): Recommendation[] {
   const scored = candidates
     .map(candidate => ({ candidate, score: heuristicScore(task, candidate) }))
     .sort((a, b) => b.score - a.score)
@@ -275,7 +287,7 @@ export function parsePicks(text: string): RawPick[] | undefined {
 /** Validate classifier picks against the catalog; drop any hallucinated ids. */
 function validatePicks(
   picks: readonly RawPick[],
-  candidates: readonly Candidate[],
+  candidates: readonly SelectionEntry[],
   n: number,
 ): Recommendation[] {
   const byKey = new Map(candidates.map(candidate => [`${candidate.provider}\u0000${candidate.model}`, candidate]))
@@ -301,7 +313,7 @@ class TimeoutError extends Error {
 async function classifyViaLlm(
   llm: LlmService,
   task: string,
-  candidates: readonly Candidate[],
+  candidates: readonly SelectionEntry[],
   classifier: { provider: string; model: string },
   timeoutMs: number,
   execSignal: AbortSignal | undefined,
@@ -309,6 +321,7 @@ async function classifyViaLlm(
   const compact = candidates.map(candidate => ({
     provider: candidate.provider,
     model: candidate.model,
+    tier: candidate.tier,
     cost: candidate.meta.cost,
     speed: candidate.meta.speed,
     strength: candidate.meta.strength,
@@ -388,6 +401,7 @@ export async function recommend(
   health: RouteHealthStore,
   getConfig: () => ResolvedModelPickerConfig,
   cache: LruCache<string, RecommendationCore>,
+  scopeStore: ScopeStore,
 ): Promise<RecommendResult> {
   const config = getConfig()
   const n = args.n !== undefined && Number.isSafeInteger(args.n) && args.n > 0
@@ -402,7 +416,17 @@ export async function recommend(
     return { source: 'heuristic', recommendations: [], note: 'llm service unavailable on this harness' }
   }
 
-  const candidates = await collectCandidates(llm, args.provider, health)
+  // Resolve the bounded selection scope (cached for the unfiltered case,
+  // invalidated on `llm/adapters-updated`), then drop unhealthy routes.
+  let scope: SelectionEntry[]
+  if (args.provider !== undefined) {
+    scope = await collectScope(llm, args.provider, config.autoProviderOrder)
+  } else {
+    const cached = scopeStore.get()
+    scope = cached ?? await collectScope(llm, undefined, config.autoProviderOrder)
+    if (cached === undefined) scopeStore.set(scope)
+  }
+  const candidates = scope.filter(entry => health.isHealthy(entry.provider))
   if (candidates.length === 0) {
     return {
       source: 'heuristic',

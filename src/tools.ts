@@ -27,7 +27,7 @@ import { classifyFailure, failureLabel, sanitizeFailureDetail } from './failure.
 import type { FailureClass } from './failure.ts'
 import { RouteHealthStore } from './health.ts'
 import { modelMeta } from './meta.ts'
-import { recommend, LruCache, RECOMMEND_CACHE_CAPACITY } from './recommend.ts'
+import { recommend, LruCache, RECOMMEND_CACHE_CAPACITY, ScopeStore } from './recommend.ts'
 import type { RecommendationCore } from './recommend.ts'
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
@@ -875,7 +875,12 @@ export function registerModelPickerTools(
   const enableAuto = fixedConfig.enableAuto
   const health = new RouteHealthStore()
   const recommendCache = new LruCache<string, RecommendationCore>(RECOMMEND_CACHE_CAPACITY)
+  const scopeStore = new ScopeStore()
   const disposers: Array<() => void> = []
+
+  // The selection scope is derived from the live catalog; invalidate it whenever
+  // the provider topology changes so the next recommendation recomputes it.
+  disposers.push(ctx.on('llm/adapters-updated', () => scopeStore.invalidate()))
 
   disposers.push(ctx.tools.register(defineTool({
     name: fixedConfig.toolName,
@@ -1216,7 +1221,7 @@ export function registerModelPickerTools(
     },
     isConcurrencySafe: () => true,
     async execute(args: { task: string; provider?: string; n?: number }, exec) {
-      return recommend(ctx, args, exec, health, getConfig, recommendCache)
+      return recommend(ctx, args, exec, health, getConfig, recommendCache, scopeStore)
     },
   })))
 
