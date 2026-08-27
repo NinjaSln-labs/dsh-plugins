@@ -12,7 +12,7 @@ Model-routed subagent delegation for [DeepSeek Harness](https://github.com/deeps
 | Tool | Purpose |
 |---|---|
 | `subagent_model` | Delegate a task to a subagent with per-call `provider` / `model` / `max_tokens`. Omitted fields inherit the calling agent's route. Pass `model: "auto"` to delegate model choice to the built-in auto policy. |
-| `subagent_models` | Read-only catalog of the live LLM provider routes (`ctx.llm.listProviders()`) and each provider's advertised model listing, annotated with each route's `health` status. |
+| `subagent_models` | Read-only catalog of the live LLM provider routes (`ctx.llm.listProviders()`) and each provider's advertised model listing, annotated per model with derived metadata (`cost` tier / `speed` tier / `strength` tier / `specialty` / `contextWindow` for known ids) plus each route's `health` status. |
 
 ### How model selection works
 

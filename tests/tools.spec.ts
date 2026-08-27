@@ -322,13 +322,13 @@ describe('dsh-subagent-router catalog tool', () => {
       {
         provider: 'deepseek-official',
         name: 'DeepSeek',
-        models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }],
+        models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', cost: 'low', speed: 'fast', strength: 'light', specialty: [], contextWindow: '128k' }],
         health: 'healthy',
       },
       {
         provider: 'pi-ai-cn',
         name: 'PI AI CN',
-        models: [{ id: 'pi-3-mini', name: 'PI 3 Mini' }],
+        models: [{ id: 'pi-3-mini', name: 'PI 3 Mini', cost: 'low', speed: 'fast', strength: 'light', specialty: [] }],
         health: 'healthy',
       },
     ])
@@ -342,7 +342,7 @@ describe('dsh-subagent-router catalog tool', () => {
       providers: [{
         provider: 'pi-ai-cn',
         name: 'PI AI CN',
-        models: [{ id: 'pi-3-mini', name: 'PI 3 Mini' }],
+        models: [{ id: 'pi-3-mini', name: 'PI 3 Mini', cost: 'low', speed: 'fast', strength: 'light', specialty: [] }],
         health: 'healthy',
       }],
     })
