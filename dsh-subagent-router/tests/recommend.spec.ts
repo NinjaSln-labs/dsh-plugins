@@ -163,6 +163,22 @@ describe('recommend', () => {
     expect(result.recommendations).toHaveLength(1)
     expect(result.recommendations[0]).toMatchObject({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
     expect(result.recommendations[0]!.strength).toBe('strong')
+    // `recommended` is the explicit system default == top pick
+    expect(result.recommended).toEqual(result.recommendations[0])
+  })
+
+  it('stamps `recommended` on the heuristic path and omits it when empty', async () => {
+    const llm = fakeLlm({
+      routes: ROUTES,
+      streamText: JSON.stringify({ picks: [{ provider: 'ghost', model: 'ghost-model', reason: 'made up' }] }),
+    })
+    const result = await runRecommend(llm, { task: 'write code' })
+    expect(result.source).toBe('heuristic')
+    expect(result.recommended).toEqual(result.recommendations[0])
+
+    const empty = await runRecommend(undefined, { task: 'do a thing' })
+    expect(empty.recommendations).toEqual([])
+    expect(empty.recommended).toBeUndefined()
   })
 
   it('drops hallucinated ids and degrades to heuristic', async () => {
