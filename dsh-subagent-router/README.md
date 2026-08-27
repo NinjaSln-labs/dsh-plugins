@@ -12,7 +12,7 @@
 | 工具 | 用途 |
 |---|---|
 | `subagent_model` | 委派任务给子代理，并在本次调用中指定 `provider` / `model` / `max_tokens`。省略的字段继承调用方代理的路由。传 `model: "auto"` 可把模型选择交给内置自动策略。 |
-| `subagent_models` | 只读目录：列出当前 `ctx.llm` 上注册的 provider 路由（`listProviders()`）及每个 provider 广告的模型列表，并标注每个路由的 `health` 状态。 |
+| `subagent_models` | 只读目录：列出当前 `ctx.llm` 上注册的 provider 路由（`listProviders()`）及每个 provider 广告的模型列表，并为每个模型标注**派生元数据**（`cost` 成本档 / `speed` 速度档 / `strength` 强度档 / `specialty` 特长 / `contextWindow` 已知模型的上下文窗口）+ 每个路由的 `health` 状态。 |
 
 ### 模型选择如何工作
 
