@@ -47,6 +47,9 @@ export type Recommendation = {
 /** The cached half of a result (source + picks, without any per-call note). */
 export type RecommendationCore = {
   readonly source: 'llm' | 'heuristic'
+  /** The system's default pick — the single best recommendation (== `recommendations[0]`); omitted when no candidate exists. */
+  readonly recommended?: Recommendation
+  /** The full ranked list (top-n), ordered best-first. */
   readonly recommendations: Recommendation[]
 }
 
@@ -363,6 +366,15 @@ function degradationNote(error: unknown, timeoutMs: number, timeoutError: boolea
     : `${failureLabel(cls)}; fell back to heuristic`
 }
 
+/** Build a core result, stamping the top pick as the explicit `recommended` default. */
+function buildCore(source: 'llm' | 'heuristic', recommendations: Recommendation[]): RecommendationCore {
+  return {
+    source,
+    ...recommendations.length > 0 ? { recommended: recommendations[0] } : {},
+    recommendations,
+  }
+}
+
 /**
  * Recommend provider/model routes for a task.
  *
@@ -408,8 +420,7 @@ export async function recommend(
   }
 
   const heuristic = (note: string): RecommendResult => ({
-    source: 'heuristic',
-    recommendations: heuristicRecommend(args.task, candidates, n),
+    ...buildCore('heuristic', heuristicRecommend(args.task, candidates, n)),
     note,
   })
 
@@ -423,7 +434,7 @@ export async function recommend(
       if (picks !== undefined) {
         const recommendations = validatePicks(picks, candidates, n)
         if (recommendations.length > 0) {
-          const core: RecommendationCore = { source: 'llm', recommendations }
+          const core: RecommendationCore = buildCore('llm', recommendations)
           cache.set(cacheKey, core)
           return core as RecommendResult
         }
