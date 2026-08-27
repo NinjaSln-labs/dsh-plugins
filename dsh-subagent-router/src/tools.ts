@@ -1092,7 +1092,7 @@ export function registerModelPickerTools(
           signal: exec.signal,
         }),
         autoSelection,
-        {},
+        request.agentOptions,
         exec.signal,
         health,
       )
