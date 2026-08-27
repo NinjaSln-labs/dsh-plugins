@@ -2,6 +2,7 @@
 import * as React from 'react'
 import type { SessionHealthProjection, HealthSeverity } from '../types.ts'
 import { formatCny, formatUsd } from '../util.ts'
+import { sortOverviewRows } from '../overview-sort.ts'
 import { compact, SEVERITY_LABEL, SEVERITY_ARIA, type CommandsRemote } from './shared.ts'
 
 /**
@@ -47,8 +48,6 @@ export class OverviewStore {
   }
 }
 
-const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
-
 /** Relative creation time — repeated titles stay distinguishable in the list. */
 function ageOf(ts: number): string {
   if (ts <= 0) return ''
@@ -90,11 +89,6 @@ function dateFull(ts: number): string {
 /** Sort modes: 'severity' = 方案 A (tier → activity → newest), 'time' = newest first. */
 export type SortMode = 'severity' | 'time'
 
-/** Activity sort rank: running first, then loaded, then cold. */
-function activityRankOf(status: OverviewRowLike['status'] | undefined): number {
-  return status === 'running' ? 0 : status === 'loaded' ? 1 : 2
-}
-
 /** 状态列的三态文案/样式/说明（运行中=智能体回合中；已加载=待命；冷却=仅持久化）。 */
 const ACTIVITY_LABEL: Record<OverviewRowLike['status'], { label: string; cls: string; tip: string; meta: string }> = {
   running: { label: '运行中', cls: 'sh-row-running', tip: '智能体正在处理回回合（进行中）', meta: '运行中（智能体在工作）' },
@@ -113,27 +107,18 @@ function moneyOf(proj: SessionHealthProjection | null, isZh: boolean): string | 
 }
 
 /** Rows arrive host-sorted (severity mode); the client re-sorts locally for
-    the selected mode and refreshes. */
+    the selected mode and refreshes. severity 模式直接委托共享排序模块
+    （与 host buildOverview 同源——OV-5 治愈，消除双份逐行等价实现）。 */
 function sortRows(
   rows: OverviewRowLike[],
   mode: SortMode,
   updatedById: Record<string, { updatedAt?: number }> = {},
 ): OverviewRowLike[] {
-  const updated = (r: OverviewRowLike): number => updatedById[r.id]?.updatedAt ?? r.createdAt ?? 0
-  return [...rows].sort((a, b) => {
-    if (mode === 'time') return updated(b) - updated(a)
-    // 运行中永远置顶（跨 severity tier，与 host sortOverviewRows 同规则），
-    // 且运行中组内也按 红→黄→蓝→绿 排——正在跑的黄比正在跑的绿更急。
-    const arn = a.status === 'running', brn = b.status === 'running'
-    if (arn !== brn) return arn ? -1 : 1
-    const ra = a.health === null ? 4 : SEVERITY_RANK[a.health.severity] ?? 4
-    const rb = b.health === null ? 4 : SEVERITY_RANK[b.health.severity] ?? 4
-    if (ra !== rb) return ra - rb
-    const aa = activityRankOf(a.status)
-    const ab = activityRankOf(b.status)
-    if (aa !== ab) return aa - ab
-    return (b.createdAt ?? 0) - (a.createdAt ?? 0)
-  })
+  if (mode === 'time') {
+    const updated = (r: OverviewRowLike): number => updatedById[r.id]?.updatedAt ?? r.createdAt ?? 0
+    return [...rows].sort((a, b) => updated(b) - updated(a))
+  }
+  return sortOverviewRows(rows)
 }
 
 /** Panel page size (agreed: 5 rows per page — the usual live-session count). */

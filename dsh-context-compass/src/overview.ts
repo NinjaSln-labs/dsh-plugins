@@ -26,7 +26,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { HealthSeverity, SessionActivity, SessionHealthProjection } from './types.ts'
+import type { SessionActivity, SessionHealthProjection } from './types.ts'
 import type { HealthReport } from './assess.ts'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { assess } from './assess.ts'
@@ -53,42 +53,11 @@ export interface OverviewRow {
   workspace: { id: string; title: string } | null
 }
 
-const SEVERITY_RANK: Record<HealthSeverity, number> = { red: 0, yellow: 1, blue: 2, green: 3 }
-
-/** Sort rank: red first, then yellow / blue / green, unknown last. */
-export function rankOf(health: SessionHealthProjection | null | undefined): number {
-  if (health === undefined || health === null) return 4
-  return SEVERITY_RANK[health.severity] ?? 4
-}
-
-/** Activity sort rank: running first, then loaded, then cold. */
-function activityRank(status: SessionActivity | null | undefined): number {
-  return status === 'running' ? 0 : status === 'loaded' ? 1 : 2
-}
-
-/**
- * Stable sort (agreed priority — 方案 A): severity tier first (red on top),
- * then REAL activity (running agents burning tokens now > loaded/idle >
- * cold — the ones the user cares about), then newest-created first inside a
- * tier. The old sort by `live` (in-memory presence) ranked idle sessions
- * above genuinely running ones in other states and is gone.
- */
-export function sortOverviewRows(rows: OverviewRow[]): OverviewRow[] {
-  return [...rows].sort((a, b) => {
-    // Running agents first regardless of severity tier (2026-08-22 反馈),
-    // and within the running group severity still orders — a running yellow
-    // outranks a running green. Non-running rows keep the severity ladder.
-    const arn = a.status === 'running', brn = b.status === 'running'
-    if (arn !== brn) return arn ? -1 : 1
-    const ra = rankOf(a.health)
-    const rb = rankOf(b.health)
-    if (ra !== rb) return ra - rb
-    const la = activityRank(a.status)
-    const lb = activityRank(b.status)
-    if (la !== lb) return la - lb
-    return (b.createdAt ?? 0) - (a.createdAt ?? 0)
-  })
-}
+// OV-5 治愈：排序规则收敛到共享单源模块（src/overview-sort.ts），host/client
+// 同源。import 供 buildOverview 内部调用，同时 re-export 保持 lib/overview.js
+// 的公共出口（rankOf / sortOverviewRows）不变——测试与 index.ts 引用路径无需改动。
+import { rankOf, sortOverviewRows, type SortableOverviewRow } from './overview-sort.ts'
+export { rankOf, sortOverviewRows, type SortableOverviewRow }
 
 /** Loose face of the sessionQuery service (only the parts overview needs). */
 interface SessionQueryLike {
