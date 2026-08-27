@@ -48,7 +48,11 @@ type Section = {
 
 /** Host model-directory wire face (session-independent; `llm.models`). */
 type CatalogApi = {
-  llm?: { models?: (request: {}) => Promise<{ groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }> }> }
+  llm?: {
+    models?: (request: {}) => Promise<{
+      result: { ok: boolean; value?: { groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }> } }
+    }>
+  }
 }
 
 /** Loaded directory snapshot handed to the pickers. */
@@ -287,9 +291,10 @@ function SettingsCard(props: { scope: SettingsScope<Section>; api?: CatalogApi }
     void api.llm.models({}).then(
       (resolved) => {
         if (!alive) return
+        const groups = resolved.result.ok && resolved.result.value !== undefined ? resolved.result.value.groups : []
         setCatalog({
           status: 'ready',
-          groups: resolved.groups.map(group => ({
+          groups: groups.map(group => ({
             id: group.id,
             name: group.name,
             models: group.models.map(model => ({ id: model.id, name: model.name })),
