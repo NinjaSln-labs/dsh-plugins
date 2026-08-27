@@ -1,6 +1,6 @@
 # HANDOFF.md — dsh-context-compass 工作交接
 
-> 最后更新：2026-08-26 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.11.0 已发布（npm latest，含 AUDIT 修复批 + smoke/client 重构）；profile 已回归干净包，待重启验证；下一步 C2 卡片或 OV-5 共享排序**
+> 最后更新：2026-08-27 · 交接方：dsh web 会话（ox-alpha）· 一句话：**0.11.0 已发布且重启验证全过（sparkline/Host 校验/延迟稳态）；下一步 C2 卡片或 OV-5 共享排序**
 
 ## 1. 交接元信息
 
@@ -64,7 +64,7 @@
 
 - [x] **0.11.0 发版**（2026-08-26）：门禁 7 步全绿 → bump minor → tag `context-compass-v0.11.0`（== HEAD `30ede78`）→ CI 审批发布（npm latest 已确认 0.11.0）
 - [x] profile 回归干净包：手动改版本 + `pnpm install` + bundles 核对完整；contract-check 复跑全绿
-- [ ] **重启后验证**（待 harness 重启加载 0.11.0）：contract-check + 面板目视——重点 RPC 新 Host 校验不破坏浏览器同源访问、R1 去重后 sparkline 正常
+- [x] **重启后验证**——✅ 已完成（2026-08-27 14:29 重启加载 0.11.0）：contract-check 全绿（稳态 25-38ms，首查 431ms 为预热尖峰）；wire pressureHistory 40 样本正常；Playwright 实测浮层 sparkline 可见（aria「占用趋势（最近 40 个采样）」）；Host 校验未破坏浏览器同源访问
 - [ ] C2 client 配置卡片（P3，ROADMAP）——开工前先出简短设计定稿
 - [ ] R3 定价同步 CI（P2 低优）
 - [ ] AUDIT recorded 项（6 项）按需：OV-5 抽 host/client 共享排序模块是唯一一致性风险点，值得优先
