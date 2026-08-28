@@ -102,7 +102,7 @@
 | **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选，顺延）——稳定性基建收尾 |
 | ~~0.9.0~~ | R1 sparkline（已交付）· C1 调研 + 设计定稿（已交付）|
 | **0.10.0** | **C1 host 配置点接入（已交付，随本版发）**——`installSettingsSection` getter 模式：thresholds/checks live 生效、resolveConfig 双源治愈、validate 三档单调、projection.enabled live 切换；pricing 源 4 字段 restart |
-| **0.11.x** | C2 client 配置卡片 |
+| **0.11.x** | C2 client 配置卡片（设计定稿已出 `docs/C2-SETTINGS-CARD-DESIGN.md`，实施待 dsh 0.1.2 发版后）· **harness 0.1.2 升级适配**（两项高影响：`sessionProjectionCache.coldSnapshot` 签名 breaking / `conversation.chat.commandview` slot 移除，详见 HANDOFF §3.1） |
 | **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|
 
 ## 维护规则
@@ -111,4 +111,4 @@
 - 被阻塞项保留在「被阻塞」并写明卡点；卡点解除后移回「待做」
 - 优先级/排期变化只改这里；`HANDOFF.md` / `DESIGN.md` / `OPTIMIZATION-RESEARCH.md` 引用本文件、不复制路线内容
 - **peer 基线策略**：`peerDependencies` 声明"最低要求的服务版本"，保持宽松、不随 harness 每次升级而升。caret `^0.1.0-rc.6` 语义自动覆盖 rc.6→rc.8（`>=0.1.0-rc.6 <0.2.0`，下限是 prerelease 故匹配 prerelease；semver 已验 `rc.8 satisfies ^0.1.0-rc.6`）。仅当接入依赖更高版本独有 API 时**局部**升对应服务（例：C1 接入 `@deepseek-ai/dsh-settings`，需 rc.7+），不全局升
-- **升级体检基线（S1 依据）**：每次 harness 升级，对照 live 契约校验插件硬注入（commands / tools / sessionProjections / webServer）+ 全部 `ctx.get` 可选读取 + client slot（sidebar.footer.action / shell.overlay / conversation.chat.commandview）是否仍存在、形状是否兼容。rc.8 本次校验通过（见 commit `9b98c07` 前后）
+- **升级体检基线（S1 依据）**：每次 harness 升级，对照 live 契约校验插件硬注入（commands / tools / sessionProjections / webServer）+ 全部 `ctx.get` 可选读取 + client slot（sidebar.footer.action / shell.overlay / conversation.session.header.utilities；`conversation.chat.commandview` 已于 **0.1.2-alpha.1** 随会话流重构移除，/compass 卡片待换新机制）是否仍存在、形状是否兼容。rc.8 本次校验通过（见 commit `9b98c07` 前后）；**0.1.2-alpha.1 预判已记账（HANDOFF §3.1）：coldSnapshot 签名 breaking + commandview 移除，其余（事件词汇 / cachedSnapshot / settings Host mutate / 各 slot）验证无影响，待正式版实测**
