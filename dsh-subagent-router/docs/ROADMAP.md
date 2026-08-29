@@ -36,15 +36,15 @@
 |---|---|---|---|---|
 | 1a | ~~`backgroundMode: continuable` 运行时实测~~ → **✅ 已完成（2026-08-27）**：base 层（profile cordis.patch.yml）`backgroundMode: continuable` + 重启 → `subagent_model` 默认返回 `kind:'continuable'` + 持久 `subagentId` → `send_message` 同会话续聊成功（第二轮回执「send_message 续聊 OK」）· spawn provider `prepareContinuable` 前提✅ · 前台路径✅ · one-shot 后台 jobs 通道✅ · 工具描述✅ · **关键机制发现**：`backgroundMode` 是注册期快照，`installSettingsSection` 的 `setSource` 异步注入晚于 `apply()` 冻结——用户层/设置页对该字段无效，**必须写 base 层**（详见 HANDOFF §4 坑 10） | P0 | 后台委派是主力场景，不能只靠单测；验证 startContinuable 路径 + 工具描述 | — |
 | 1b | ~~profile 级 config 覆盖实测~~ → **✅ 已完成**：设置页 UI（设置 → 插件配置）实现并验证（host settings 命名空间 + client 卡片 + 实时生效，见 PLAN-settings-ui.md） | P1 | 配置面闭环，堵静默失效 | — |
-| 1c | ~~目录元数据~~ → **✅ 已完成（2026-08-27，`a9012eb`）**：`subagent_models` 每个模型加派生元数据（`cost` 成本档 / `speed` 速度档 / `strength` 强度档 / `specialty` 特长 / `contextWindow` 已知模型上下文窗口）——零外部依赖，命名启发式 + 内置已知映射（`src/meta.ts`）；无法推断的字段省略不猜，精确值留 3c | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
+| 1c | ~~目录元数据~~ → **✅ 已完成（2026-08-27，`fb14814`）**：`subagent_models` 每个模型加派生元数据（`cost` 成本档 / `speed` 速度档 / `strength` 强度档 / `specialty` 特长 / `contextWindow` 已知模型上下文窗口）——零外部依赖，命名启发式 + 内置已知映射（`src/meta.ts`）；无法推断的字段省略不猜，精确值留 3c | P0 | 一切智能选型的地基，推荐引擎（2a）的输入 | — |
 | 1d | **auto 策略参数化（余项）**：档位阈值（字符数/markers）、**预算上限**（maxCost / tier ceiling） | P0 | 防升级失控；升级次数上限已交付（`autoEscalationTiers`） | — |
-| 1e | ~~真实环境健康感知验证~~ → **✅ 已实测（2026-08-27，`a3b0e34`）**：teamorouter/deepseek-v4-flash-free 委派失败复现。**发现两个问题**：① bug（已修）`initialAgentOptions` 传空 `{}` → 失败/健康记录 provider 记为 `spawn` 而非实际 llm provider；② **seam 局限（依赖 dsh-subagent）**——子代理「运行时」配额耗尽被 dsh-subagent 压缩成 `stopReason:'error'`（`dsh-tool-subagent` 渲染为 ``subagent run failed``），底层 LlmFailure/quota 证据不跨进程传回 tool 层，classifyFailure 只能判 `other`（瞬态 60s），死锚无法识别为终态 quota。**死锚+换路对「start 拒绝」（基础设施，能暴露 LlmError/HTTP）仍有效；对「运行时 quota」盲区需 dsh-subagent 暴露失败分类** | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
+| 1e | ~~真实环境健康感知验证~~ → **✅ 已实测（2026-08-27，`ec10a98`）**：teamorouter/deepseek-v4-flash-free 委派失败复现。**发现两个问题**：① bug（已修）`initialAgentOptions` 传空 `{}` → 失败/健康记录 provider 记为 `spawn` 而非实际 llm provider；② **seam 局限（依赖 dsh-subagent）**——子代理「运行时」配额耗尽被 dsh-subagent 压缩成 `stopReason:'error'`（`dsh-tool-subagent` 渲染为 ``subagent run failed``），底层 LlmFailure/quota 证据不跨进程传回 tool 层，classifyFailure 只能判 `other`（瞬态 60s），死锚无法识别为终态 quota。**死锚+换路对「start 拒绝」（基础设施，能暴露 LlmError/HTTP）仍有效；对「运行时 quota」盲区需 dsh-subagent 暴露失败分类** | P0 | 死锚检测是本次新增的核心，需在真实 provider 上验证分类与换路 | 第二波 |
 
 ### Phase 2 — 智能推荐（v0.3.x，中期）
 
 | # | 项 | 优先级 | 动机 / 价值 | 依赖 |
 |---|---|---|---|---|
-| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason —— **✅ 已完成（2026-08-28，实测闭环）**：`src/recommend.ts` + `src/selection.ts`。核心设计：**「模型选型范围」候选池**（`buildSelectionScope` 全量 167 → ≤12 = `cheapest`/`medium`/`strong`/`best` 4 档各 3，`normalizeModelId` 去版本变体，多 provider 同模型按 `autoProviderOrder` 去重，`ScopeStore` 缓存 + `llm/adapters-updated` 失效）→ **分类器锚定父模型**（复用 harness auto 锚定语义；失败回退 `pickClassifiers` 多候选重试，排除 light/lite 超轻量）→ 归一化 LRU 缓存 + 超时降级（`recommendTimeoutMs` 默认 15000）+ `validatePicks` 归一/大小写鲁棒匹配 + 结果带 `recommended`（=top-1）+ `tier` 四档。**实测揪出并修复的问题链**：① pickClassifier 死守注册顺序选中慢 route + 超时太短 → 尊重 `autoProviderOrder` + 超时 4000→15000；② 分类器全幻觉 → `validatePicks` 归一鲁棒匹配；③ light 模型返回空/超时 → 排除超轻量 + medium/strong 优先；④ 单点分类器太脆 → 多候选重试；⑤ **收敛为锚定父模型**（`60c45c2`，真机 2/3 命中 llm，剩余失败是 provider 真实 5xx 瞬态，降级启发式兜底正确）。`tests/{selection,recommend,failure-evidence}.spec.ts` 共 40 项，全套件 106/106 全绿 | P1 | 比命名启发式准一个量级；复用 harness auto 锚定 + knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级）——**B2 已解除**：`ctx.llm.stream()` 插件内可自足发起辅助分类调用，无需跨仓库配合 | 1c |
+| 2a | **`subagent_recommend` 工具**：任务描述 → 推荐 provider/model + reason —— **✅ 已完成（2026-08-28，实测闭环）**：`src/recommend.ts` + `src/selection.ts`。核心设计：**「模型选型范围」候选池**（`buildSelectionScope` 全量 167 → ≤12 = `cheapest`/`medium`/`strong`/`best` 4 档各 3，`normalizeModelId` 去版本变体，多 provider 同模型按 `autoProviderOrder` 去重，`ScopeStore` 缓存 + `llm/adapters-updated` 失效）→ **分类器锚定父模型**（复用 harness auto 锚定语义；失败回退 `pickClassifiers` 多候选重试，排除 light/lite 超轻量）→ 归一化 LRU 缓存 + 超时降级（`recommendTimeoutMs` 默认 15000）+ `validatePicks` 归一/大小写鲁棒匹配 + 结果带 `recommended`（=top-1）+ `tier` 四档。**实测揪出并修复的问题链**：① pickClassifier 死守注册顺序选中慢 route + 超时太短 → 尊重 `autoProviderOrder` + 超时 4000→15000；② 分类器全幻觉 → `validatePicks` 归一鲁棒匹配；③ light 模型返回空/超时 → 排除超轻量 + medium/strong 优先；④ 单点分类器太脆 → 多候选重试；⑤ **收敛为锚定父模型**（`63b6691`，真机 2/3 命中 llm，剩余失败是 provider 真实 5xx 瞬态，降级启发式兜底正确）。`tests/{selection,recommend,failure-evidence}.spec.ts` 共 40 项，全套件 106/106 全绿 | P1 | 比命名启发式准一个量级；复用 harness auto 锚定 + knowledge L1 扩展模式（一次小模型调用 + 归一化缓存 + 超时降级）——**B2 已解除**：`ctx.llm.stream()` 插件内可自足发起辅助分类调用，无需跨仓库配合 | 1c |
 | 2b | **失败反馈闭环**：按 任务类型×模型 记录成功/失败/耗时，反哺策略与推荐 | P1 | 长期差异化；轻量自存或对接 dsh-knowledge-sqlite | 2a |
 | 2c | **同模型多 route 感知**：同一 model id 在多个 provider 注册时按成本/延迟选 route | P2 | 自动选择不应忽略路由维度（如 deepseek-v4-pro 在 deepseek-official 与 opencode-go 都有） | 1c |
 | 2d | **预算仪表**：auto 决策历史（每任务选了谁、花了多少、升级几次）可查 | P2 | 可审计性从单次升级到全局 | 1d |
@@ -69,7 +69,7 @@
 
 | 版本 | 内容 |
 |---|---|
-| **0.2.x / 0.3.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· ✅ 1b 设置页配置 UI · ✅ 1a continuable 实测 · ✅ 1c 目录元数据 · ✅ 1e 真实环境验证（发现 bug `a3b0e34` + seam 盲区 B3）· 配置面瘦身+枚举化 |
+| **0.2.x / 0.3.x** | ✅ 健康感知先行落地（失败分类/死锚/换路/升级参数化/目录标注）· ✅ 1b 设置页配置 UI · ✅ 1a continuable 实测 · ✅ 1c 目录元数据 · ✅ 1e 真实环境验证（发现 bug `ec10a98` + seam 盲区 B3）· 配置面瘦身+枚举化 |
 | **0.4.x** | ✅ 2a subagent_recommend（已实测闭环）· 2b 反馈闭环 · 2c 多 route 感知 · 2d 决策历史 |
 | **后续** | 3a–3d · B1/B3（等依赖就绪；B3 需 dsh-subagent 暴露失败分类） |
 

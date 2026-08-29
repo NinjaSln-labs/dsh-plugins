@@ -7,13 +7,13 @@
 | 项 | 状态 |
 |---|---|
 | npm | ✅ `dsh-context-compass@0.6.0`（latest，CI 自动发布，run 31924069699）· `dsh-knowledge-sqlite@0.1.2`（latest） |
-| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main（`523c94e`），tag `context-compass-v0.6.0` |
+| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main（tag `context-compass-v0.6.0` 现指向 `8f35840`；原文 `523c94e` 为早期改写前坐标） |
 | 本地验证 | ⏳ 重启 `dsh web` + 硬刷新后验证一览面板（profile 当前为 file: 开发模式，重建自动同步） |
 | 双语文档 | ✅ README.md / README.zh.md（含面板节） |
 
 **0.6.0 发布过程修复的两个 CI 坑**（`publish.yml` 首次成功跑通）：
-1. `npm ci` 需要 lockfile，但 `package-lock.json` 曾被 `.gitignore` 排除 → 入库（`123168c`）
-2. setup-node `cache: npm` 在仓库根探测锁文件，`working-directory` 管不到 action → 显式 `cache-dependency-path: dsh-context-compass/package-lock.json`（`523c94e`）
+1. `npm ci` 需要 lockfile，但 `package-lock.json` 曾被 `.gitignore` 排除 → 入库（现坐标 `8b6e5e6`；原 `123168c` 为早期改写前坐标）
+2. setup-node `cache: npm` 在仓库根探测锁文件，`working-directory` 管不到 action → 显式 `cache-dependency-path: dsh-context-compass/package-lock.json`（现坐标同 `8b6e5e6` 时期工作流调整；原 `523c94e` 为早期改写前坐标）
 
 ## 版本历史
 
