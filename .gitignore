@@ -4,3 +4,12 @@ node_modules/
 .DS_Store
 pnpm-lock.yaml
 .githooks/
+
+# 统一规则：各插件本地的交接文档私有，不追踪、不入仓库
+# 每个插件目录各自的 HANDOFF.md / HANDOFF-ARCHIVE/ 归各自管理，互不冲突
+dsh-*/HANDOFF.md
+dsh-*/HANDOFF-ARCHIVE/
+
+# 本地私有插件，整体不追踪
+dsh-session-slm-router/
+

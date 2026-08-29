@@ -3,8 +3,4 @@ lib/
 *.tgz
 .DS_Store
 
-# 本机私有交接文档（不追踪、不入公开仓库）
-HANDOFF.md
 ROADMAP.md
-HANDOFF-ARCHIVE/
-
