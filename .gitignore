@@ -2,5 +2,3 @@ node_modules/
 lib/
 *.tgz
 .DS_Store
-HANDOFF.md
-HANDOFF-ARCHIVE/
