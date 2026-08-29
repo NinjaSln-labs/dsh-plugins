@@ -4,7 +4,7 @@
  * Two backends, both synchronous HTTP APIs called with Node `fetch`:
  *
  * - `dashscope` (default): 阿里云百炼 multimodal-generation/generation
- *   endpoint. Default model `wan2.7-image` (free quota, see ROADMAP); the
+ *   endpoint. Default model `wan2.7-image` (free quota); the
  *   response returns presigned image URLs that we download locally. Domestic
  *   endpoint first, international fallback on network failure.
  *   See https://docs.qwencloud.com/api-reference/image-generation/wan27-image-gen-edit/synchronous

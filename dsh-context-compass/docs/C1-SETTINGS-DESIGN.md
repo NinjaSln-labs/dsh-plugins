@@ -1,6 +1,6 @@
 # C1 设计定稿 — host 配置点接入（`installSettingsSection` getter 模式）
 
-> 状态：**调研完成，设计定稿待确认**（ROADMAP 规则：未定稿不动工）
+> 状态：**已定稿并随 0.10.0 交付**（2026-08-26 发版；实施按 T1→T3 完成，见 `docs/ROADMAP.md` 0.10.0 段）
 > 调研基准：harness `0.1.1-rc.2`（live）· `@deepseek-ai/dsh-settings@0.1.1-rc.2`（harness 自带）与 `0.1.0-rc.6`（npm peer 基线，tarball 实测）
 > 调研日期：2026-08-26
 
@@ -111,4 +111,4 @@ economyWindowRatio、messageCountWindowRatio ∈ [0,1]  // schema 已管，不�
 
 1. **T1**：source thunk + installSettingsSection 接线 + 消费点 getter 化（投影/工具/命令/RPC）+ projection.enabled 重判定
 2. **T2**：validate 单调性 + 集成测试（stub provider）+ S3 矩阵切换 source 复用
-3. **T3**：peer/devDeps + README/HANDOFF/ROADMAP 回填 + 发版 0.10.0（或 0.9.x）
+3. **T3**：peer/devDeps + README/HANDOFF（本地私有未追踪）/ROADMAP 回填 + 发版 0.10.0（或 0.9.x）

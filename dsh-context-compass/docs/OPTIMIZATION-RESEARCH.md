@@ -61,7 +61,7 @@
 - **价值**：多会话/multitask 场景的真实需求（用户已实测遇到）；比每行色点信息更全。
 
 #### B1b. `/compass` 富卡片（P1，低成本的意外收获）
-- 实测 Slot 树：`conversation.chat.commandview`（按命令名 keyed 的卡片位，**当前零占用**）——插件可注册 `health` key，让 `/compass` 输出渲染为带色块 severity chip + 交接清单的富卡片，而非纯文本。
+- 实测 Slot 树：`conversation.chat.commandview`（按命令名 keyed 的卡片位，**当前零占用**）——插件可注册 `compass` key，让 `/compass` 输出渲染为带色块 severity chip + 交接清单的富卡片，而非纯文本。
 
 #### B2. 浮层信息分层（P2）
 - **现状**：一次展示 8 行（占用/每轮输入/预计下次/计费/窗口/规模/压缩/提示），信息密度高。
@@ -98,7 +98,7 @@
 - **结论**：token-meter 的 tokenUsage 投影加 `cacheHitRate` 字段需要改 harness 核心，**无源码不可做**。0.5.8 的插件侧单点（src/usage.ts）+ 与核心 StatsLine 的注释互相指认即最终状态；公式 1 行且操作同一份 totals，漂移风险已降至最低。
 
 #### C1b. 环境基线固化（P1，运维）
-- **现状**：harness 无源码、dsh 全局安装（`~/.nvm/versions/node/v24.18.0/bin/dsh`）、重启需 `dsh web`；DESIGN.md 等文档里的旧源码路径引用全部失效。
+- **现状**：harness 无源码、dsh 全局安装（路径一律以 `which dsh` / `npm root -g` 为准，不硬编码 nvm 版本路径）、重启需 `dsh web`；DESIGN.md 等文档里的旧源码/用户名路径引用已清理（2026-08-30 复核：仅剩已标注为「历史设计快照」的 v0.4.8 时代内容）。
 - **方案**：文档改为「以 `which dsh` / `npm root -g` 为准」；发布与重启流程固化为全局 dsh；调研文档作为新基线。
 
 #### C2. 测试补强（P1）

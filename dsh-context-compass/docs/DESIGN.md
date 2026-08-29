@@ -1,9 +1,10 @@
 # dsh-context-compass 插件：设计文档（方案 + 设计笔记）
 
 > 状态：**已发布并归档（2026-08-14，v0.4.8）**——npm latest + 本地 profile 从 npm 加载验证通过。
-> 来源方法论：[session-health 技能](/Users/sin/.agents/skills/session-health/SKILL.md)（二维决策模型、工作性质 5 问、交接就绪检查），完整移植；数据层改用 DSH 原生信号。
+> ⚠️ **历史设计快照（v0.4.8 时代）**：现行版本 **0.11.0**（npm latest；命令注册名 `compass`、`projection.enabled` 默认 `true`、smoke 107 项），**以 `README.md` / `docs/ROADMAP.md` / `PUBLISHING.md` 为准**。下文原文保留以追溯设计脉络，未随后续版本改写。
+> 来源方法论：社区 session-health 技能（本地 `~/.agents/skills/`，见其 `SKILL.md`）——二维决策模型、工作性质 5 问、交接就绪检查，完整移植；数据层改用 DSH 原生信号。
 
-## 0. 实现状态（2026-08-14，**v0.4.8 已发布**）
+## 0. 实现状态（2026-08-14，**v0.4.8 已发布**）⚠️ *历史快照（v0.4.8 时代）；现行 0.11.0，以 README/ROADMAP 为准*
 
 > 最终形态速览：投影驱动 badge（零轮询）、`/compass` 命令 + `context_compass` 工具、阈值/检查项/价格全部可配置、官方峰谷定价（CNY+USD 双币，按北京时间判定时段、按 locale 选币种）、交接清单自动化、进程检测。构建 = tsc + esbuild `__ModuleLoader__` 工厂 bundle；验证 = smoke 35 项 + mount + client-mount。
 
@@ -18,7 +19,7 @@
 | 判定 | ✅ 四档（绿/蓝/黄/红）：窗口占比 ≥0.8 红；≥0.5 或每轮计费当量 ≥ max(50K, 0.3×窗口) 黄；≥0.3 蓝；**消息数代理 ≥800 绿→蓝升级**；经济（缓存折扣计费当量）优先于容量；工具在「依赖早期内容且未记录」时升级 danger-zone（禁止裸切）。**v0.5.0 校准**：经济口径从原始压力 token 改为 effectivePerRound（消除 cacheWrite 双计 + 与金额显示一致），门槛随窗口缩放——修复 1M 窗口下 15% 占用即误报黄色 |
 | **UI 色点（badge）** | ✅ v0.2.0 重构：**纯投影驱动**（`sessionHealth` 单元帧推送，零轮询零 RPC——客户端 Remote 是构建期固定清单，社区插件 Remote 无法挂载，故移除 Typert Remote 服务）；悬停提示扩充（建议、占用条、每轮输入 + **缓存命中率**、**预计下次输入（剔除缓存命中）**、**计费预期（金额，¥/$ 按 locale，忙/闲时标注）**、窗口、轮次/消息、压缩次数）；**点击经核心 `remote.commands` 运行 /compass**；**占用数合并 token-meter 压缩感知 `contextPressure.projectedTokens`**；蓝档色点；a11y；客户端 bundle 走 `__ModuleLoader__` 工厂格式（esbuild，build-client.mjs），样式走 `<style data-plugin>` 契约注入 |
 | 验证 | ✅ `tsc` 构建 + esbuild 客户端 bundle + 严格 typecheck；`npm run smoke`（47 项：折叠/阈值/缓存命中/双币定价/忙闲时/费用/消息代理/评估/git 自动化/命令/工具/文案/压缩比例）；`npm run mount`（真实 cordis 挂载：命令 + 工具 + 投影单元 + git checklist 断言）；`client-mount`（浏览器挂载路径：__ModuleLoader__/inject/merge/lagOf/解析/样式/locale）；`npm run visual`（Playwright 视觉回归：明/暗 × 四档 × 卡片展开矩阵 + hover 桥接层 e2e） |
-| **发布与归档** | ✅ v0.4.8 发布 npm latest；本地 profile 从 npm 加载（`^0.4.8`）运行验证通过；双语文档齐备；发布记录见 `dsh-context-compass/PUBLISHING.md` |
+| **发布与归档** | ✅ v0.4.8 发布 npm latest；本地 profile 从 npm 加载（`^0.4.8`）运行验证通过；双语文档齐备；发布记录见 `dsh-context-compass/PUBLISHING.md` ⚠️ *历史快照：现行 npm latest 0.11.0，见 `PUBLISHING.md` 版本历史* |
 | 输出约束 | ✅ 无 emoji（跨平台一致）；DSH 渲染器 raw HTML 字面输出 → 颜色只能 UI 给 |
 
 ## 1. 定位与方案（C）
@@ -52,7 +53,7 @@
 | 消息/轮次 | 会话事件 | `user/message`、`turn/start`、`assistant/message` 计数（经 `ctx.sessions` 或 sessionQuery 读取当前 session） |
 | 压缩痕迹 | tokenMeter 快照序列 | 快照 token 下降或 compaction 事件出现 → 压缩已发生（比例按下降幅度估算，标注口径） |
 | git 状态 | 只读 git 命令 | `git status --short`、`git log --oneline -1`（subprocess，工作区 cwd；只读子命令白名单） |
-| 交接文档 | 文件系统 | `HANDOFF.md` / 交接文档存在性检查（fs 只读） |
+| 交接文档 | 文件系统 | 交接文档存在性检查（fs 只读；只探测用户配置的文件名。本仓库自身的 `HANDOFF.md` 已改为本地私有未追踪，读者在发布仓库中看不到） |
 | 工作性质 | 模型判断 + 用户确认 | 工具内部先自查（对话内容可推断），关键项用 `ask_user_question` 确认 |
 
 ## 3. 判定模型（移植技能，参数化）
@@ -85,7 +86,7 @@
 ### 4.1 命令 `/compass`
 ```ts
 // ctx.commands 注册（dsh-commands 服务）
-commands.register('health', async (ctx, args) => {
+commands.register('compass', async (ctx, args) => {   // 0.6.1 起命令名由 'health' 统一为 'compass'
   const report = await assess(ctx)   // 见 4.4 数据流
   return report                     // 渲染为 markdown 消息
 })
@@ -121,7 +122,7 @@ z.object({
     messageCountProxy: z.number().default(800),
   }).default({}),
   git: z.object({ enabled: z.boolean().default(true), allowedCommands: z.array(z.string()).default(['status', 'log', 'diff --stat']) }),
-  projection: z.object({ enabled: z.boolean().default(false) }),  // phase 2
+  projection: z.object({ enabled: z.boolean().default(true) }),   // phase 2；⚠️ 现行 schema/README 默认 true（旧稿误记 false，以现行 README 为准）
 })
 ```
 
@@ -145,7 +146,7 @@ assess(ctx):
 
 ### 4.6 可配置/可选检查项（用户选取采用）
 
-> 来源方法论假设了 git + 交接文档（HANDOFF.md）工作流——**并非所有用户都有**。检查项全部可配置，且按"探测 → 降级"运行：没有就不报错，标注跳过。
+> 来源方法论假设了 git + 交接文档（`HANDOFF.md` 一类的文件；本仓库自身的 `HANDOFF.md` 已改为本地私有未追踪，发布仓库中不含）工作流——**并非所有用户都有**。检查项全部可配置，且按"探测 → 降级"运行：没有就不报错，标注跳过。
 
 **配置 schema（检查项开关）**：
 ```ts

@@ -18,6 +18,7 @@
 - **`context_compass` 工具** — 模型可调用的只读评估（长任务自查）：结构化结论（`severity` / `recommendation` / `signals` / `cost` / `handoffReady`），黄/红档附带完整 markdown 报告。工作性质问题由模型自查（`dependsOnEarly` / `earlyDecisionRecorded` / `remainingRounds`），其余全部由宿主精确测量。
 - **`sessionHealth` 投影** — 宿主计算的持久折叠（轮次、消息数、压缩次数、last-wins 压力/窗口、上次请求缓存桶、**上次压缩比例**、severity + 建议）推送到所有客户端；重放与页面刷新后依然存活。
 - **多会话罗盘一览面板**（v0.6.0，0.7.15–0.7.17 重构）— 侧栏底部「设置」旁的「罗盘一览」按钮打开全屏面板（`shell.overlay`），列出**所有会话**的健康判定。数据走同源宿主 RPC（`/context-compass-rpc`，仅 loopback）：在线会话切投影注册表快照，冷会话读持久化投影缓存（异步 cold load 兜底）；标题来自日志折叠 / 批量查询。行按**运行中置顶**排序：运行中组内红→黄→蓝→绿 → 非运行中同梯（红→黄→蓝→绿→无数据）→ 已加载>冷却 → 新会话在前（host+client 双侧同规则）。面板打开期间每 5 秒轮询，**stale-while-revalidate**：过期帧立即返回旧列表 + 后台刷新，任何帧都不等慢查询（实测轮询帧 ≤20ms，冷启动首帧唯一例外）。状态列三态——**运行中**（智能体正在处理回回合，与侧栏「进行中」同源）、**已加载**（内存驻留待命）、**冷却**（仅持久化）；「活动」列显示相对时间。点击行打开该会话并运行 `/compass`。Esc / 点遮罩关闭；键盘与读屏可达（severity 从不只靠颜色传达）。
+- **压缩比例与判定滞后标注**（v0.7.0）— 折叠在 `compaction/end` 前后的压力快照上推断上次压缩比例（1 − 压缩后/压缩前，不依赖事件载荷；不可判定的折叠读 null，绝不虚报 0），并在建议、报告、工具信号与面板浮层以「快照口径」标注。压缩后若 severity 判定（last-wins 压力）与占用条（压缩感知的下次请求成本）分叉 ≥5pp，浮层标注滞后提示，直到下次请求刷新判定。
 
 ## 交接清单（自动化）
 
@@ -78,7 +79,7 @@ cost: {
 
 harness 不携带价格数据，金额显示通过实时缓存解析，数据源为**官方 DeepSeek 定价文档**
 （默认 `priceUrl` = jsdelivr CDN 镜像，`priceFallbackUrl` = GitHub raw 同轮回退；
-文档即本仓库维护的 [`pricing/deepseek.json`](../../../pricing/deepseek.json)，
+文档即本仓库维护的 [`pricing/deepseek.json`](../pricing/deepseek.json)，
 与 [api-docs.deepseek.com](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 同步）。
 主源不可达时（如部分网络屏蔽 GitHub raw）自动回退，避免金额显示降级为静态 USD。
 

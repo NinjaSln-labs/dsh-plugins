@@ -96,7 +96,7 @@ node sqlite-trigram-verify.mjs   # SQLite 层基线（无 API 依赖）
 node js-bm25-calibration.mjs     # JS↔FTS5 校准（无 API 依赖）
 
 # bundle（dsh-plugins/dsh-knowledge-sqlite）
-npm test                 # vitest 29 项（store 16 + service 13）
+npm test                 # vitest 38 项（store 19 + service 19）
 node test-smoke.mjs      # SQLite 冒烟（7/21/50/65 + 契约）
 # 宿主：knowledge_probe { suite: 'variance' | 'latency' | 'all' }
 ```
@@ -233,7 +233,7 @@ latencyMs 是完整调用时长而非首包；且未核对实际路由。curl �
   **网关物理 TTFT ~2s 未解**；human fresh L1-live 59% 无退化
 - 缓存兜底不变：命中查询 0 延迟零降级（§8）
 
-### 9.3 悬而未决（交接 HANDOFF.md §3 决策项）
+### 9.3 悬而未决（交接 HANDOFF.md §3 决策项，本地私有，未追踪）
 
 - 决策 A/B：接受网关 TTFT ~2s vs 0.1.7 加 `queryExpansion.provider` 走官方直连（107ms）；
   用户此前倾向不直连官方（「官方也可能思维链全开」）——已被本节 curl 实测排除，待用户拍板

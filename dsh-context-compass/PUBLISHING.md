@@ -1,21 +1,43 @@
 # 发布记录：dsh-context-compass
 
-**已发布**（GitHub + npm）：`dsh-context-compass@0.6.0`（latest，**新包名首发** CI run 31942773437；旧名 `dsh-session-health` 已发布 deprecate 指令待网页操作）· `dsh-knowledge-sqlite@0.1.2`（latest）。
+**已发布**（GitHub + npm）：`dsh-context-compass@0.11.0`（npm latest；发版 tag `context-compass-v0.11.0` → `731f7bc`）· `dsh-knowledge-sqlite@0.1.2`（latest）。本包名首发于 0.6.0（CI run 31942773437）；旧名 `dsh-session-health` 已发布 deprecate 指令待网页操作。
 
-## 发布状态（2026-08-16 更新）
+## 发布状态（2026-08-30 更新）
 
 | 项 | 状态 |
 |---|---|
-| npm | ✅ `dsh-context-compass@0.6.0`（latest，CI 自动发布，run 31924069699）· `dsh-knowledge-sqlite@0.1.2`（latest） |
-| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main（tag `context-compass-v0.6.0` 现指向 `8f35840`；原文 `523c94e` 为早期改写前坐标） |
+| npm | ✅ `dsh-context-compass@0.11.0`（latest，CI 自动发布；0.6.0 首发时 run 31924069699）· `dsh-knowledge-sqlite@0.1.2`（latest） |
+| GitHub | ✅ `NinjaSln-labs/dsh-plugins` main = `e8d37fd`（2026-08-29）；发版 tag `context-compass-v0.11.0` → `731f7bc`（2026-08-27） |
 | 本地验证 | ⏳ 重启 `dsh web` + 硬刷新后验证一览面板（profile 当前为 file: 开发模式，重建自动同步） |
-| 双语文档 | ✅ README.md / README.zh.md（含面板节） |
+| 双语文档 | ✅ README.md / README.en.md（含面板节） |
 
 **0.6.0 发布过程修复的两个 CI 坑**（`publish.yml` 首次成功跑通）：
 1. `npm ci` 需要 lockfile，但 `package-lock.json` 曾被 `.gitignore` 排除 → 入库（现坐标 `8b6e5e6`；原 `123168c` 为早期改写前坐标）
 2. setup-node `cache: npm` 在仓库根探测锁文件，`working-directory` 管不到 action → 显式 `cache-dependency-path: dsh-context-compass/package-lock.json`（现坐标同 `8b6e5e6` 时期工作流调整；原 `523c94e` 为早期改写前坐标）
 
 ## 版本历史
+
+> 命名沿革：**0.6.1 起命令/RPC 名由 `health` 统一改为 `compass`**（`/health` → `/compass`、`/session-health-rpc` → `/context-compass-rpc`）；下文早期条目中的 `/health` 为当时命名。
+
+- **0.11.0** — **AUDIT-0.10.0 修复批 + client 模块化拆分 + peer 升 0.1.1**（2026-08-27，tag → `731f7bc`）：审计修复批（`a73578e`）修 OV-1 空结果双连采信清空（幽灵列表自愈）、OV-2/3 `isLoopback` fail-closed + Host 头校验（防 DNS rebinding）、C1-1 settings 接线 try/catch 降级、C1-2 去重 pending inject、C1-3 validateConfig 全字段有限性、R1-1 采样按 (turn,step) 去重（stateVersion 10）、R1-2 不再泄漏「null%」、R1-3 压缩捕获失败失效陈旧比例、R1-4/5 sparkline aria 口径 + overflow 可见；client.tsx 1286 行单体拆为 `src/client/{styles,shared,badge,command-card,overview}`（`6584007`，slot 注册与 CSS 注入零变化、visual 基线不变）；peer 升 `^0.1.1-rc.2` + 适配 0.1.1 投影契约（`666ee8f`）、OV-5 抽共享排序模块收敛 host/client 双份实现（`7330d3d`）；S4 canary 发布通道（`f7b67c5`——git 上落在 0.10.0 tag 之后，ROADMAP 记在 0.10.0 段）。补测试：SWR 后台刷新独立 AbortController + 测试洞 3/4/5（重放等价性 / chunk 封顶 / compaction-chunk 交互）
+
+- **0.10.0** — **C1 host 配置点接入**（2026-08-26，tag → `5ec24ef`）：`installSettingsSection` source-thunk 模式，投影/工具/命令/RPC 四处 getter 化——**thresholds×8 / checks×5 / cost 显示项 live 生效**；`projection.enabled` 经 onChange 重判定 live 切换；`validate` 三档阈值单调写时拒绝；pricing 源 4 字段 restart；`resolveConfig` 降级为测试/回退路径（双源治愈）；peer 新增 `@deepseek-ai/dsh-settings ^0.1.0-rc.6`。**测试规模**：smoke 107 + mount 6 + client-mount 7 + visual 6（mount 集成测试抓到 `as` 强转压掉 thunk 未调用的真 bug）
+
+- **0.9.0** — **R1 占用趋势 sparkline**（2026-08-26，tag → `09c9eb8`）：投影加 `pressureHistory` 环形采样（每次带 inputTokens 的 usage 报告一个样本，封顶 40；stateVersion 8→9，旧行丢弃全量重放重建趋势）；浮层「上下文占用」行下 SVG 迷你折线（优先除以当前窗口、窗口未知除以序列峰值，<2 点隐藏，主题色随 severity）；view 边界过滤非有限/负数遗留样本；smoke +4
+
+- **0.8.0** — **稳定性基建收尾（S2 + S3）**（2026-08-26，tag → `b7b75a0`）：S2 stateVersion 向后兼容测试（退化/异形 state 矩阵 + 真实 `SessionProjectionRegistry` 集成 + wire 键集合守卫）；S3 配置生效冒烟（thresholds×8 / checks×5 / cost×6 / projection.enabled 每字段改动可观测断言）；**顺带修 `healthView` 真 bug**（旧 JSON state 冷加载 `schema.parse` 崩 → wire 边界防御收口）+ 投影单元双契约兼容（顶层 `view` 供 rc.6、`wire` 供 0.1.1+）。**测试规模**：smoke 100 + mount 5
+
+- **0.7.17** — **listSessions stale-while-revalidate**（2026-08-25，tag → `8e2481c`）：缓存 TTL 2.5s→6s 对齐 5s 轮询间隔（原值小于轮询间隔导致每帧过期重查）；过期帧立即返回旧列表 + 后台刷新，任何帧不再同步等 harness 慢查询（rc.2 实测抖到 5.7s）；contract-check 加冷启动预热重试豁免；补装 `@deepseek-ai/dsh-client-ui-slots@0.1.0-rc.6` devDep（SlotMap augmentation 缺包致 build/typecheck 失败）+ Linux 视觉基线入库
+
+- **0.7.16** — **一览面板性能 + UI 重构**（2026-08-24，tag → `aa1cd16`）：cold/list 双缓存首帧 ≤200ms、**运行中置顶**（host+client 同规则）+ 运行中组内也按 severity 排序、「活动」列上次使用时间、弹性 7 列布局修复溢出、contract 时延断言 200ms；排版精修（列宽按实测定宽 + 数字列表头右对齐 + 次要列降灰 + 修 8px 容器错位）
+
+- **0.7.15** — **适配 dsh 0.1.1 wire 契约**（2026-08-22，tag → `06a1724`）：投影 unit 补 `wire`（viewSchema + view）恢复 client-visible——0.1.1 起 snapshot/cache 只收集带 `wire` 的 unit，旧 `view` 字段被忽略导致 health 全 null「没有基础数据」
+
+- **0.7.14** — **S0/S1 稳定性基建 + R2**（2026-08-21，tag → `b09d036`）：S0 本地发布门禁 `scripts/release-check.mjs`（一条命令收敛完整验证链含 visual，任一失败 exit 1 禁发）；S1 live 契约检查 `scripts/contract-check.mjs`（对运行中 harness 断言挂载 + 注入链路，并入 release-check，未运行时 SKIP）；R2 压缩触发频率（「已压缩 N 次」补「约每 X 轮一次」，`compactIntervalRounds` 防除零）；清理 rc.8 已移除的 `dsh-client-ui-primitives` 过时声明
+
+- **0.7.13** — **第五~十一轮审计收敛**（2026-08-19，tag → `da8288f`）：可观测性 logger + 工具 schema 对齐 + 格式化单点化；外部读数 NaN/Infinity 拒绝、`renderToolText` 防御、RPC 500 路径；`compactionRatio` isFinite 全链对齐；ratio / windowPercent / 交接摘要 pct 截断 100% + client CNY 走 `formatCny`；overview `workspaceRegistry` 抛错降级 + `healthView` 边界（pct 截断 / window=0）；pricing 大文档 Content-Length 上限防御（1MB）+ fetch 超时降级；负数 `remainingRounds` 按未提供归一化；CSS reduced-motion / 运行时类型守卫 / 配置双源注释 / CNY remainingNote 覆盖
+
+- **0.7.12** — **第四轮审计收敛**（2026-08-19，tag → `f0ea356`）：RPC body 上限 + handoff 路径白名单 + 配置关闭标注；`remainingRounds` NaN 污染防御 + 投影 fold 防流式 usage NaN 污染；`formatCompact` 舍入溢出守卫；富卡片 reason 被尾部交接快照段污染修复；summary 用真实配置 + 补 push 状态；processes 默认关闭对齐 DESIGN + 跳过标注；快照分隔符共享常量。visual 启用 B2/B3 浮层测试 + 键盘序列 + 剪贴板权限
 
 - **0.7.11** — **第二波四项（B3/A3/A4/B2）**：
   1. **B3 交接摘要一键复制**：徽章浮层加「复制交接摘要」按钮——RPC 新方法 `summary`（POST /context-compass-rpc，loopback，sessionId 参数）走真实 assess() 生成纯文本摘要（健康度/规模/每轮/缓存命中/压缩/未提交变更/交接文档/commit/时间），点按钮写入剪贴板，短暂显示「✓ 已复制」
@@ -94,11 +116,11 @@
 
 ```sh
 dsh plugin add dsh-context-compass
-# 或 profile package.json：dsh-context-compass: ^0.4.8
+# 或 profile package.json：dsh-context-compass: ^0.11.0
 # 重启 dsh + 浏览器硬刷新
 ```
 
-验证点：`/health` 输出正常；头部徽章（绿/蓝/黄/红 + 占用百分比）；悬停显示缓存命中率、预计下次输入（剔除缓存命中）、计费预期（¥/$，忙/闲时标注）；点击徽章运行 `/health`。
+验证点：`/compass` 输出正常；头部徽章（绿/蓝/黄/红 + 占用百分比）；悬停显示缓存命中率、预计下次输入（剔除缓存命中）、计费预期（¥/$，忙/闲时标注）；点击徽章运行 `/compass`。
 
 ## 维护要点
 

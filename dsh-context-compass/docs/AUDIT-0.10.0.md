@@ -117,9 +117,9 @@
 
 ### P2
 
-**R1-2 advice 泄漏字面量「null%」**：proxyHit 晋级 blue 但 ratio 为 null 时，blue else 分支渲染「上下文占用 null%（中等）」。S2 矩阵 base 只有 2 条消息恰好绕开该组合。**待修（本轮）**——该分支对 ratio null 回退无占位文案。
+**R1-2 advice 泄漏字面量「null%」**：proxyHit 晋级 blue 但 ratio 为 null 时，blue else 分支渲染「上下文占用 null%（中等）」。S2 矩阵 base 只有 2 条消息恰好绕开该组合。**fixed（a73578e）**——该分支对 ratio null 回退无占位文案。
 
-**R1-3 连续两次压缩且首次推理跳过时，陈旧 compressionRatio 被当作「上次压缩比例」展示**：compaction/end 捕获 pre 失败时 foldCompression 直接 return，旧比例保留而 compactions 已 +1。**待修（本轮）**——捕获失败时置 null（本次不可判定）。
+**R1-3 连续两次压缩且首次推理跳过时，陈旧 compressionRatio 被当作「上次压缩比例」展示**：compaction/end 捕获 pre 失败时 foldCompression 直接 return，旧比例保留而 compactions 已 +1。**open（截至 2026-08-30）**——捕获失败时置 null（本次不可判定）。
 
 ### P3
 

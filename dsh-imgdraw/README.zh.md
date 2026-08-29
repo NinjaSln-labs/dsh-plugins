@@ -27,6 +27,7 @@ pnpm add dsh-imgdraw@file:/path/to/dsh-plugins/dsh-imgdraw
 | `defaultBackend` | `dashscope` | 默认后端：`dashscope`（百炼 wan2.7-image 免费）或 `siliconflow`（Qwen-Image） |
 | `dashscopeModel` | `wan2.7-image` | 百炼模型 |
 | `siliconflowModel` | `Qwen/Qwen-Image` | SiliconFlow 模型 |
+| `historyCap` | `50` | 历史记录条数上限（index.json 最多保留的 job 数） |
 
 示例：
 
@@ -45,7 +46,7 @@ pnpm add dsh-imgdraw@file:/path/to/dsh-plugins/dsh-imgdraw
 
 ## 后端说明
 
-- **百炼 wan2.7-image（默认）**：DashScope `multimodal-generation/generation` 同步端点（国内域名优先，intl 备用）；免费额度 50 次（2026-11-14 到期），用尽后建议切 qwen-image 系列或 z-image-turbo（见 ROADMAP）。
+- **百炼 wan2.7-image（默认）**：DashScope `multimodal-generation/generation` 同步端点（国内域名优先，intl 备用）；免费额度 50 次（2026-11-14 到期），用尽后建议切 qwen-image 系列或 z-image-turbo（见本地 ROADMAP.md（私有未追踪））。
 - **SiliconFlow Qwen-Image**：`images/generations` 端点，依赖账户券/余额。
 - keys 文件：`~/.dsh/image-api-keys.json`（`{"dashscope": "sk-...", "siliconflow": "sk-...", ...}`，proxy 字段仅供 Gemini 方案预留）。
 

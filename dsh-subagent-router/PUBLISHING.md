@@ -9,7 +9,7 @@
 | npm | ✅ `dsh-subagent-router@0.3.0`（latest，CI 自动发布）· `0.2.0` · `0.1.1` · `0.1.0`（手动首发 bootstrap） |
 | GitHub | ✅ `NinjaSln-labs/dsh-plugins` main，tag `subagent-router-v0.3.0` |
 | 旧包 | ✅ `dsh-subagent-model-picker` 0.1.0/0.1.1 deprecated（Renamed to dsh-subagent-router） |
-| profile | `~/.dsh/profiles/web` 仍为 `file:/mnt/e/...` 本地链接（发版后可选切回 npm `^0.3.0`，见 HANDOFF §3.1） |
+| profile | `~/.dsh/profiles/web` 仍为 `file:` 协议指向本地插件目录（本机私有部署；发版后可选切回 npm `^0.3.0`，见 HANDOFF §3.1（本地私有，未追踪）） |
 | 发布管道 | ✅ tag → 版本守卫 → 验证链 → 人工审批 → publish（0.1.1 首次跑通；0.3.0 第三次） |
 
 ## 版本历史
@@ -20,12 +20,12 @@
   - **移除 autoCeiling**（最后一处手填模型 id，语义与 tierPolicy 重叠）；autoTierPicks 改按 `autoProviderOrder` 顺序找
   - ROADMAP 1c：`subagent_models` 每个模型加派生元数据（cost/speed/strength/specialty/contextWindow，`src/meta.ts`）
   - 设置页 UX：分组标题/层次、触控目标、`:focus-visible`、保存反馈、tier policy 保存修复（stale 闭包 + patch 冗余值根因）
-  - 配置面最终：**6 个 live 字段**；67/67 vitest
+  - 配置面最终：**7 个 live 字段**；67/67 vitest
   - 发布前置（承接）：client build 干净安装缺陷已在前版修复（`3f9c919`，ui-slots devDep pin）
 
 - **0.2.0** — **健康感知 + 配置化 + 设置页 UI**（HANDOFF 会话三大功能块）：
   - 内容：失败分类脱敏透传、死锚检测（RouteHealthStore）、终态换路（autoReroute）、升级参数化（autoEscalationTiers）、目录健康标注、模型路由优先级配置化四层（autoProviderOrder/autoTierPolicy/autoTierPicks/autoCeiling）、设置页配置 UI（host+client 化，settings 命名空间 + 插件卡片）
-  - 发布前置修复（`3f9c919`，接手会话）：client build 干净安装缺陷——`@deepseek-ai/dsh-client-ui-slots` module augmentation 在全新 `npm install` 下 TS2664/TS2345（`skipLibCheck` 不加载 .d.ts 传递 import）；修复 = devDependencies 精确 pin `0.1.0-rc.6`（与 runtime peer 解析副本一致，caret 会漂移致 SlotMap 双副本）+ client.tsx 副作用 `import type {}`。详见 HANDOFF §4 坑 9
+  - 发布前置修复（`3f9c919`，接手会话）：client build 干净安装缺陷——`@deepseek-ai/dsh-client-ui-slots` module augmentation 在全新 `npm install` 下 TS2664/TS2345（`skipLibCheck` 不加载 .d.ts 传递 import）；修复 = devDependencies 精确 pin `0.1.0-rc.6`（与 runtime peer 解析副本一致，caret 会漂移致 SlotMap 双副本）+ client.tsx 副作用 `import type {}`。详见 HANDOFF §4 坑 9（本地私有，未追踪）
   - 验证：strict typecheck + 66/66 vitest + build 全绿；CI 等价（fresh `npm install`）模拟通过后推 tag → GitHub 审批 → publish
 
 - **0.1.1** — **git 自动发布管道首次跑通**：
@@ -36,7 +36,7 @@
 
 - **0.1.0** — **新包名首发（手动 bootstrap）**：
   - 背景：更名 `dsh-subagent-model-picker` → `dsh-subagent-router`（picker 低估了路由+auto 策略的功能面）；granular token 选不到未发布包，需手动首发
-  - 手动 `npm publish`（token `ninjasln`）→ 包上线后建立限权 granular token → NPM_TOKEN secret → 后续版本走 git 管道
+  - 手动 `npm publish`（npm 发布 token，向用户索取）→ 包上线后建立限权 granular token → NPM_TOKEN secret → 后续版本走 git 管道
   - 旧包 deprecate：`dsh-subagent-model-picker@0.1.0/0.1.1` → 「Renamed to dsh-subagent-router」
 
 - **0.1.0–0.1.2（旧名 dsh-subagent-model-picker，已 deprecate）**：
@@ -56,5 +56,5 @@ git push && git push --tags    # CI 验证 → GitHub 审批 → 自动 publish
 
 ## 维护规则
 
-- 每个新版本发布后在本文件追加一条版本历史（一行式 + 关键细节），并在 `HANDOFF.md` §2 同步快照
+- 每个新版本发布后在本文件追加一条版本历史（一行式 + 关键细节），并在 `HANDOFF.md` §2 同步快照（本地私有，未追踪）
 - 发布一律走 git 管道，不用手工 `npm publish`（bootstrap 例外仅限新包名首发）

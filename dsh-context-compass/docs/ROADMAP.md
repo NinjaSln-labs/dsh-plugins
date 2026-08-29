@@ -1,8 +1,8 @@
 # dsh-context-compass — Roadmap
 
-状态基准：**v0.7.17**（2026-08-25 发布）。本文件是路线图的**唯一权威来源（单源）**；`HANDOFF.md` / `DESIGN.md` / `OPTIMIZATION-RESEARCH.md` 只记录 delta 并引用本文件，不复制路线内容。
+状态基准：**v0.11.0**（2026-08-27 发布，npm latest）。本文件是路线图的**唯一权威来源（单源）**；`HANDOFF.md`（本地私有未追踪，不入仓库）/ `DESIGN.md` / `OPTIMIZATION-RESEARCH.md` 只记录 delta 并引用本文件，不复制路线内容。
 
-## 已交付（到 v0.7.17）
+## 已交付（到 v0.11.0）
 
 ### 第一波（插件侧，无核心依赖）
 
@@ -27,7 +27,7 @@
 ### 质量
 
 - **十二轮审计**：51 fixed + 25 recorded（0 残留）
-- **100 项自动化测试全绿**：83 smoke + 4 mount + 7 client-mount + 6 visual
+- **117 项自动化测试全绿**：107 smoke + 4 mount + 7 client-mount + 6 visual（0.11.0 时点复核）
 
 ### 稳定性基建（0.8.0 先行落地）
 
@@ -53,6 +53,14 @@
 - **测试** — smoke +3（validate 单调 / readConfig 双形态 / thunk 换层即时生效）+ mount +1（**真实接线集成**：settings 写入 → 工具判定 live 变化 + validate 拒绝非单调——该测试抓到 `as` 强转压掉 thunk 未调用的真 bug，见 pits 2026-08-26）
 - **测试规模** — smoke 107 + mount 6 + client-mount 7 + visual 6
 - **S4 canary 发布通道（顺带交付）** — `publish.yml`：prerelease 版本（`0.10.1-next.0` 形态，tag 同后缀）自动 `npm publish --tag next`（不动 latest）；新增 `canary-promote.yml`（workflow_dispatch 输入版本号 → 守卫 prerelease/存在性 → `npm dist-tag add … latest`，走同一 npm-publish 审批门）；流程文档入 `PUBLISHING.md`
+
+### 0.11.0 审计收敛与工程化
+
+- **AUDIT-0.10.0 修复批** — P1×4 / P2×6 / P3×3 已修（`a73578e`）：OV-1 空结果双连采信清空（幽灵列表自愈）、OV-2/3 `isLoopback` fail-closed + Host 头校验（防 DNS rebinding）、C1-1 settings 接线 try/catch 降级、C1-2 syncProjectionUnit 去重 pending inject、C1-3 validateConfig 全数值字段有限性、R1-1 采样按 (turn, step) 去重（stateVersion 9→10）、R1-2 不再泄漏「null%」、R1-3 压缩捕获失败失效陈旧比例、R1-4/5 sparkline aria 口径 + overflow 可见；recorded 项留档（`docs/AUDIT-0.10.0.md`）
+- **client.tsx 模块化拆分** — 1286 行单体 → `src/client/{styles,shared,badge,command-card,overview}` + 瘦身入口（`6584007`）：slot 注册与 CSS 注入零变化，`parseCompassReport` / `mergePressure` / `lagOf` 保留入口再导出供 client-mount 断言；门禁 7 步全绿、visual 基线不变
+- **peer 基线升 `^0.1.1-rc.2` + 适配 0.1.1 投影契约**（`666ee8f`）— 修 prerelease 门控陷阱（旧 range 连当时部署的 0.1.1-rc.2 都声明不上）；wire 双契约对齐
+- **OV-5 抽共享排序模块** — 收敛 host/client 双份实现（`7330d3d`）；OV-7 SWR 后台刷新独立 AbortController、OV-10 TTL 注释对齐、测试洞 3/4/5 补齐（重放等价性 / chunk 封顶 / compaction-chunk 交互）（`1e359ef`）
+- **harness 0.1.2-alpha.1 影响评估 + C2 设计定稿** — 两项高影响记账（`sessionProjectionCache.coldSnapshot` 签名 breaking / `conversation.chat.commandview` slot 移除，详见本地私有未追踪的 HANDOFF §3.1）；C2 设计定稿入 `docs/C2-SETTINGS-CARD-DESIGN.md`
 
 ### 一览面板周期（0.7.14 → 0.7.17）
 
@@ -102,13 +110,13 @@
 | **0.8.0** | S2 stateVersion 兼容测试 + S3 配置生效冒烟（S4 canary 可选，顺延）——稳定性基建收尾 |
 | ~~0.9.0~~ | R1 sparkline（已交付）· C1 调研 + 设计定稿（已交付）|
 | **0.10.0** | **C1 host 配置点接入（已交付，随本版发）**——`installSettingsSection` getter 模式：thresholds/checks live 生效、resolveConfig 双源治愈、validate 三档单调、projection.enabled live 切换；pricing 源 4 字段 restart |
-| **0.11.x** | C2 client 配置卡片（设计定稿已出 `docs/C2-SETTINGS-CARD-DESIGN.md`，实施待 dsh 0.1.2 发版后）· **harness 0.1.2 升级适配**（两项高影响：`sessionProjectionCache.coldSnapshot` 签名 breaking / `conversation.chat.commandview` slot 移除，详见 HANDOFF §3.1） |
+| **0.11.x** | C2 client 配置卡片（设计定稿已出 `docs/C2-SETTINGS-CARD-DESIGN.md`，实施待 dsh 0.1.2 发版后）· **harness 0.1.2 升级适配**（两项高影响：`sessionProjectionCache.coldSnapshot` 签名 breaking / `conversation.chat.commandview` slot 移除，详见本地私有 HANDOFF（不入仓库）§3.1） |
 | **后续** | R3 / R4 / R5 / R6 · B1 / B2（等依赖就绪）|
 
 ## 维护规则
 
 - 本文件是路线图的**唯一权威来源**；完成一项 → 从「待做」移到「已交付」并标注落地版本
 - 被阻塞项保留在「被阻塞」并写明卡点；卡点解除后移回「待做」
-- 优先级/排期变化只改这里；`HANDOFF.md` / `DESIGN.md` / `OPTIMIZATION-RESEARCH.md` 引用本文件、不复制路线内容
+- 优先级/排期变化只改这里；`HANDOFF.md`（本地私有未追踪）/ `DESIGN.md` / `OPTIMIZATION-RESEARCH.md` 引用本文件、不复制路线内容
 - **peer 基线策略**：`peerDependencies` 声明"最低要求的服务版本"，保持宽松、不随 harness 每次升级而升。**2026-08-29 已升 `^0.1.1-rc.2`**（此前 `^0.1.0-rc.6` 有 semver prerelease 门控陷阱：`>=0.1.0-rc.6 <0.2.0` 的带 prerelease 比较符元组是 0.1.0，仅 rc.8 这类元组 0.1.0 的版本匹配；0.1.1 系列元组 0.1.1 **不匹配**——旧 range 连当前部署 0.1.1-rc.2 都声明不上）。`^0.1.1-rc.2` 覆盖 0.1.1-rc.2 + 未来 0.1.2 正式版（`<0.2.0`）；**0.1.2-alpha.1 尚未发布 npm（暂不可声明 `^0.1.2-*`），待发布且接入其独有 API 时再局部升**（参考：C1 接入 `@deepseek-ai/dsh-settings` 的局部升先例）
-- **升级体检基线（S1 依据）**：每次 harness 升级，对照 live 契约校验插件硬注入（commands / tools / sessionProjections / webServer）+ 全部 `ctx.get` 可选读取 + client slot（sidebar.footer.action / shell.overlay / conversation.session.header.utilities；`conversation.chat.commandview` 已于 **0.1.2-alpha.1** 随会话流重构移除，/compass 卡片待换新机制）是否仍存在、形状是否兼容。rc.8 本次校验通过（见 commit `5a00d11`/`04a4600` 前后；原文 `9b98c07` 为早期改写前坐标）；**0.1.2-alpha.1 预判已记账（HANDOFF §3.1）：coldSnapshot 签名 breaking + commandview 移除，其余（事件词汇 / cachedSnapshot / settings Host mutate / 各 slot）验证无影响，待正式版实测**
+- **升级体检基线（S1 依据）**：每次 harness 升级，对照 live 契约校验插件硬注入（commands / tools / sessionProjections / webServer）+ 全部 `ctx.get` 可选读取 + client slot（sidebar.footer.action / shell.overlay / conversation.session.header.utilities；`conversation.chat.commandview` 已于 **0.1.2-alpha.1** 随会话流重构移除，/compass 卡片待换新机制）是否仍存在、形状是否兼容。rc.8 本次校验通过（见 commit `5a00d11`/`04a4600` 前后；原文 `9b98c07` 为早期改写前坐标）；**0.1.2-alpha.1 预判已记账（本地私有未追踪的 HANDOFF §3.1）：coldSnapshot 签名 breaking + commandview 移除，其余（事件词汇 / cachedSnapshot / settings Host mutate / 各 slot）验证无影响，待正式版实测**

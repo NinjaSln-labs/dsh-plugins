@@ -443,7 +443,7 @@ function sendFile(res: ServerResponse, filePath: string): void {
 
 export const name = 'dsh-imgdraw'
 
-/** Cordis plugin — OBJECT form (never a factory), see dsh-session-health notes. */
+/** Cordis plugin — OBJECT form (never a factory), see dsh-context-compass notes. */
 export default {
   name,
   apply(ctx: Context, config: ImgdrawConfig = {}): void {

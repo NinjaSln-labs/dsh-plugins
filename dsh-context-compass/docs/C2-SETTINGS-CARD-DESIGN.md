@@ -1,6 +1,6 @@
 # C2 设计定稿 — Client 配置卡片（`settings.plugin.item` keyed 自建）
 
-> 状态：**调研完成，设计定稿待确认**（ROADMAP 规则：未定稿不动工）
+> 状态：**设计定稿已出，待实施**（实施待 dsh 0.1.2 发版后；ROADMAP 记为 C2，见 `docs/ROADMAP.md`）
 > 调研基准：harness `0.1.1-rc.2`（live）· `@deepseek-ai/dsh-settings@0.1.0-rc.6` · `@deepseek-ai/dsh-client-ui-settings@0.1.0-rc.6` · `@deepseek-ai/dsh-client-schema-form@0.1.0-rc.6` · `@deepseek-ai/dsh-client-ui-settings-plugins`（harness 内置，0.1.1-rc.2）
 > 调研日期：2026-08-27
 
@@ -87,4 +87,4 @@ ops = [
 
 1. **T1**：Host `handleOverviewRpc` 加 `settings-describe` / `settings-mutate` 转发 + smoke 测试（describe 形状 / mutate 嵌套 path / 409 冲突 / 400 校验失败）
 2. **T2**：Client 卡片组件（schema-form 复用 + 自建控件 + 草稿 + revision 设栅）+ 注册 slot + client-mount 入口断言
-3. **T3**：README/ROADMAP/HANDOFF 回填 + 发版 0.12.0
+3. **T3**：README/ROADMAP/HANDOFF（本地私有未追踪）回填 + 发版 0.12.0
