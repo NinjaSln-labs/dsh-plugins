@@ -31,7 +31,7 @@
 3. **默认锚定父模型**：调用方代理的 options 在解析出的 provider 上命名了模型时，就用它 —— `trivial`/`standard` 任务无条件使用，`complex` 任务在父模型已算强模型（`pro` / `max` / `reason` / `think` / `ultra` / `code` / `turbo` / `large` / `deep`）时也保留。只有两种情况回退到目录打分选型（强信号 +1、廉价信号 `flash`/`mini`/`lite`/`fast`/`small`/`quick`/`nano`/`light` −1；`trivial` 取最低分、`complex` 取最高分、`standard` 取第一个 0 分）：父没有命名模型，或任务是 `complex` 且父模型不够强（此时取目录最强模型）。显式 `provider` 与父路由不同时同样丢弃锚点（父模型不再属于该分组）。
 4. **可审计**：每次 auto 调用都会在工具结果里记录 `auto: { provider, model, tier, reason, anchored?, escalatedFrom?, reroutedFrom?, rerouteReason? }`，渲染文本带 `[auto]` 行（保留父模型时带 `anchored` 标记）与理由 —— 随时可以问「为什么选它」。
 5. **失败恢复**（仅前台调用）：
-   - **瞬态失败升级**（`autoEscalate` + `autoEscalationTiers`）：`rate-limit` / `server` / `timeout` / `transport` / 未分类失败时，用下一档重试（`trivial → standard → complex`，默认最多 1 次），但仅当该选择**严格更强**于当前模型时才升级 —— 锚定的强父模型永远不会被降级。重试结果记录 `escalatedFrom`。
+   - **瞬态失败升级**（`autoEscalate` + `autoEscalationTiers`）：`rate-limit` / `server` / `timeout` / `transport` / 未分类失败时，用下一档重试（`trivial → standard → complex`，默认最多 1 次），但仅当该选择**严格更强**于当前模型时才升级 —— 锚定的强父模型永远不会被降级。重试结果记录 `escalatedFrom`。后台/continuable 调用跳过升级（失败对调用方不可见）。
    - **终态失败换路**（`autoReroute`）：`quota` / `auth`（配额耗尽 / 凭据失效）重试同一 provider 无意义 —— 直接换到目录里第一个健康的 provider 路由重启（`reroutedFrom` + `rerouteReason`）。升级中若撞上终态失败也会停止继续升级该 provider。
 6. **健康感知（死锚检测）**：插件在会话内记录每个 provider 路由的失败分类。一旦父模型所在路由被判定不健康，后续 `model: "auto"` 调用**不再锚定**该父路由，而是直接改挑健康 provider —— 避免把子代理一直钉在坏路由上。过期时间**按失败类型分档**：`auth` 终态（不过期）· 不支持模型 24h · `rate-limit` 用 retry-after（无则约 35s，RPM 假设）· `quota` 下一整点 · `server`/`timeout`/`transport`/`context` 60s · 未分类默认 5min。`subagent_models` 目录工具也会为每个 provider 标注 `health: healthy/unhealthy` + `failingClass` + `retryAfterSec`。
 7. **失败详情透传**：子代理失败不再只是「subagent run failed」——能观测到的失败（`start` 拒绝、基础设施故障）会被分类（quota / rate-limit / auth / context / server / timeout / transport）并**脱敏**后拼进工具结果（含 HTTP 状态码与 retry-after），调用方直接看到「provider rate-limited (http 429)」而不是误判成执行失败。
@@ -60,6 +60,7 @@ bundle 只插入一行组合（`subagent-router`）。它消费 host 的 `tools`
 | `autoProviderOrder` | — | **provider 优先级**：`model: "auto"` 按此顺序解析 provider（未列出的排在之后）；父路由不健康或缺失时用它兜底。不配则用注册表顺序。 |
 | `autoTierPolicy` | — | **每档选型模式**：`{ trivial\|standard\|complex: 'anchor'\|'cheapest'\|'strongest' }`。`anchor`=父路由健康时沿用父模型；`cheapest`=目录里命名分最低；`strongest`=最高。未配的档位保持内置启发式。 |
 | `autoTierPicks` | — | **每档显式候选序**：`{ trivial\|standard\|complex: [modelId, ...] }`，完全覆盖该档选型；候选是全局模型优先级，按 provider 优先级顺序找，第一个被健康 provider 广告的模型胜出（可跨 provider）。 |
+| `recommendTimeoutMs` | `15000` | `subagent_recommend` 的一次性 LLM 分类调用超时（毫秒）；超时降级到命名启发式并说明原因。 |
 
 **固定默认（不可配置）**：注册期行为固定为合理默认，不再暴露为配置项（早期版本这些字段可配但「保存」不生效，是陷阱）：
 
@@ -112,7 +113,7 @@ pnpm run build  # tsc -> lib/
 
 ## 路线图
 
-自动路由策略的后续计划（目录元数据、推荐工具、反馈闭环、预算上限）：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。交接见 [HANDOFF.md](./HANDOFF.md)，发布记录见 [PUBLISHING.md](./PUBLISHING.md)。
+自动路由策略的后续计划（目录元数据、推荐工具、反馈闭环、预算上限）：见 [docs/ROADMAP.md](./docs/ROADMAP.md)。发布记录见 [PUBLISHING.md](./PUBLISHING.md)。交接记录（HANDOFF.md）为本地私有文件，不入仓库/npm 包。
 
 ## License
 
