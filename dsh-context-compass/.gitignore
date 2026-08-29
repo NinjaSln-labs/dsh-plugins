@@ -4,3 +4,6 @@ lib/
 PUBLISH.md
 visual/results/
 test-results/
+# 交接文档本地私有，不追踪（HANDOFF.md / HANDOFF-ARCHIVE/）
+HANDOFF.md
+HANDOFF-ARCHIVE/
