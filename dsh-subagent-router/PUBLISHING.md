@@ -31,8 +31,8 @@
 - **0.1.1** — **git 自动发布管道首次跑通**：
   - 发布流程：`npm version patch --no-git-tag-version`（工作树脏时 npm 的自动 commit/tag 会被跳过）→ 手动 commit + 打 `subagent-router-v0.1.1` tag → push → GitHub 审批（environment `npm-publish`）→ CI publish
   - 管道修复的两个 CI 坑（原记录在仓库根 `HANDOFF-ARCHIVE/`，该目录已删除，详情如下）：
-    1. workflow step name `Guard: tag version...` 冒号 = invalid YAML，GitHub 静默失败 run 从不触发发布——加引号修复（`85dcb70`，顺带修好 context-compass 的 publish.yml）
-    2. setup-node `cache: npm` 找不到 lockfile（本仓库 pnpm lock 不入库）→ Setup Node 直接失败——去掉 `cache: npm`（`1402b97`）
+    1. workflow step name `Guard: tag version...` 冒号 = invalid YAML，GitHub 静默失败 run 从不触发发布——加引号修复（`d071b69`，顺带修好 context-compass 的 publish.yml）
+    2. setup-node `cache: npm` 找不到 lockfile（本仓库 pnpm lock 不入库）→ Setup Node 直接失败——去掉 `cache: npm`（`c42fe98`）
 
 - **0.1.0** — **新包名首发（手动 bootstrap）**：
   - 背景：更名 `dsh-subagent-model-picker` → `dsh-subagent-router`（picker 低估了路由+auto 策略的功能面）；granular token 选不到未发布包，需手动首发
