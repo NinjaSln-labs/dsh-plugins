@@ -15,11 +15,23 @@
  */
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { sessionHealthProjectionSchema } from './schemas.ts'
+import { sessionHealthProjectionSchema, sessionHealthStateSchema } from './schemas.ts'
 import type { HealthSeverity, SessionHealthProjection } from './types.ts'
 import { readConfig, type ConfigSource, type ResolvedConfig } from './config.ts'
 import type { PricePeriod, ResolvedPricing } from './pricing.ts'
 import { formatCompact } from './util.ts'
+
+// 0.1.1-rc.2 类型契约：ProjectionDefinition 的 K 约束为 keyof
+// SessionProjectionStateMap（host fold-state 表），而 client-visible 键在
+// SessionProjectionMap（types.ts 已扩展）。sessionHealth 是 client-visible
+// 且带 wire —— 在此扩展 StateMap 使两个表都含 sessionHealth，与 types.ts
+// 对 SessionProjectionMap 的扩展配套（register 带 wire 重载按
+// keyof SessionProjectionMap 走）。
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    sessionHealth: SessionHealthState
+  }
+}
 
 /**
  * 平均每 X 轮压缩一次 —— turns / compactions 取整，供「已压缩 N 次」补
@@ -363,12 +375,17 @@ export function healthView(
   }
 }
 
+/** 与 register 带 wire 重载参数精确匹配的形态（wire 必选，非可选）。 */
+type SessionHealthDefinition = Omit<ProjectionDefinition<'sessionHealth', SessionHealthState>, 'wire'> & {
+  wire: NonNullable<ProjectionDefinition<'sessionHealth', SessionHealthState>['wire']>
+}
+
 /** Build the unit for one registration; the fold functions close over config. */
 export function sessionHealthProjectionDefinition(
   config: ConfigSource,
   pricing?: { get(model?: string): ResolvedPricing },
   modelOf?: () => string,
-): ProjectionDefinition<'sessionHealth', SessionHealthState> {
+): SessionHealthDefinition {
   // 0.1.1+ wire 契约（破坏性变化，见 ROADMAP「升级体检基线」）：snapshot /
   // cachedSnapshot / coldSnapshot 的 values 只收集 client-visible（带 wire）
   // 的 unit；不带 wire 的 unit 是 host-only，其值从所有快照省略（health 全
@@ -385,7 +402,11 @@ export function sessionHealthProjectionDefinition(
   // 顶层 view 在 0.1.1 上被擦除、无副作用。
   const unit = {
     key: 'sessionHealth',
+    // 双契约兼容：rc.6 register 读 `schema`（wire 验证）；0.1.1-rc.2 读
+    // `stateSchema`（fold-state 验证，restore 复用守卫——缺它会
+    // `undefined.parse` 崩溃，用错 schema 则持久化行永不复用、每次全量重放）。
     schema: sessionHealthProjectionSchema,
+    stateSchema: sessionHealthStateSchema,
     init,
     apply: applyHealthEvent,
     view: wireView,
@@ -406,5 +427,5 @@ export function sessionHealthProjectionDefinition(
     // rebuilds both history and dedup state.
     stateVersion: 10,
   }
-  return unit as unknown as ProjectionDefinition<'sessionHealth', SessionHealthState>
+  return unit as unknown as SessionHealthDefinition
 }

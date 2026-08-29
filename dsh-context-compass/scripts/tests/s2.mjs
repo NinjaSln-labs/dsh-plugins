@@ -82,9 +82,18 @@ export async function run() {
     // 视为「尚未可用」，由全量重放补齐），绝不能把旧形状 state 塞进新 view。
     const stale = registry.viewCheckpoint({ sessionHealth: { ver: def.stateVersion - 1, seq: 9, val: { turns: 3 } } })
     assert.ok(!('sessionHealth' in stale), `stale-ver row must be discarded, got: ${JSON.stringify(stale)}`)
-    // 当前版本行：即使 val 是空对象（极端退化），view 也必须 schema 合法。
-    const fresh = registry.viewCheckpoint({ sessionHealth: { ver: def.stateVersion, seq: 9, val: {} } })
-    assert.ok(fresh.sessionHealth, 'matching row must serve a view')
+    // 当前版本行：0.1.1-rc.2 语义是 stateSchema.parse 失败（退化/畸形 state）
+    // → 整行跳过（fail-safe，冷消费者视为「尚未可用」由全量重放补齐），不再
+    // 是 rc.6 的「退化也出 view」。合法完整 state 行才出 view。
+    const degraded = registry.viewCheckpoint({ sessionHealth: { ver: def.stateVersion, seq: 9, val: {} } })
+    assert.ok(!('sessionHealth' in degraded), 'degraded state row must be skipped (fail-safe)')
+    const fresh = registry.viewCheckpoint({
+      sessionHealth: {
+        ver: def.stateVersion, seq: 9,
+        val: { turns: 1, lastTurn: 1, userMessages: 1, assistantMessages: 1, compactions: 0 },
+      },
+    })
+    assert.ok(fresh.sessionHealth, 'valid state row must serve a view')
     assertWireSafe(fresh.sessionHealth, 'checkpoint-view')
   })
 
