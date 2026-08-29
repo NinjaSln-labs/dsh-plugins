@@ -21,11 +21,11 @@
   - ROADMAP 1c：`subagent_models` 每个模型加派生元数据（cost/speed/strength/specialty/contextWindow，`src/meta.ts`）
   - 设置页 UX：分组标题/层次、触控目标、`:focus-visible`、保存反馈、tier policy 保存修复（stale 闭包 + patch 冗余值根因）
   - 配置面最终：**6 个 live 字段**；67/67 vitest
-  - 发布前置（承接）：client build 干净安装缺陷已在前版修复（`500933b`，ui-slots devDep pin）
+  - 发布前置（承接）：client build 干净安装缺陷已在前版修复（`3f9c919`，ui-slots devDep pin）
 
 - **0.2.0** — **健康感知 + 配置化 + 设置页 UI**（HANDOFF 会话三大功能块）：
   - 内容：失败分类脱敏透传、死锚检测（RouteHealthStore）、终态换路（autoReroute）、升级参数化（autoEscalationTiers）、目录健康标注、模型路由优先级配置化四层（autoProviderOrder/autoTierPolicy/autoTierPicks/autoCeiling）、设置页配置 UI（host+client 化，settings 命名空间 + 插件卡片）
-  - 发布前置修复（`500933b`，接手会话）：client build 干净安装缺陷——`@deepseek-ai/dsh-client-ui-slots` module augmentation 在全新 `npm install` 下 TS2664/TS2345（`skipLibCheck` 不加载 .d.ts 传递 import）；修复 = devDependencies 精确 pin `0.1.0-rc.6`（与 runtime peer 解析副本一致，caret 会漂移致 SlotMap 双副本）+ client.tsx 副作用 `import type {}`。详见 HANDOFF §4 坑 9
+  - 发布前置修复（`3f9c919`，接手会话）：client build 干净安装缺陷——`@deepseek-ai/dsh-client-ui-slots` module augmentation 在全新 `npm install` 下 TS2664/TS2345（`skipLibCheck` 不加载 .d.ts 传递 import）；修复 = devDependencies 精确 pin `0.1.0-rc.6`（与 runtime peer 解析副本一致，caret 会漂移致 SlotMap 双副本）+ client.tsx 副作用 `import type {}`。详见 HANDOFF §4 坑 9
   - 验证：strict typecheck + 66/66 vitest + build 全绿；CI 等价（fresh `npm install`）模拟通过后推 tag → GitHub 审批 → publish
 
 - **0.1.1** — **git 自动发布管道首次跑通**：
