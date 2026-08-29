@@ -4,7 +4,7 @@
 
 Cross-session knowledge for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a `ctx.knowledge` service seam plus `knowledge_*` model tools, backed by SQLite FTS5 **trigram** retrieval (CJK substring search) with **L1 query expansion**.
 
-Implements the [V1.11 knowledge seam proposal](https://github.com/NinjaSln-labs/dsh-knowledge-sqlite/blob/main/docs/DESIGN.md) (11-round reviewed design, community proposal — not an official DSH feature). Contract: `write/update/search/list/delete` + budget + events + error codes.
+Implements the [V1.11 knowledge seam proposal](https://github.com/NinjaSln-labs/dsh-plugins/blob/main/dsh-knowledge-sqlite/docs/DESIGN.md) (11-round reviewed design, community proposal — not an official DSH feature). Contract: `write/update/search/list/delete` + budget + events + error codes.
 
 ```sh
 dsh plugin add dsh-knowledge-sqlite
@@ -51,13 +51,13 @@ Plugin row config (all optional, defaults are the V1.11 proposal defaults):
   name: 'dsh-knowledge-sqlite'
   config:
     gating: 'ask'                              # 'ask'（默认，V1.11）：write/delete 经 approval 确认；'none'：跳过门控自动放行
-    databasePath: '~/.dsh/knowledge.sqlite'   # default $DSH_HOME/knowledge.sqlite
+    databasePath: '/custom/data/knowledge.sqlite'   # 默认 $DSH_HOME/knowledge.sqlite（DSH_HOME 缺省 ~/.dsh）
     maxContentTokens: 2048
     queryExpansion:
       enabled: true
       model: ''                                # unset = session default model
       maxOutputTokens: 300
-      timeoutMs: 2500
+      timeoutMs: 3000   # 默认值（0.1.5 起）
       cache: true
     retrieval:
       topN: 20
@@ -80,7 +80,7 @@ Plugin row config (all optional, defaults are the V1.11 proposal defaults):
 ```sh
 npm install
 npm run build          # tsc（纯 TS，无需装饰器转换）
-npm test               # vitest：29 项（store 16 + service 13）
+npm test               # vitest：38 项（store 19 + service 19）
 node test-smoke.mjs    # SQLite 层冒烟：复现 A 7% / C 21% / D 50% / human-A 65% + 契约检查
 ```
 

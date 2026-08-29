@@ -4,7 +4,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的跨会话知识插件：`ctx.knowledge` 服务接缝 + `knowledge_*` 模型工具，基于 SQLite FTS5 **trigram** 检索（中文子串匹配）+ **L1 查询扩展**。
 
-实现了 [V1.11 知识接缝提案](https://github.com/NinjaSln-labs/dsh-knowledge-sqlite/blob/main/docs/DESIGN.md)（11 轮评审的设计，社区提案——非 DSH 官方功能）。契约：`write/update/search/list/delete` + budget + 事件 + 错误码。
+实现了 [V1.11 知识接缝提案](https://github.com/NinjaSln-labs/dsh-plugins/blob/main/dsh-knowledge-sqlite/docs/DESIGN.md)（11 轮评审的设计，社区提案——非 DSH 官方功能）。契约：`write/update/search/list/delete` + budget + 事件 + 错误码。
 
 ```sh
 dsh plugin add dsh-knowledge-sqlite
@@ -51,13 +51,13 @@ DSH 现有的全文检索使用 `unicode61`，无法匹配中文子串。在项�
   name: 'dsh-knowledge-sqlite'
   config:
     gating: 'ask'                              # 'ask'（默认，V1.11）：write/delete 经 approval 确认；'none'：跳过门控自动放行
-    databasePath: '~/.dsh/knowledge.sqlite'   # 默认 $DSH_HOME/knowledge.sqlite
+    databasePath: '/custom/data/knowledge.sqlite'   # 默认 $DSH_HOME/knowledge.sqlite（DSH_HOME 缺省 ~/.dsh）
     maxContentTokens: 2048
     queryExpansion:
       enabled: true
       model: ''                                # 未设置 = 会话默认模型
       maxOutputTokens: 300
-      timeoutMs: 2500
+      timeoutMs: 3000   # 默认值（0.1.5 起）
       cache: true
     retrieval:
       topN: 20
@@ -80,7 +80,7 @@ DSH 现有的全文检索使用 `unicode61`，无法匹配中文子串。在项�
 ```sh
 npm install
 npm run build          # tsc（纯 TS，无需装饰器转换）
-npm test               # vitest：29 项（store 16 + service 13）
+npm test               # vitest：38 项（store 19 + service 19）
 node test-smoke.mjs    # SQLite 层冒烟：复现 A 7% / C 21% / D 50% / human-A 65% + 契约检查
 ```
 
