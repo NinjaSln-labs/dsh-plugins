@@ -24,7 +24,7 @@
 ### 质量
 
 - **64 项自动化测试全绿**（30 项既有 + 34 项新增：失败分类、健康存储、死锚换路、瞬态升级、多档阶梯、详情透传、目录标注、优先级配置四层、other 瞬态信号、换路沿用配置）
-- **CI 双坑修复**（已归档 `../../HANDOFF-ARCHIVE/pits.md`）：workflow step name 冒号 invalid YAML；setup-node `cache: npm` 无 lockfile
+- **CI 双坑修复**（原归档于仓库根 `HANDOFF-ARCHIVE/`，该目录已删除，坑详情见 `../PUBLISHING.md` 0.1.1 节）：workflow step name 冒号 invalid YAML；setup-node `cache: npm` 无 lockfile
 
 ## 待做（按优先级）
 
