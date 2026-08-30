@@ -1,0 +1,6 @@
+# dsh-subagent-cursor bundle layer: registers the dormant `cursor`
+# SubagentProvider (Profile Bundle). Model-facing tools are separate
+# `dsh-tool-subagent` rows that name this provider.
+- insert:
+    - id: subagent-cursor
+      name: 'dsh-subagent-cursor'
