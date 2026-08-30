@@ -260,10 +260,14 @@ export function decideWeakOnly(
     return { ...d, bound: false }
   }
   if (d.switch === 'switch_to_weak') {
-    const registered = allowBind && Boolean(d.targetProvider) && registeredProviders.includes(d.targetProvider!)
+    // 目标不健康 → 同档下一备选（plan S3 §4）：按序取第一个 provider 已注册的 weak 槽
+    const candidate = cfg.weakSlots.find(s => registeredProviders.includes(s.provider))
+    const targetProvider = candidate?.provider ?? d.targetProvider
+    const targetModel = candidate?.model ?? d.targetModel
+    const registered = allowBind && Boolean(targetProvider) && registeredProviders.includes(targetProvider!)
     const targetHealth: WeakOnlyDecision['targetHealth'] = registered ? d.targetHealth : 'unhealthy'
     const bound = registered && d.targetHealth === 'healthy'
-    return { ...d, targetHealth, bound }
+    return { ...d, targetProvider, targetModel, targetHealth, bound }
   }
   return { ...d, bound: false }
 }
@@ -410,6 +414,9 @@ export default {
       turnSeq: number
       utterance: string
     }>()
+    // weak-only：记录降档前的用户原模型——下一轮先恢复原模型再重新决策，
+    // 避免「降档后 header 持久化 → 实际档永远 weak → switch_to_strong 不放行 → 钉死弱档」的单向陷阱
+    const boundOriginal = new Map<string, { provider: string; model: string; targetProvider: string; targetModel: string }>()
 
     // Fallback current-model source: the default selection (per-call overrides
     // captured from the agent/request waterfall take precedence once seen).
@@ -451,6 +458,20 @@ export default {
       const predicted = await pending.promise
       readDefaultSelection()
 
+      // 降档陷阱修复：若当前 config 是上一轮我们自己降的档（== 上轮目标），先恢复用户原模型
+      // 作为本轮决策基准（bind 只对当轮生效）；若与上轮目标不符（用户手动改模），以当前为新基准。
+      const prior = boundOriginal.get(agentId)
+      let baseConfig = callConfig
+      if (prior) {
+        if (currentProvider === prior.targetProvider && currentModel === prior.targetModel) {
+          baseConfig = { ...callConfig, provider: prior.provider, model: prior.model }
+          currentProvider = prior.provider
+          currentModel = prior.model
+        } else {
+          boundOriginal.delete(agentId)
+        }
+      }
+
       const actualTier = tierOf(currentProvider, currentModel, cfg.weakSlots, cfg.strongSlots)
       const suggestedTier = predicted.ok ? predicted.result.tier : null
       const confidence = predicted.ok ? predicted.result.confidence : null
@@ -471,10 +492,13 @@ export default {
 
       const d = decideWeakOnly(cfg, suggestedTier, actualTier, currentProvider, currentModel, abstained, allowBind, registeredProviders)
 
-      let nextConfig = callConfig
+      let nextConfig = baseConfig
       if (d.bound && d.targetProvider && d.targetModel) {
-        nextConfig = { ...callConfig, provider: d.targetProvider, model: d.targetModel }
+        nextConfig = { ...baseConfig, provider: d.targetProvider, model: d.targetModel }
+        boundOriginal.set(agentId, { provider: currentProvider, model: currentModel, targetProvider: d.targetProvider, targetModel: d.targetModel })
         console.info(`[slm-router] weak-only bind: ${currentProvider}/${currentModel} → ${d.targetProvider}/${d.targetModel}`)
+      } else {
+        boundOriginal.delete(agentId)
       }
 
       const predictOk = predicted.ok

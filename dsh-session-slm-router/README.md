@@ -71,8 +71,10 @@ session-slm-router:
 
 weak-only 换模条件（全部满足才 `bound=true`）：
 1. 预测建议 `weak` 且当前实际档为 `strong`（`switch_to_weak`）
-2. 目标槽（weakSlots[0]）健康且目标 **provider 已在 llm 注册**（`llm.listProviders()` 检查，避免换到死槽）
+2. 目标槽健康且目标 **provider 已在 llm 注册**（`llm.listProviders()` 检查）；首选槽不可用时**按序取下一个已注册的 weak 槽**（plan S3「同档下一备选」），全不可用则不换
 3. `weakOnlyMainOnly=true` 时仅主会话（`agents.roots()`）换模，子代理只记录不换
+
+**降档只对当轮生效（防单向陷阱）**：bind 后插件记住用户原模型；下一轮先恢复原模型作为决策基准再重新预测决策——连续多轮都判弱则持续降档，一旦不判弱（或用户手动改模）即自动回到用户原选模型，会话不会因一次降档被钉死在弱档。
 
 > ⚠️ weak-only 换模在 `agent/request` waterfall 内**同步等待预测结果**（最多 `timeoutMs`=250ms）后才发出 LLM 请求——这是 mode:on 的固有代价（必须先决策才能换模），S3 灰度已授权。shadow/off 完全无此开销。
 
