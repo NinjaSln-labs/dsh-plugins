@@ -21,7 +21,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { resolveConfig, type ResolvedSessionSlmRouterConfig, type SessionSlmRouterConfig, type ModelSlot } from './config.ts'
 import {
-  slotKey, configHashOf, orderSlots, mergeProviderValidation,
+  slotKey, configHashOf, orderSlots, mergeProviderValidation, availableCandidates,
   isModelUnavailableFailure, isCacheUsable,
   type SlotStatus, type SlotSource, type SlotHealthEntry, type SlotCacheFile,
 } from './slot-health.ts'
@@ -427,7 +427,7 @@ export default {
     // provider 注销 / 模型实测不可用 → 沉底；free 槽优先；缓存 24h TTL，删除即重建。
     const slotCachePath = join(homedir(), '.dsh', dirname(cfg.logPath ?? 'slm-shadow/session-slm-shadow.jsonl'), 'slot-order-cache.json')
     const slotConfigHash = configHashOf(cfg.weakSlots)
-    let slotStatuses = new Map<string, { status: SlotStatus; source: SlotSource }>()
+    let slotStatuses = new Map<string, { status: SlotStatus; source: SlotSource; demotedAt?: string }>()
     let runtimeOrder: ModelSlot[] = cfg.weakSlots
 
     const saveSlotCache = (): void => {
@@ -435,7 +435,7 @@ export default {
         mkdirSync(dirname(slotCachePath), { recursive: true })
         const slots: SlotHealthEntry[] = cfg.weakSlots.map(s => {
           const e = slotStatuses.get(slotKey(s.provider, s.model))
-          return { provider: s.provider, model: s.model, status: e?.status ?? 'ok', source: e?.source ?? 'provider' }
+          return { provider: s.provider, model: s.model, status: e?.status ?? 'ok', source: e?.source ?? 'provider', ...(e?.demotedAt ? { demotedAt: e.demotedAt } : {}) }
         })
         const cache: SlotCacheFile = { v: 1, configHash: slotConfigHash, updatedAt: new Date().toISOString(), slots }
         writeFileSync(slotCachePath, JSON.stringify(cache, null, 2))
@@ -447,7 +447,12 @@ export default {
     const revalidateSlots = (reason: string): void => {
       try {
         const llm = ctx.get('llm') as { listProviders?: () => Array<{ id?: string }> } | undefined
+        // M3：llm 未就绪或 provider 拓扑为空（未知）时不重验——避免空列表把全部槽误标 dead 落盘
         const providers = llm?.listProviders?.()?.map(p => String(p.id)) ?? []
+        if (providers.length === 0) {
+          console.info(`[slm-router] slots revalidate skipped (${reason}): provider topology unknown/empty`)
+          return
+        }
         slotStatuses = mergeProviderValidation(cfg.weakSlots, providers, slotStatuses)
         runtimeOrder = orderSlots(cfg.weakSlots, slotStatuses)
         saveSlotCache()
@@ -462,7 +467,7 @@ export default {
     try {
       const cache = JSON.parse(readFileSync(slotCachePath, 'utf8')) as SlotCacheFile
       if (isCacheUsable(cache, slotConfigHash)) {
-        slotStatuses = new Map(cache.slots.map(e => [slotKey(e.provider, e.model), { status: e.status, source: e.source }]))
+        slotStatuses = new Map(cache.slots.map(e => [slotKey(e.provider, e.model), { status: e.status, source: e.source, ...(e.demotedAt ? { demotedAt: e.demotedAt } : {}) }]))
         console.info(`[slm-router] slot cache restored (${cache.slots.length} slots, updated ${cache.updatedAt})`)
       } else {
         console.info('[slm-router] slot cache stale/mismatched → rebuild')
@@ -487,12 +492,14 @@ export default {
         const message = String(failure.message ?? '').toLowerCase()
         const agentId = String((p?.agent as Record<string, unknown> | undefined)?.id ?? '')
         const bound = boundOriginal.get(agentId)
-        const slot = cfg.weakSlots.find(s => s.provider === provider && message.includes(s.model.toLowerCase()))
-          ?? (bound && bound.targetProvider === provider
-            ? cfg.weakSlots.find(s => s.provider === provider && s.model === bound.targetModel)
-            : undefined)
+        // M2：优先精确匹配本轮绑定目标（provider+model 全等，最可信）；再回退消息包含匹配
+        // （模型 id 常含 '/' 如 deepseek/deepseek-v4-flash，错误消息通常只含模型名，子串匹配会漏）
+        const slot = (bound && bound.targetProvider === provider
+          ? cfg.weakSlots.find(s => s.provider === provider && s.model === bound.targetModel)
+          : undefined)
+          ?? cfg.weakSlots.find(s => s.provider === provider && message.includes(s.model.toLowerCase()))
         if (!slot) return action
-        slotStatuses.set(slotKey(slot.provider, slot.model), { status: 'dead', source: 'model' })
+        slotStatuses.set(slotKey(slot.provider, slot.model), { status: 'dead', source: 'model', demotedAt: new Date().toISOString() })
         runtimeOrder = orderSlots(cfg.weakSlots, slotStatuses)
         saveSlotCache()
         console.warn(`[slm-router] slot demoted (model unavailable): ${slot.provider}/${slot.model}`)
@@ -568,10 +575,11 @@ export default {
         if (!allowBind) console.info(`[slm-router] weak-only: skip bind for non-root agent ${agentId}`)
       }
 
-      // 目标候选：运行时槽位顺序 ∩ 本轮已注册 provider（双保险，避免换到死槽破坏本轮）
+      // 目标候选：运行时槽位顺序 ∩ 本轮已注册 provider，且排除 dead（M1——死槽不得进候选，
+      // 尤其 model-dead 但 provider 仍在的槽，避免全部候选失效时反而绑定已知死模）
       const llm = ctx.get('llm') as { listProviders?: () => Array<{ id?: string }> } | undefined
       const registeredProviders = llm?.listProviders?.()?.map(p => String(p.id)) ?? []
-      const candidates = runtimeOrder.filter(s => registeredProviders.includes(s.provider))
+      const candidates = availableCandidates(runtimeOrder, registeredProviders, slotStatuses)
 
       const d = decideWeakOnly(cfg, suggestedTier, actualTier, currentProvider, currentModel, abstained, allowBind, candidates)
 
