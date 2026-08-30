@@ -8,8 +8,13 @@ export interface ModelSlot {
 }
 
 export interface SessionSlmRouterConfig {
-  /** 'shadow' (default) or 'off'. S1 prohibits 'on'. */
-  mode?: 'shadow' | 'off'
+  /**
+   * 'shadow' (default) / 'weak-only' / 'off'.
+   * S1 禁 'on'；S3 灰度用 'weak-only'（只放行 switch_to_weak，见 S2b 裁定）。
+   */
+  mode?: 'shadow' | 'weak-only' | 'off'
+  /** weak-only 是否只对主会话（roots）换模，子代理仅记录。默认 true。 */
+  weakOnlyMainOnly?: boolean
   /** Full shell command for the predictor (no --model / --utterance; those are appended). */
   predictCmd: string
   /** Absolute path to the R1 model JSON. */
@@ -28,10 +33,12 @@ export interface ResolvedSessionSlmRouterConfig extends SessionSlmRouterConfig {
   weakSlots: ModelSlot[]
   strongSlots: ModelSlot[]
   timeoutMs: number
+  weakOnlyMainOnly: boolean
 }
 
 export const defaultConfig: ResolvedSessionSlmRouterConfig = {
   mode: 'shadow',
+  weakOnlyMainOnly: true,
   predictCmd: 'python3 /home/shadow/ninjasin-labs/vertical-small-model/scripts/route_predict.py',
   predictModel: '/home/shadow/ninjasin-labs/vertical-small-model/data/eval/routing-v0/model-r1.json',
   timeoutMs: 250,
@@ -103,5 +110,6 @@ export function resolveConfig(config: SessionSlmRouterConfig = {} as SessionSlmR
     logPath: config.logPath ?? defaultConfig.logPath,
     weakSlots: config.weakSlots ?? defaultConfig.weakSlots,
     strongSlots: config.strongSlots ?? defaultConfig.strongSlots,
+    weakOnlyMainOnly: config.weakOnlyMainOnly ?? defaultConfig.weakOnlyMainOnly,
   }
 }

@@ -46,7 +46,8 @@ changing the active session model** (S1 only).
 
 ```yaml
 session-slm-router:
-  mode: shadow              # 只许 shadow | off；禁止默认 on
+  mode: shadow              # shadow | weak-only | off（禁止 on）
+  weakOnlyMainOnly: true    # weak-only 是否只对主会话（roots）换模，子代理仅记录
   predictCmd: "python3 /home/shadow/ninjasin-labs/vertical-small-model/scripts/route_predict.py"
   predictModel: "/home/shadow/ninjasin-labs/vertical-small-model/data/eval/routing-v0/model-r1.json"
   timeoutMs: 250
@@ -59,6 +60,21 @@ session-slm-router:
 ```
 
 路径统一使用 WSL 本地副本 `/home/shadow/ninjasin-labs/vertical-small-model/`（2026-08-30 起；/mnt/e 为 E 盘旧副本，git 停留在历史改写前，勿再引用）。
+
+## 模式（S2b 裁定落实）
+
+| mode | 行为 |
+|------|------|
+| `shadow`（默认） | 只预测 + 写影子日志，**不换模**（S1 验收行为） |
+| `weak-only`（S3 灰度） | 真正换模，但**只放行 `switch_to_weak`**（A 层 precision 93%）；`switch_to_strong` 记录但 `bound=false`（B 层 38% 过敏不放行）；abstain 回退 stay（C 层 8% 弃权不当 strong） |
+| `off` | 关闭 |
+
+weak-only 换模条件（全部满足才 `bound=true`）：
+1. 预测建议 `weak` 且当前实际档为 `strong`（`switch_to_weak`）
+2. 目标槽（weakSlots[0]）健康且目标 **provider 已在 llm 注册**（`llm.listProviders()` 检查，避免换到死槽）
+3. `weakOnlyMainOnly=true` 时仅主会话（`agents.roots()`）换模，子代理只记录不换
+
+> ⚠️ weak-only 换模在 `agent/request` waterfall 内**同步等待预测结果**（最多 `timeoutMs`=250ms）后才发出 LLM 请求——这是 mode:on 的固有代价（必须先决策才能换模），S3 灰度已授权。shadow/off 完全无此开销。
 
 ## 日志 schema（~/.dsh/slm-shadow/session-slm-shadow.jsonl，一行一 JSON）
 
@@ -83,11 +99,15 @@ session-slm-router:
   "target_health": null,
   "agree": true,
   "would_bind": false,
+  "bound": false,
   "predict_ms": 45,
   "predict_ok": true,
   "error": null
 }
 ```
+
+- `would_bind`（建议层）：决策判定「若换模策略放行且目标健康，本轮会不会换」——shadow 与 weak-only 口径一致
+- `bound`（执行层）：weak-only **实际是否换模**；shadow 恒 false。灰度命中率 = `bound=true` 占 `would_bind=true` 的比例
 
 ## 安装
 
