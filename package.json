@@ -25,6 +25,7 @@
   "files": [
     "lib/index.js",
     "lib/config.js",
+    "lib/slot-health.js",
     "lib/*.d.ts",
     "cordis.patch.yml",
     "README.md"

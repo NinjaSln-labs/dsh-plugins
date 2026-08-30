@@ -76,6 +76,19 @@ weak-only 换模条件（全部满足才 `bound=true`）：
 
 **降档只对当轮生效（防单向陷阱）**：bind 后插件记住用户原模型；下一轮先恢复原模型作为决策基准再重新预测决策——连续多轮都判弱则持续降档，一旦不判弱（或用户手动改模）即自动回到用户原选模型，会话不会因一次降档被钉死在弱档。
 
+## 槽位健康缓存（weak-only 换模顺序）
+
+weakSlots 的**配置顺序 ≠ 生效顺序**。插件维护一个持久化健康缓存，决定「换到哪个弱档」：
+
+- 缓存文件：`~/.dsh/slm-shadow/slot-order-cache.json`（**删除即重建**，无需清别的）
+- 生效顺序：可用 `free` 槽 → 可用非 free 槽 → 瞬态未知槽（原配置序）→ 死亡槽（沉底）
+- 死亡判定两来源：
+  - **provider 级**：provider 已从 llm 注销 → 沉底（重验可复活）
+  - **model 级**：换模目标实际调用报「模型不可用」类确定性错误（`agent/request-error`，如 404 / NO_ADAPTER / 模型不存在）→ 沉底（保留至缓存过期重建才复活，防止模型误杀）
+- 刷新时机：**启动**、**`llm/adapters-updated`**（用户改供应商/模型配置触发）、**24h TTL 过期**
+- 配置摘要：缓存存 `weakSlots` 的 sha256 前 16 位——你改过槽位配置 → 摘要变化 → 旧缓存顺序作废重建，不存在的模型不会一直占位
+- 瞬态失败（限流/超时/5xx）**不淘汰**，防误杀
+
 > ⚠️ weak-only 换模在 `agent/request` waterfall 内**同步等待预测结果**（最多 `timeoutMs`=250ms）后才发出 LLM 请求——这是 mode:on 的固有代价（必须先决策才能换模），S3 灰度已授权。shadow/off 完全无此开销。
 
 ## 日志 schema（~/.dsh/slm-shadow/session-slm-shadow.jsonl，一行一 JSON）
