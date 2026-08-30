@@ -85,6 +85,11 @@ def build_report(events: list[dict], log_path: Path) -> tuple[str, bool]:
     ms_values = [e["predict_ms"] for e in valid if isinstance(e.get("predict_ms"), int)]
     failed = sum(1 for e in events if e.get("predict_ok") is False)
 
+    # S3 灰度（weak-only）：would_bind（建议层）vs bound（执行层）命中率
+    would_bind_n = sum(1 for e in valid if e.get("would_bind") is True)
+    bound_n = sum(1 for e in valid if e.get("bound") is True)
+    hit = f"{bound_n}/{would_bind_n} = {pct(bound_n, would_bind_n)}" if would_bind_n else "n/a（无 would_bind=true 轮）"
+
     rows = [
         ("N（有效影子条数 predict_ok=true）", str(n)),
         ("建议弱档率", f"{sug_weak}（{pct(sug_weak, n)}）"),
@@ -95,6 +100,8 @@ def build_report(events: list[dict], log_path: Path) -> tuple[str, bool]:
         ("目标不健康率（would_bind 且 target unhealthy）", f"{target_unhealthy}（{pct(target_unhealthy, n)}）"),
         ("弃权率 abstained=true", f"{abstained}（{pct(abstained, n)}）"),
         ("p95 predict_ms", p95(ms_values)),
+        ("灰度命中率 would_bind→bound", hit),
+        ("实际换模 bound=true", f"{bound_n}（{pct(bound_n, n)}；shadow 期恒 0）"),
     ]
     table = "| 指标 | 值 |\n|------|----|\n" + "\n".join(f"| {k} | {v} |" for k, v in rows)
 

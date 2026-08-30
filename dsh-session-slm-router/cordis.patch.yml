@@ -4,6 +4,10 @@
 #
 # Configuration lives HERE (cordis row config), passed directly to apply().
 # To change slots/paths, edit below and restart dsh.
+#
+# mode 取值：shadow（只影子）| weak-only（S3 灰度：只降档换模）| off
+# 切到 weak-only 后需重启 dsh 生效；回滚改回 shadow 即可。
+# weakOnlyMainOnly（默认 true）：仅主会话换模，子代理只记录。
 
 - insert:
     - id: session-slm-router

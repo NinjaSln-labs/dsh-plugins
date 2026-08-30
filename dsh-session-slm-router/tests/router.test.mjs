@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const indexJs = join(here, '..', 'lib', 'index.js')
-const { tierOf, extractUtterance, computeDecision, shouldSkipUtterance } = await import(
+const { tierOf, extractUtterance, computeDecision, shouldSkipUtterance, decideWeakOnly, currentHealthOf, buildShadowEvent } = await import(
   'file://' + indexJs.replace(/\\/g, '/')
 )
 
@@ -238,4 +238,109 @@ test('skip: 正常用户话语 → 不跳过', () => {
 test('skip: 空字符串 → 不跳过（由上层 if(!utterance) 处理）', () => {
   assert.equal(shouldSkipUtterance(''), false)
   assert.equal(shouldSkipUtterance(null), false)
+})
+
+// ---------- weak-only 决策（S2b：只降档） ----------
+
+test('weak-only: switch_to_weak 且目标 provider 已注册 → bound=true, target_health=healthy', () => {
+  const d = decideWeakOnly(
+    CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
+    false, true, ['opencode-go-custom', 'commandcode'],
+  )
+  assert.equal(d.switch, 'switch_to_weak')
+  assert.equal(d.bound, true)
+  assert.equal(d.targetHealth, 'healthy')
+})
+
+test('weak-only: switch_to_weak 但目标 provider 未注册 → bound=false, target_health=unhealthy', () => {
+  const d = decideWeakOnly(
+    CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
+    false, true, ['commandcode'], // opencode-go-custom 未注册
+  )
+  assert.equal(d.switch, 'switch_to_weak')
+  assert.equal(d.bound, false)
+  assert.equal(d.targetHealth, 'unhealthy')
+})
+
+test('weak-only: switch_to_strong 不放行 → bound=false（B 层过敏，仅记录）', () => {
+  const d = decideWeakOnly(
+    CFG, 'strong', 'weak', 'opencode-go-custom', 'ox-alpha-free',
+    false, true, ['opencode-go-custom'],
+  )
+  assert.equal(d.switch, 'switch_to_strong')
+  assert.equal(d.bound, false)
+})
+
+test('weak-only: abstain → stay, bound=false（C 层弃权回退）', () => {
+  const d = decideWeakOnly(
+    CFG, 'strong', 'weak', 'opencode-go-custom', 'ox-alpha-free',
+    true, true, ['opencode-go-custom'],
+  )
+  assert.equal(d.switch, 'stay')
+  assert.equal(d.bound, false)
+  assert.equal(d.targetProvider, null)
+})
+
+test('weak-only: 非主会话（allowBind=false）→ switch_to_weak 但 bound=false', () => {
+  const d = decideWeakOnly(
+    CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
+    false, false, ['opencode-go-custom'],
+  )
+  assert.equal(d.switch, 'switch_to_weak')
+  assert.equal(d.bound, false)
+})
+
+test('weak-only: stay 建议 → bound=false', () => {
+  const d = decideWeakOnly(
+    CFG, 'weak', 'weak', 'opencode-go-custom', 'ox-alpha-free',
+    false, true, ['opencode-go-custom'],
+  )
+  assert.equal(d.switch, 'stay')
+  assert.equal(d.bound, false)
+})
+
+test('weak-only: 预测失败（suggested=null）→ 全空, bound=false', () => {
+  const d = decideWeakOnly(
+    CFG, null, 'weak', 'opencode-go-custom', 'ox-alpha-free',
+    false, true, ['opencode-go-custom'],
+  )
+  assert.equal(d.switch, null)
+  assert.equal(d.bound, false)
+})
+
+// ---------- currentHealthOf ----------
+
+test('currentHealthOf: 已知 slot → healthy; 未知 → unknown', () => {
+  assert.equal(currentHealthOf(CFG, 'opencode-go-custom', 'ox-alpha-free'), 'healthy')
+  assert.equal(currentHealthOf(CFG, 'some-provider', 'some-model'), 'unknown')
+})
+
+// ---------- buildShadowEvent（bound 字段 + preview 截断 + 隐私） ----------
+
+test('buildShadowEvent: 含 bound 字段 + preview ≤80 字符', () => {
+  const d = decideWeakOnly(
+    CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
+    false, true, ['opencode-go-custom'],
+  )
+  const e = buildShadowEvent({
+    sessionId: 's1', turnSeq: 1, utterance: 'x'.repeat(100),
+    suggestedTier: 'weak', confidence: 0.8, abstained: false,
+    actualProvider: 'commandcode', actualModel: 'deepseek/deepseek-v4-pro',
+    actualTier: 'strong', decision: d, predictMs: 50, predictOk: true, error: null,
+  })
+  assert.equal(e.bound, true)
+  assert.ok(e.utterance_preview.length <= 80, `preview ${e.utterance_preview.length}`)
+  assert.equal(e.utterance_hash.length, 16)
+})
+
+test('buildShadowEvent: error 只记简短原因（不含命令/原话）', () => {
+  const d = decideWeakOnly(CFG, null, 'weak', 'opencode-go-custom', 'ox-alpha-free', false, true, [])
+  const e = buildShadowEvent({
+    sessionId: 's1', turnSeq: 2, utterance: '私密原话',
+    suggestedTier: null, confidence: null, abstained: null,
+    actualProvider: 'opencode-go-custom', actualModel: 'ox-alpha-free',
+    actualTier: 'weak', decision: d, predictMs: 0, predictOk: false, error: 'predict failed: timeout',
+  })
+  assert.equal(e.error, 'predict failed: timeout')
+  assert.ok(!e.error.includes('私密原话'))
 })
