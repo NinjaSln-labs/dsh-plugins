@@ -252,14 +252,25 @@ test('weak-only: switch_to_weak 且目标 provider 已注册 → bound=true, tar
   assert.equal(d.targetHealth, 'healthy')
 })
 
-test('weak-only: switch_to_weak 但目标 provider 未注册 → bound=false, target_health=unhealthy', () => {
+test('weak-only: 所有 weak 槽 provider 均未注册 → bound=false, target_health=unhealthy', () => {
   const d = decideWeakOnly(
     CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
-    false, true, ['commandcode'], // opencode-go-custom 未注册
+    false, true, [], // 全部未注册
   )
   assert.equal(d.switch, 'switch_to_weak')
   assert.equal(d.bound, false)
   assert.equal(d.targetHealth, 'unhealthy')
+})
+
+test('weak-only: 目标不健康 → 同档下一备选（weakSlots 按序取第一个已注册槽）', () => {
+  // weakSlots[0]=opencode-go-custom 未注册；[1]=commandcode 已注册 → 换到 [1]
+  const d = decideWeakOnly(
+    CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
+    false, true, ['commandcode'],
+  )
+  assert.equal(d.switch, 'switch_to_weak')
+  assert.deepEqual([d.targetProvider, d.targetModel], ['commandcode', 'deepseek/deepseek-v4-flash'])
+  assert.equal(d.bound, true)
 })
 
 test('weak-only: switch_to_strong 不放行 → bound=false（B 层过敏，仅记录）', () => {
