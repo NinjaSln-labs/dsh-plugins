@@ -1,0 +1,72 @@
+{
+  "name": "dsh-subagent-cursor",
+  "description": "Cursor-as-subagent provider for DeepSeek Harness: one-shot local runs via @cursor/sdk, summary-first result presentation, unattended Profile Bundle.",
+  "version": "0.1.0",
+  "author": {
+    "name": "ninjasln",
+    "url": "https://github.com/NinjaSln-labs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NinjaSln-labs/dsh-plugins.git",
+    "directory": "dsh-subagent-cursor"
+  },
+  "homepage": "https://github.com/NinjaSln-labs/dsh-plugins/tree/main/dsh-subagent-cursor#readme",
+  "bugs": {
+    "url": "https://github.com/NinjaSln-labs/dsh-plugins/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "subagent",
+    "cursor",
+    "cursor-sdk",
+    "delegation"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit || true",
+    "test": "vitest run"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-session": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-subagent": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-subprocess": "^0.1.0-rc.5"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.0.28"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.10"
+  }
+}
