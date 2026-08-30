@@ -22,6 +22,10 @@ const indexJs = join(here, '..', 'lib', 'index.js')
 const { tierOf, extractUtterance, computeDecision, shouldSkipUtterance, decideWeakOnly, currentHealthOf, buildShadowEvent } = await import(
   'file://' + indexJs.replace(/\\/g, '/')
 )
+const {
+  configHashOf, isFreeSlot, orderSlots, mergeProviderValidation,
+  isModelUnavailableFailure, isCacheUsable,
+} = await import('file://' + join(here, '..', 'lib', 'slot-health.js').replace(/\\/g, '/'))
 
 const CFG = {
   mode: 'shadow',
@@ -241,32 +245,37 @@ test('skip: 空字符串 → 不跳过（由上层 if(!utterance) 处理）', ()
 })
 
 // ---------- weak-only 决策（S2b：只降档） ----------
+// candidates = 已按槽位健康缓存排序后的可用候选槽（第一位为换模目标）
 
-test('weak-only: switch_to_weak 且目标 provider 已注册 → bound=true, target_health=healthy', () => {
+const W0 = { provider: 'opencode-go-custom', model: 'ox-alpha-free' }
+const W1 = { provider: 'commandcode', model: 'deepseek/deepseek-v4-flash' }
+
+test('weak-only: 候选槽首位可用 → bound=true, target_health=healthy', () => {
   const d = decideWeakOnly(
     CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
-    false, true, ['opencode-go-custom', 'commandcode'],
+    false, true, [W0, W1],
   )
   assert.equal(d.switch, 'switch_to_weak')
   assert.equal(d.bound, true)
   assert.equal(d.targetHealth, 'healthy')
+  assert.deepEqual([d.targetProvider, d.targetModel], ['opencode-go-custom', 'ox-alpha-free'])
 })
 
-test('weak-only: 所有 weak 槽 provider 均未注册 → bound=false, target_health=unhealthy', () => {
+test('weak-only: 无候选槽 → bound=false, target_health=unhealthy', () => {
   const d = decideWeakOnly(
     CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
-    false, true, [], // 全部未注册
+    false, true, [], // 全部槽位不可用
   )
   assert.equal(d.switch, 'switch_to_weak')
   assert.equal(d.bound, false)
   assert.equal(d.targetHealth, 'unhealthy')
 })
 
-test('weak-only: 目标不健康 → 同档下一备选（weakSlots 按序取第一个已注册槽）', () => {
-  // weakSlots[0]=opencode-go-custom 未注册；[1]=commandcode 已注册 → 换到 [1]
+test('weak-only: 首选槽死 → 用候选第二槽（同档下一备选）', () => {
+  // W0 被沉底（不在候选），W1 顶上来
   const d = decideWeakOnly(
     CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
-    false, true, ['commandcode'],
+    false, true, [W1],
   )
   assert.equal(d.switch, 'switch_to_weak')
   assert.deepEqual([d.targetProvider, d.targetModel], ['commandcode', 'deepseek/deepseek-v4-flash'])
@@ -276,7 +285,7 @@ test('weak-only: 目标不健康 → 同档下一备选（weakSlots 按序取第
 test('weak-only: switch_to_strong 不放行 → bound=false（B 层过敏，仅记录）', () => {
   const d = decideWeakOnly(
     CFG, 'strong', 'weak', 'opencode-go-custom', 'ox-alpha-free',
-    false, true, ['opencode-go-custom'],
+    false, true, [W0],
   )
   assert.equal(d.switch, 'switch_to_strong')
   assert.equal(d.bound, false)
@@ -285,7 +294,7 @@ test('weak-only: switch_to_strong 不放行 → bound=false（B 层过敏，仅�
 test('weak-only: abstain → stay, bound=false（C 层弃权回退）', () => {
   const d = decideWeakOnly(
     CFG, 'strong', 'weak', 'opencode-go-custom', 'ox-alpha-free',
-    true, true, ['opencode-go-custom'],
+    true, true, [W0],
   )
   assert.equal(d.switch, 'stay')
   assert.equal(d.bound, false)
@@ -295,7 +304,7 @@ test('weak-only: abstain → stay, bound=false（C 层弃权回退）', () => {
 test('weak-only: 非主会话（allowBind=false）→ switch_to_weak 但 bound=false', () => {
   const d = decideWeakOnly(
     CFG, 'weak', 'strong', 'commandcode', 'deepseek/deepseek-v4-pro',
-    false, false, ['opencode-go-custom'],
+    false, false, [W0],
   )
   assert.equal(d.switch, 'switch_to_weak')
   assert.equal(d.bound, false)
@@ -304,7 +313,7 @@ test('weak-only: 非主会话（allowBind=false）→ switch_to_weak 但 bound=f
 test('weak-only: stay 建议 → bound=false', () => {
   const d = decideWeakOnly(
     CFG, 'weak', 'weak', 'opencode-go-custom', 'ox-alpha-free',
-    false, true, ['opencode-go-custom'],
+    false, true, [W0],
   )
   assert.equal(d.switch, 'stay')
   assert.equal(d.bound, false)
@@ -313,10 +322,80 @@ test('weak-only: stay 建议 → bound=false', () => {
 test('weak-only: 预测失败（suggested=null）→ 全空, bound=false', () => {
   const d = decideWeakOnly(
     CFG, null, 'weak', 'opencode-go-custom', 'ox-alpha-free',
-    false, true, ['opencode-go-custom'],
+    false, true, [W0],
   )
   assert.equal(d.switch, null)
   assert.equal(d.bound, false)
+})
+
+// ---------- 槽位健康缓存（slot-health） ----------
+
+test('slot-health: configHashOf 对同配置稳定、异配置不同', () => {
+  assert.equal(configHashOf(CFG.weakSlots), configHashOf(CFG.weakSlots))
+  assert.notEqual(configHashOf(CFG.weakSlots), configHashOf([{ provider: 'x', model: 'y' }]))
+})
+
+test('slot-health: isFreeSlot 识别 free 标记的 model/provider', () => {
+  assert.equal(isFreeSlot({ provider: 'p', model: 'ox-alpha-free' }), true)
+  assert.equal(isFreeSlot({ provider: 'commandcode-free', model: 'minimax-m2.7-free' }), true)
+  assert.equal(isFreeSlot({ provider: 'p', model: 'agnes-2.5-flash' }), false)
+})
+
+test('slot-health: orderSlots —— ok free 优先、dead 沉底、同档保配置序', () => {
+  const config = [W0, W1, { provider: 'agnes', model: 'agnes-2.5-flash' }] // W0 是 free
+  const statuses = new Map([
+    ['opencode-go-custom::ox-alpha-free', { status: 'dead', source: 'provider' }], // 死了
+    ['commandcode::deepseek/deepseek-v4-flash', { status: 'ok', source: 'provider' }],
+    ['agnes::agnes-2.5-flash', { status: 'unknown', source: 'provider' }],
+  ])
+  const ordered = orderSlots(config, statuses)
+  assert.deepEqual(ordered, [W1, { provider: 'agnes', model: 'agnes-2.5-flash' }, W0]) // ok → unknown → dead
+})
+
+test('slot-health: orderSlots —— 同为 ok 时 free 槽排非 free 前', () => {
+  const config = [{ provider: 'a', model: 'm1' }, { provider: 'b', model: 'm2-free' }, { provider: 'c', model: 'm3' }]
+  const statuses = new Map([
+    ['a::m1', { status: 'ok', source: 'provider' }],
+    ['b::m2-free', { status: 'ok', source: 'provider' }],
+    ['c::m3', { status: 'ok', source: 'provider' }],
+  ])
+  const ordered = orderSlots(config, statuses)
+  assert.deepEqual(ordered, [{ provider: 'b', model: 'm2-free' }, { provider: 'a', model: 'm1' }, { provider: 'c', model: 'm3' }])
+})
+
+test('slot-health: mergeProviderValidation —— provider 注销→dead(provider)，model 级 dead 保留', () => {
+  const config = [W0, W1]
+  const prev = new Map([
+    ['opencode-go-custom::ox-alpha-free', { status: 'ok', source: 'provider' }],
+    ['commandcode::deepseek/deepseek-v4-flash', { status: 'dead', source: 'model' }],
+  ])
+  // opencode-go-custom 注销；commandcode 仍在
+  const next = mergeProviderValidation(config, ['commandcode'], prev)
+  assert.equal(next.get('opencode-go-custom::ox-alpha-free').status, 'dead')
+  assert.equal(next.get('opencode-go-custom::ox-alpha-free').source, 'provider')
+  assert.equal(next.get('commandcode::deepseek/deepseek-v4-flash').status, 'dead') // model 级保留
+  assert.equal(next.get('commandcode::deepseek/deepseek-v4-flash').source, 'model')
+})
+
+test('slot-health: isModelUnavailableFailure 只认确定性模型不可用', () => {
+  assert.equal(isModelUnavailableFailure({ code: 'NO_ADAPTER', status: 0, message: 'no adapter for provider' }), true)
+  assert.equal(isModelUnavailableFailure({ code: 'MODEL_NOT_FOUND', status: 0, message: 'x' }), true)
+  assert.equal(isModelUnavailableFailure({ code: 'x', status: 404, message: 'y' }), true)
+  assert.equal(isModelUnavailableFailure({ code: 'x', status: 0, message: '模型不存在' }), true)
+  // 瞬态/限流/5xx 不淘汰
+  assert.equal(isModelUnavailableFailure({ code: 'RATE_LIMITED', status: 429, message: 'slow down' }), false)
+  assert.equal(isModelUnavailableFailure({ code: 'TIMEOUT', status: 0, message: 'timed out' }), false)
+  assert.equal(isModelUnavailableFailure({ code: 'x', status: 500, message: 'internal' }), false)
+})
+
+test('slot-health: isCacheUsable —— 版本/hash/TTL 任一不符即不可用', () => {
+  const fresh = { v: 1, configHash: 'h', updatedAt: new Date(Date.now() - 1000).toISOString(), slots: [] }
+  const expired = { v: 1, configHash: 'h', updatedAt: new Date(Date.now() - 25 * 3600 * 1000).toISOString(), slots: [] }
+  const mismatch = { v: 1, configHash: 'other', updatedAt: new Date(Date.now() - 1000).toISOString(), slots: [] }
+  assert.equal(isCacheUsable(fresh, 'h'), true)
+  assert.equal(isCacheUsable(expired, 'h'), false)
+  assert.equal(isCacheUsable(mismatch, 'h'), false)
+  assert.equal(isCacheUsable(undefined, 'h'), false)
 })
 
 // ---------- currentHealthOf ----------
