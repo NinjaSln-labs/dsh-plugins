@@ -24,7 +24,7 @@ const { tierOf, extractUtterance, computeDecision, shouldSkipUtterance, decideWe
 )
 const {
   configHashOf, isFreeSlot, orderSlots, mergeProviderValidation,
-  isModelUnavailableFailure, isCacheUsable,
+  isModelUnavailableFailure, isCacheUsable, availableCandidates,
 } = await import('file://' + join(here, '..', 'lib', 'slot-health.js').replace(/\\/g, '/'))
 
 const CFG = {
@@ -380,12 +380,52 @@ test('slot-health: mergeProviderValidation —— provider 注销→dead(provide
 test('slot-health: isModelUnavailableFailure 只认确定性模型不可用', () => {
   assert.equal(isModelUnavailableFailure({ code: 'NO_ADAPTER', status: 0, message: 'no adapter for provider' }), true)
   assert.equal(isModelUnavailableFailure({ code: 'MODEL_NOT_FOUND', status: 0, message: 'x' }), true)
-  assert.equal(isModelUnavailableFailure({ code: 'x', status: 404, message: 'y' }), true)
+  assert.equal(isModelUnavailableFailure({ code: 'x', status: 0, message: 'model not found' }), true)
   assert.equal(isModelUnavailableFailure({ code: 'x', status: 0, message: '模型不存在' }), true)
+  assert.equal(isModelUnavailableFailure({ code: 'x', status: 404, message: 'model does not exist' }), true)
+  // 裸 404/通用不存在 不淘汰（M2：网关/路由 404 与模型无关）
+  assert.equal(isModelUnavailableFailure({ code: 'x', status: 404, message: 'y' }), false)
+  assert.equal(isModelUnavailableFailure({ code: 'NOT_FOUND', status: 404, message: 'route not found' }), false)
   // 瞬态/限流/5xx 不淘汰
   assert.equal(isModelUnavailableFailure({ code: 'RATE_LIMITED', status: 429, message: 'slow down' }), false)
   assert.equal(isModelUnavailableFailure({ code: 'TIMEOUT', status: 0, message: 'timed out' }), false)
   assert.equal(isModelUnavailableFailure({ code: 'x', status: 500, message: 'internal' }), false)
+})
+
+test('slot-health: mergeProviderValidation —— provider 注销→dead(provider)，model 级 dead 条目级 TTL 复活', () => {
+  const config = [W0, W1]
+  const prev = new Map([
+    ['opencode-go-custom::ox-alpha-free', { status: 'ok', source: 'provider' }],
+    // model 级 dead：刚淘汰（<TTL）→ 保留
+    ['commandcode::deepseek/deepseek-v4-flash', { status: 'dead', source: 'model', demotedAt: new Date(Date.now() - 1000).toISOString() }],
+  ])
+  // opencode-go-custom 注销 → provider 级 dead；commandcode 仍在 → model 级保留
+  const next = mergeProviderValidation(config, ['commandcode'], prev)
+  assert.equal(next.get('opencode-go-custom::ox-alpha-free').status, 'dead')
+  assert.equal(next.get('opencode-go-custom::ox-alpha-free').source, 'provider')
+  assert.equal(next.get('commandcode::deepseek/deepseek-v4-flash').status, 'dead')
+  assert.equal(next.get('commandcode::deepseek/deepseek-v4-flash').source, 'model')
+})
+
+test('slot-health: model 级 dead 过 TTL → 复活为 ok（C1 修复）', () => {
+  const config = [W1]
+  const prev = new Map([
+    ['commandcode::deepseek/deepseek-v4-flash', { status: 'dead', source: 'model', demotedAt: new Date(Date.now() - 25 * 3600 * 1000).toISOString() }],
+  ])
+  const next = mergeProviderValidation(config, ['commandcode'], prev)
+  assert.equal(next.get('commandcode::deepseek/deepseek-v4-flash').status, 'ok')
+  assert.equal(next.get('commandcode::deepseek/deepseek-v4-flash').source, 'provider')
+})
+
+test('slot-health: availableCandidates —— 排除 dead，保留非 dead + provider 已注册（M1 修复）', () => {
+  const order = [W0, W1, { provider: 'agnes', model: 'agnes-2.5-flash' }]
+  const statuses = new Map([
+    ['opencode-go-custom::ox-alpha-free', { status: 'dead', source: 'model' }], // model-dead 但 provider 注册
+    ['commandcode::deepseek/deepseek-v4-flash', { status: 'ok', source: 'provider' }],
+  ])
+  const cands = availableCandidates(order, ['opencode-go-custom', 'commandcode', 'agnes'], statuses)
+  // W0 虽 provider 注册但 status=dead → 排除
+  assert.deepEqual(cands, [W1, { provider: 'agnes', model: 'agnes-2.5-flash' }])
 })
 
 test('slot-health: isCacheUsable —— 版本/hash/TTL 任一不符即不可用', () => {

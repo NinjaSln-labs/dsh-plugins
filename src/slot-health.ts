@@ -27,6 +27,8 @@ export interface SlotHealthEntry {
   model: string
   status: SlotStatus
   source: SlotSource
+  /** model 级淘汰的时间戳（ISO）——用于条目级 TTL 复活 */
+  demotedAt?: string
 }
 
 export interface SlotCacheFile {
@@ -75,24 +77,33 @@ export function orderSlots(
 }
 
 /**
- * provider 级重验：provider 不在已注册列表 → dead(source=provider)；
- * provider 在 → 维持原状态（model 级 dead 不因 provider 复活而复活，等 TTL 重建）；
- * 无历史 → ok。
+ * provider 级重验 + model 级 TTL 复活：
+ * - provider 不在已注册列表 → dead(source=provider)，可复活
+ * - provider 在 且 之前是 model 级 dead：
+ *     demotedAt 距今 < TTL → 维持 dead（防误杀复发）
+ *     demotedAt 距今 ≥ TTL → 复活为 ok（条目级 TTL，不依赖整体缓存刷新）
+ * - provider 在 且无历史 / 其他 → ok
  * 返回合并后的完整条目表（覆盖全部 configSlots）。纯函数，便于单测。
  */
 export function mergeProviderValidation(
   configSlots: readonly ModelSlot[],
   registeredProviders: readonly string[],
-  previous: ReadonlyMap<string, { status: SlotStatus; source: SlotSource }>,
-): Map<string, { status: SlotStatus; source: SlotSource }> {
-  const next = new Map<string, { status: SlotStatus; source: SlotSource }>()
+  previous: ReadonlyMap<string, { status: SlotStatus; source: SlotSource; demotedAt?: string }>,
+  now: number = Date.now(),
+): Map<string, { status: SlotStatus; source: SlotSource; demotedAt?: string }> {
+  const next = new Map<string, { status: SlotStatus; source: SlotSource; demotedAt?: string }>()
   for (const slot of configSlots) {
     const key = slotKey(slot.provider, slot.model)
     const prev = previous.get(key)
     if (!registeredProviders.includes(slot.provider)) {
       next.set(key, { status: 'dead', source: 'provider' })
     } else if (prev?.status === 'dead' && prev.source === 'model') {
-      next.set(key, { status: 'dead', source: 'model' }) // model 级死亡只在 TTL 重建时复活
+      const demoted = prev.demotedAt ? Date.parse(prev.demotedAt) : NaN
+      if (Number.isFinite(demoted) && now - demoted >= SLOT_CACHE_TTL_MS) {
+        next.set(key, { status: 'ok', source: 'provider' }) // TTL 到 → 复活
+      } else {
+        next.set(key, { status: 'dead', source: 'model', demotedAt: prev.demotedAt }) // model 级死亡：条目级 TTL 内保留
+      }
     } else {
       next.set(key, { status: 'ok', source: 'provider' })
     }
@@ -101,17 +112,36 @@ export function mergeProviderValidation(
 }
 
 /**
+ * 可换模候选：运行时顺序中「非 dead」且「provider 本轮已注册」的槽。
+ * 独立成纯函数——M1 修复：死槽（尤其 model-dead 但 provider 仍在）不得进候选，
+ * 避免全部候选死光时反而绑定已知死模。
+ */
+export function availableCandidates(
+  runtimeOrder: readonly ModelSlot[],
+  registeredProviders: readonly string[],
+  statuses: ReadonlyMap<string, { status: SlotStatus; source: SlotSource; demotedAt?: string }>,
+): ModelSlot[] {
+  return runtimeOrder.filter(s => {
+    const e = statuses.get(slotKey(s.provider, s.model))
+    return (e?.status ?? 'ok') !== 'dead' && registeredProviders.includes(s.provider)
+  })
+}
+
+/**
  * 实际调用失败反馈（agent/request-error）：判定是否「模型不可用」类确定性失败。
- * 保守匹配——只认明确语义，限流/超时/5xx 一律不淘汰。
+ * 保守匹配——只认明确指向模型语义的 code/message：
+ *   - 不认裸 status 404（网关/路由 404 与模型无关）
+ *   - code 需含 model/no_adapter 语义
+ *   - message 需同时含「模型语义词 + 不存在语义」，防子串误伤
+ * 限流/超时/5xx 一律不淘汰。
  */
 export function isModelUnavailableFailure(failure: { code?: unknown; status?: unknown; message?: unknown }): boolean {
   const code = String(failure.code ?? '').toLowerCase()
-  const status = Number(failure.status ?? 0)
   const message = String(failure.message ?? '').toLowerCase()
-  if (status === 404) return true
-  if (/no_adapter|not_found|model_not_found|invalid_model|unknown_model|unsupported_model|model_unavailable|no_such_model/.test(code)) return true
-  if (/not found|no such model|unknown model|invalid model|does not exist|model unavailable|unsupported model|模型不存在|不存在该模型|不支持的模型|模型不可用|未找到模型/.test(message)) return true
-  return false
+  if (/no_adapter|model_not_found|invalid_model|unknown_model|unsupported_model|model_unavailable|no_such_model|not_found.*model|model.*not_found/.test(code)) return true
+  const hasModelSemantic = /model|模型|模型名/.test(message)
+  const hasMissingSemantic = /not found|no such|unknown|invalid|does not exist|unavailable|不存在|找不到|未知|无效|不支持|不可用|未找到/.test(message)
+  return hasModelSemantic && hasMissingSemantic
 }
 
 /** 缓存是否可采纳：版本对 + 配置摘要一致 + 未过 TTL */
