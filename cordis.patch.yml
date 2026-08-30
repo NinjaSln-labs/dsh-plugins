@@ -13,7 +13,8 @@
     - id: session-slm-router
       name: 'dsh-session-slm-router'
       config:
-        mode: shadow
+        mode: weak-only
+        weakOnlyMainOnly: true
         predictCmd: "python3 /home/shadow/ninjasin-labs/vertical-small-model/scripts/route_predict.py"
         predictModel: "/home/shadow/ninjasin-labs/vertical-small-model/data/eval/routing-v0/model-r1.json"
         timeoutMs: 250
