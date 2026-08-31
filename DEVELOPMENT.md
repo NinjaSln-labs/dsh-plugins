@@ -177,7 +177,7 @@ git config core.hooksPath .githooks
 | 宿主重启丢插件定义 | 动态插件全部消失 | 重建时 host+client 双全，用 .mtask/pkgs 备份源码 |
 | 语料/目录迁移后 bundle 默认路径未同步 | 宿主 probe ENOENT、npm test 用例失败 | 发版前 grep 全仓路径引用（src 默认值 + tests + smoke），宿主冒烟 probe 一次 |
 | 低延迟子任务配置跟随主模型路由 | 主模型换 reasoning/中转模型后子任务隐性退化（TTFT 3s+、100% 降级） | 子任务显式禁用思维链（reasoningEffort off）+ 固定 model；用宿主 latency 套件回归 |
-| registry 装的插件改了源码没发版 | 同版本号不同内容，行为错位、版本校验失效 | 部署纪律：安装方式统一 + 装后 diff 自检 |
+| registry 装的插件改了源码没发版 | 同版本号不同内容，行为错位、版本校验失效 | `pnpm check:deploy`（registry 差异 → FAIL）+ `.githooks/pre-commit` 硬拦截 + 插件级 AGENTS.md 规则内联 |
 
 ## 维护
 
