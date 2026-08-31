@@ -100,6 +100,44 @@ Backlog → In Progress → Verify(DoD) → Done
               └── 未过 DoD：打回 ──┘
 ```
 
+## 部署纪律：profile 安装（2026-08-31 事故沉淀）
+
+> 事故：本地改了 `dsh-context-compass` 源码并 build，但 profile 里装的仍是 registry 旧 0.11.0——**同版本号、不同内容**，版本校验完全失效，行为错位极难排查。根因是安装方式不统一（registry / file: 混用 + 无装后校验）。
+
+### 统一规则
+
+| 插件状态 | profile 安装方式 |
+|---|---|
+| 联调中（worktree 有未提交改动） | `file:` 指向 worktree 源码目录 |
+| 已入库主仓、未发版 | `file:` 指向 `dsh-plugins/<pkg>` |
+| 已发版且主仓 lib == 部署 lib | registry `^x.y.z` |
+
+安装一律走官方入口（内部 pnpm，禁裸 npm install——npm 会把 peerDependencies 装进 profile，产生第二套 `@deepseek-ai/*`，导致 Symbol 错配 unscoped、webserver 版本错配 400）：
+
+```bash
+dsh plugin --profile web install
+```
+
+### 装后自检（每次 install 后必跑）
+
+```bash
+# 1) 三点对齐：源码 lib == 部署 lib（改完源码必跑，diff 非空 = 事故前兆）
+diff -rq dsh-plugins/<pkg>/lib ~/.dsh/profiles/web/node_modules/<pkg>/lib
+
+# 2) 无宿主核心包阴影：此处只允许 cosmokit / schemastery
+ls ~/.dsh/profiles/web/node_modules/@deepseek-ai/
+
+# 3) file: 拷贝应为真实目录（pnpm 会剥离插件自带 node_modules，防遮蔽宿主）
+ls -la ~/.dsh/profiles/web/node_modules/ | grep <pkg>
+```
+
+### 关键认知
+
+- **版本号相同 ≠ 内容相同**：registry 包只在"发版→立即重装"闭环里可信；脱离闭环一律降级为 file: 直装
+- peer 永远由宿主 dsh 提供（fallback 在 `~/.dsh/profiles/node_modules/@deepseek-ai/`），profile 内不装宿主核心包；`pnpm peers check` 报 missing peer 属预期（运行时由宿主解析）
+- workspace `pnpm-workspace.yaml` 的 `overrides`（32 条钉版本）是防双实例护栏，勿删
+- `file:` 场景禁止手动软链：Node 按 realpath 解析会脱离 profile 的宿主 fallback，报 `Cannot find package '@deepseek-ai/...'`
+
 ## 附录：高频坑速查表（回顾沉淀）
 
 | 坑 | 症状 | 拦截环节 |
@@ -118,6 +156,7 @@ Backlog → In Progress → Verify(DoD) → Done
 | 宿主重启丢插件定义 | 动态插件全部消失 | 重建时 host+client 双全，用 .mtask/pkgs 备份源码 |
 | 语料/目录迁移后 bundle 默认路径未同步 | 宿主 probe ENOENT、npm test 用例失败 | 发版前 grep 全仓路径引用（src 默认值 + tests + smoke），宿主冒烟 probe 一次 |
 | 低延迟子任务配置跟随主模型路由 | 主模型换 reasoning/中转模型后子任务隐性退化（TTFT 3s+、100% 降级） | 子任务显式禁用思维链（reasoningEffort off）+ 固定 model；用宿主 latency 套件回归 |
+| registry 装的插件改了源码没发版 | 同版本号不同内容，行为错位、版本校验失效 | 部署纪律：安装方式统一 + 装后 diff 自检 |
 
 ## 维护
 
