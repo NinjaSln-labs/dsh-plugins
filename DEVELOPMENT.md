@@ -120,6 +120,17 @@ dsh plugin --profile web install
 
 ### 装后自检（每次 install 后必跑）
 
+一键自检脚本（替代手工 diff，FAIL 即非零退出码）：
+
+```bash
+pnpm check:deploy                     # 全量
+pnpm check:deploy -- --pkg dsh-xxx    # 只查指定插件
+```
+
+FAIL 条件与下面三点一一对应：① registry 安装且与本仓 lib 有差异（同版本号不同内容，硬拦截）；② profile 内 `@deepseek-ai/` 出现非 cosmokit/schemastery 包；③ `file:` 安装为软链，或源码 lib ≠ 部署 lib。
+
+手工命令（脚本不可用时的等价操作）：
+
 ```bash
 # 1) 三点对齐：源码 lib == 部署 lib（改完源码必跑，diff 非空 = 事故前兆）
 diff -rq dsh-plugins/<pkg>/lib ~/.dsh/profiles/web/node_modules/<pkg>/lib
@@ -130,6 +141,16 @@ ls ~/.dsh/profiles/web/node_modules/@deepseek-ai/
 # 3) file: 拷贝应为真实目录（pnpm 会剥离插件自带 node_modules，防遮蔽宿主）
 ls -la ~/.dsh/profiles/web/node_modules/ | grep <pkg>
 ```
+
+### 强制执行（git hook）
+
+pre-commit 钩子（`.githooks/pre-commit`）：提交涉及 `dsh-*/src/` 改动时自动对相关插件跑 `check:deploy`，FAIL 拒绝提交（`lib/` 为构建产物已 ignore，故挂在 src 上）。钩子随仓库分发，worktree 共享；若未生效执行一次：
+
+```bash
+git config core.hooksPath .githooks
+```
+
+中间态确需跳过时用 `git commit --no-verify`，并在提交说明注明"未部署，部署前需自检"。插件目录与根目录的 `AGENTS.md` 已内联规则摘要（指向本节），agent 开发会话会自动读取。
 
 ### 关键认知
 
