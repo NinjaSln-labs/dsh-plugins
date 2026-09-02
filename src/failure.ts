@@ -24,6 +24,7 @@ import {
   isContextWindowExceededError,
   isQuotaExceededError,
 } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 
 /** Stable, provider-neutral failure class used for routing decisions. */
 export type FailureClass =
@@ -59,6 +60,7 @@ const CODE_TO_CLASS: Record<string, FailureClass> = {
 
 /** HTTP statuses that identify a failure class independent of any code. */
 function classFromStatus(status: number): FailureClass | undefined {
+  if (status === 402) return 'quota'
   if (status === 429) return 'rate-limit'
   if (status === 401 || status === 403) return 'auth'
   if (status >= 500 && status <= 599) return 'server'
@@ -202,6 +204,36 @@ export function extractFailureEvidence(value: unknown): FailureEvidence {
     ...retryAfterMs !== undefined ? { retryAfterMs } : {},
     ...modelNotFound ? { modelNotFound } : {},
   }
+}
+
+/**
+ * 从 SubagentResult 的 diagnostic 和 output 文本中提取失败证据。
+ * 主要用于 stopReason === 'error' 时，检查 diagnostic 字段是否包含
+ * quota / model-not-found 等信号，这些信号被 seam 压缩后丢失了
+ * 结构化 LlmFailure。
+ *
+ * 覆盖三种消息格式：
+ * 1. 中文模式：/免费额度已耗尽/（实际 402 中文消息）
+ * 2. 类型字段：/quota_exhausted/（snake_case，无 \b 限制）
+ * 3. 英文模式：isQuotaExceededError（标准 quota/credit/balance 表述）
+ */
+export function extractFailureEvidenceFromResult(
+  diagnostic: string | undefined,
+  output: readonly ContentBlock[],
+): FailureEvidence {
+  const outputText = output
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+    .map(block => block.text)
+    .join('')
+  const combined = `${diagnostic ?? ''}\n${outputText}`
+
+  // 分层检测：中文 quota → snake_case quota → 英文 quota → model-not-found → 默认退化
+  if (/免费额度已耗尽/.test(combined)) return { cls: 'quota' }
+  if (/quota_exhausted/i.test(combined)) return { cls: 'quota' }
+  if (isQuotaExceededError(combined)) return { cls: 'quota' }
+  if (isModelNotFoundError(combined)) return { cls: 'other', modelNotFound: true }
+  // 默认退化——瞬态，与现有行为一致
+  return { cls: 'other' }
 }
 
 const MAX_DETAIL_LENGTH = 400

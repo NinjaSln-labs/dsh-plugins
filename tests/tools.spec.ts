@@ -34,6 +34,8 @@ class ScriptedProvider implements SubagentProvider {
   reply = 'child says hi'
   /** The first N starts fail with stopReason 'error' (before the reply). */
   failFirstCount = 0
+  /** Diagnostic text for failed starts (absent when empty). */
+  failDiagnostic = ''
   /** The first N starts reject with the given cause (infrastructure failure). */
   rejectFirstCount = 0
   /** Exact start indexes that reject with the given cause (overrides rejectFirstCount). */
@@ -63,7 +65,11 @@ class ScriptedProvider implements SubagentProvider {
       return Promise.reject(this.rejectCause)
     }
     const result: Promise<SubagentResult> = index < this.failFirstCount
-      ? Promise.resolve({ output: [], stopReason: 'error' } satisfies SubagentResult)
+      ? Promise.resolve({
+          output: [],
+          stopReason: 'error',
+          ...this.failDiagnostic.length > 0 ? { diagnostic: this.failDiagnostic } : {},
+        } satisfies SubagentResult)
       : Promise.resolve({
           output: [{ type: 'text', text: this.reply }],
           stopReason: 'completed',
@@ -112,6 +118,18 @@ const AUTO_ROUTES = [
       { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
       { id: 'deepseek-v4-std', name: 'DeepSeek V4 Std' },
       { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
+    ],
+  },
+]
+
+/** A route with both a paid and a free version of the same model family. */
+const FREE_PAID_ROUTES = [
+  {
+    id: 'teamorouter',
+    name: 'TeamoRouter',
+    models: [
+      { id: 'deepseek-v4-flash-free', name: 'DeepSeek V4 Flash Free' },
+      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
     ],
   },
 ]
@@ -177,6 +195,249 @@ function propsOf(ctx: Context, name: string): Record<string, unknown> {
 
 afterEach(() => {
   callCounter = 0
+})
+
+describe('agent/request-error hook', () => {
+  it('records parent request failures into the health store', async () => {
+    const { ctx } = await setup()
+    // Emit a parent model-request failure: LlmFailure plain object.
+    // The waterfall event's next() is the last-argument pass-through.
+    await ctx.emit('agent/request-error', {
+      agent: fakeAgent,
+      turn: 1,
+      step: 1,
+      provider: 'deepseek-official',
+      failure: { code: 'QUOTA', status: 402, message: 'quota exhausted' },
+      retryPolicy: undefined,
+      signal: testToolSignal,
+    }, () => Promise.resolve(undefined))
+    // Health store is internal; verify via the catalog tool which reads it.
+    const cat = await callTool(ctx, 'subagent_models', { provider: 'deepseek-official' })
+    const textOut = text(cat as never)
+    expect(textOut).toContain('unhealthy')
+    expect(textOut).toContain('quota')
+  })
+
+  it('does not block the event chain (waterfall-compatible)', async () => {
+    const { ctx } = await setup()
+    // Our listener already calls next(); verify a downstream listener still fires.
+    let downstreamCalled = false
+    ctx.on('agent/request-error', async (_payload, next) => {
+      downstreamCalled = true
+      if (typeof next === 'function') return next()
+    })
+    await ctx.emit('agent/request-error', {
+      agent: fakeAgent,
+      turn: 1,
+      step: 1,
+      provider: 'deepseek-official',
+      failure: { code: 'RATE_LIMIT', status: 429, message: 'rate limited' },
+      retryPolicy: undefined,
+      signal: testToolSignal,
+    }, () => Promise.resolve(undefined))
+    expect(downstreamCalled).toBe(true)
+  })
+})
+
+describe('paid-model preference (modelScore + model-level anchor)', () => {
+  it('prefers the paid model over the free version when both exist on the same provider', async () => {
+    // A parent on a different provider ("deepseek-official") with model
+    // "deepseek-v4-flash" delegates with model: "auto" to a provider
+    // ("teamorouter") that carries both "deepseek-v4-flash" and
+    // "deepseek-v4-flash-free". The model-level anchor should pick the paid
+    // version (the parent's model name is present on the effective provider).
+    // Use a standard-tier task (not complex) so the anchor fires regardless
+    // of the parent model's strength score.
+    const { ctx, provider } = await setup(
+      { autoProviderOrder: ['teamorouter'] },
+      { routes: FREE_PAID_ROUTES },
+    )
+    // "deepseek-official" is not in FREE_PAID_ROUTES, so auto will fall
+    // through to autoProviderOrder → "teamorouter".
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'a standard task',
+      prompt: 'Go through this dataset and report the main trends and outliers.',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    const options = provider.starts[0]!.agentOptions as { provider?: string; model?: string }
+    // The model-level anchor should pick the paid version because the parent
+    // model "deepseek-v4-flash" is present on "teamorouter".
+    expect(options.model).toBe('deepseek-v4-flash')
+    expect(options.provider).toBe('teamorouter')
+    const textOut = text(result)
+    expect(textOut).toContain('anchored')
+  })
+
+  it('still selects the free model when it is the only option', async () => {
+    const { ctx, provider } = await setup(
+      { autoProviderOrder: ['teamorouter'] },
+      { routes: FREE_PAID_ROUTES },
+    )
+    // Parent on a different model only available as free.
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'a standard task',
+      prompt: 'Go through this dataset and report the main trends and outliers.',
+      model: 'auto',
+    }, { id: 'parent', options: { provider: 'deepseek-official', model: 'deepseek-v4-flash-free' } } as never)
+    expect(result.isError).toBe(false)
+    const options = provider.starts[0]!.agentOptions as { provider?: string; model?: string }
+    // Parent model is "deepseek-v4-flash-free"; model-level anchor should
+    // pick it since it exists on "teamorouter".
+    expect(options.model).toBe('deepseek-v4-flash-free')
+    const textOut = text(result)
+    expect(textOut).toContain('anchored')
+  })
+
+  it('standard tier pickModel prefers the highest-scoring model when no balanced model exists', async () => {
+    // A route with only free-tier models (all negative scores). Standard tier
+    // pickModel: find(score===0) ?? max(score). No model has score 0, so it
+    // picks the highest-scoring one.
+    const allFreeRoutes = [
+      {
+        id: 'freeprovider',
+        name: 'Free Provider',
+        models: [
+          { id: 'deepseek-v4-flash-free', name: 'Free Flash' },  // score: -2
+          { id: 'deepseek-v4-nano', name: 'Nano' },              // score: -1
+        ],
+      },
+    ]
+    const { ctx, provider } = await setup(
+      { autoProviderOrder: ['freeprovider'] },
+      { routes: allFreeRoutes },
+    )
+    // Task ~200 chars to land in standard tier (past 160 trivial threshold,
+    // below 1200 complex threshold, no COMPLEX_MARKERS).
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'a standard-length task',
+      prompt: 'Go through this dataset and list the main trends and outliers you notice, then write up a short summary of what stands out. Keep it ordinary and mid-length, past the trivial threshold but nowhere near the heavier cutoff, so this task lands in the middle tier for the test.',
+      model: 'auto',
+    }, fakeAgent) // no parent model → heuristic fallback, no model-level anchor
+    expect(result.isError).toBe(false)
+    const options = provider.starts[0]!.agentOptions as { provider?: string; model?: string }
+    // "deepseek-v4-nano" (-1) has higher score than "deepseek-v4-flash-free" (-2)
+    expect(options.model).toBe('deepseek-v4-nano')
+  })
+})
+
+describe('runtime 402 fallback (extractFailureEvidenceFromResult)', () => {
+  it('records a stopReason error with quota diagnostic as quota in the health store', async () => {
+    const { ctx, provider } = await setup(
+      { autoEscalate: false }, // prevent escalation — we want the failure to surface
+      { routes: AUTO_ROUTES },
+    )
+    provider.failFirstCount = 1
+    provider.failDiagnostic = '402: free_request_quota_exhausted: 您的deepseek-v4-flash免费额度已耗尽'
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'say hi',
+      prompt: 'hi',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    // The foreground run should fail (the subagent returns stopReason: 'error').
+    expect(result.isError).toBe(true)
+    // The health store should now record the provider as unhealthy with quota.
+    const cat = await callTool(ctx, 'subagent_models', { provider: 'deepseek-official' })
+    const textOut = text(cat as never)
+    // "deepseek-official" should be marked unhealthy because the first attempt
+    // classified the diagnostic as quota.
+    expect(textOut).toContain('unhealthy')
+    expect(textOut).toContain('quota')
+  })
+})
+
+describe('verb extraction + 4-tier (PLAN-4)', () => {
+  it('trivial task with Chinese verb "列一下" gets tier=trivial', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: '列一下今天的文件',
+      prompt: '列一下当前目录下的所有文件',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    // The parent anchor fires, so the model is the parent's model.
+    // Verify the tier is correct from the audit line.
+    const textOut = text(result)
+    expect(textOut).toContain('tier=trivial')
+  })
+
+  it('Chinese "调研" gets tier=complex', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'Voyage 全网调研',
+      prompt: '调研Voyage市场的最新趋势和竞品动态',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(text(result)).toContain('tier=complex')
+  })
+
+  it('Chinese "重构" gets tier=standard', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: '重构代码库',
+      prompt: '重构这个模块的核心逻辑，提升可维护性',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(text(result)).toContain('tier=standard')
+  })
+
+  it('Chinese "总结" gets tier=light', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: '总结一下',
+      prompt: '总结一下这份报告的主要内容',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(text(result)).toContain('tier=light')
+  })
+
+  it('English "analyze" gets tier=complex via COMPLEX_MARKERS', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'analyze data',
+      prompt: 'Analyze this dataset and find the key patterns',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(text(result)).toContain('tier=complex')
+  })
+
+  it('English "list" gets tier=trivial via verb extraction', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: 'list files',
+      prompt: 'List all files in the current directory',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(text(result)).toContain('tier=trivial')
+  })
+
+  it('Chinese single-char verb "查" with polite prefix "请" matches trivial', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: '请查一下数据',
+      prompt: '请查一下昨天的销售数据',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    expect(text(result)).toContain('tier=trivial')
+  })
+
+  it('Chinese compound word "调查" does not match single-char "查"', async () => {
+    const { ctx, provider } = await setup({}, { routes: AUTO_ROUTES })
+    const result = await callTool(ctx, 'subagent_model', {
+      description: '调查一下',
+      prompt: '调查一下这个情况',
+      model: 'auto',
+    }, fakeAgentWithRoute)
+    expect(result.isError).toBe(false)
+    // "调查" matches the verb "调查" → complex
+    expect(text(result)).toContain('tier=complex')
+  })
 })
 
 describe('dsh-subagent-router delegation tool', () => {
