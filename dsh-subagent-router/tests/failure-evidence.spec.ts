@@ -6,7 +6,7 @@
  * failure kind instead of one flat TTL.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { extractFailureEvidence, isModelNotFoundError } from '../src/failure.ts'
+import { extractFailureEvidence, isModelNotFoundError, classifyFailure, extractFailureEvidenceFromResult } from '../src/failure.ts'
 import {
   RouteHealthStore,
   MODEL_NOT_FOUND_TTL_MS,
@@ -44,6 +44,24 @@ describe('extractFailureEvidence', () => {
   })
 })
 
+describe('classifyFailure with status codes', () => {
+  it('classifies 402 as quota', () => {
+    expect(classifyFailure({ status: 402 })).toBe('quota')
+  })
+
+  it('classifies 429 as rate-limit', () => {
+    expect(classifyFailure({ status: 429 })).toBe('rate-limit')
+  })
+
+  it('classifies 401 as auth', () => {
+    expect(classifyFailure({ status: 401 })).toBe('auth')
+  })
+
+  it('classifies 500 as server', () => {
+    expect(classifyFailure({ status: 500 })).toBe('server')
+  })
+})
+
 describe('health store kind-specific TTL', () => {
   it('expires model-not-found after 24h', () => {
     vi.useFakeTimers()
@@ -77,5 +95,48 @@ describe('health store kind-specific TTL', () => {
     vi.advanceTimersByTime(2000)
     expect(store.isHealthy('a')).toBe(true)
     vi.useRealTimers()
+  })
+})
+
+describe('extractFailureEvidenceFromResult', () => {
+  it('detects Chinese quota wording in diagnostic', () => {
+    const result = extractFailureEvidenceFromResult(
+      '402: {"message":"您的deepseek-v4-flash免费额度已耗尽。如需继续使用，请更换模型代号为deepseek-v4-flash，并去充值。"}',
+      [],
+    )
+    expect(result.cls).toBe('quota')
+  })
+
+  it('detects snake_case quota_exhausted in diagnostic', () => {
+    const result = extractFailureEvidenceFromResult('free_request_quota_exhausted', [])
+    expect(result.cls).toBe('quota')
+  })
+
+  it('detects English quota wording in diagnostic', () => {
+    const result = extractFailureEvidenceFromResult('quota exhausted', [])
+    expect(result.cls).toBe('quota')
+  })
+
+  it('detects model-not-found in diagnostic', () => {
+    const result = extractFailureEvidenceFromResult('model deepseek-v4-flash not found', [])
+    expect(result.cls).toBe('other')
+    expect(result.modelNotFound).toBe(true)
+  })
+
+  it('returns other for empty diagnostic', () => {
+    const result = extractFailureEvidenceFromResult('', [])
+    expect(result.cls).toBe('other')
+  })
+
+  it('returns other for rate-limit text (not a quota signal)', () => {
+    const result = extractFailureEvidenceFromResult('API rate limit exceeded', [])
+    expect(result.cls).toBe('other')
+  })
+
+  it('falls back to output text when diagnostic is undefined', () => {
+    const result = extractFailureEvidenceFromResult(undefined, [
+      { type: 'text', text: 'quota exhausted' },
+    ])
+    expect(result.cls).toBe('quota')
   })
 })

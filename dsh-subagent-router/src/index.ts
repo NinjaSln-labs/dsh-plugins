@@ -56,7 +56,7 @@ const SUBAGENT_SECTION_ORDER = 116.5
 export type AutoTierPolicyMode = 'anchor' | 'cheapest' | 'strongest'
 
 /** Per-tier auto selection configuration. */
-export type AutoTierPolicy = Partial<Record<'trivial' | 'standard' | 'complex', AutoTierPolicyMode>>
+export type AutoTierPolicy = Partial<Record<'trivial' | 'light' | 'standard' | 'complex', AutoTierPolicyMode>>
 
 /**
  * Plugin config; every field optional with a sane default. Only LIVE fields
@@ -72,10 +72,10 @@ export interface ModelPickerConfig {
   autoEscalationTiers?: number
   /** Provider priority order for `model: "auto"` provider resolution (default: registry order). Unlisted providers sort after listed ones. */
   autoProviderOrder?: string[]
-  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic (trivial→cheapest, standard→anchor, complex→strongest). */
+  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic (trivial→cheapest, light→balanced, standard→strong, complex→strongest). */
   autoTierPolicy?: AutoTierPolicy
   /** Per-tier explicit candidate list, in priority order; when present, fully overrides the tier policy for that tier. */
-  autoTierPicks?: Partial<Record<'trivial' | 'standard' | 'complex', string[]>>
+  autoTierPicks?: Partial<Record<'trivial' | 'light' | 'standard' | 'complex', string[]>>
   /** Classifier timeout for `subagent_recommend`'s one-shot LLM call, in milliseconds (default 15000). Past it the tool degrades to the naming heuristic. */
   recommendTimeoutMs?: number
 }
