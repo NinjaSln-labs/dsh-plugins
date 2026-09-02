@@ -32,15 +32,17 @@ export const Config = z.object({
   autoEscalationTiers: z.number().min(0).default(1),
   /** Provider priority order for `model: "auto"` provider resolution (default: registry order). Unlisted providers sort after listed ones. */
   autoProviderOrder: z.array(z.string()).default([]),
-  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic (trivial→cheapest, standard→anchor, complex→strongest). */
+  /** Per-tier selection mode; omitted tiers fall back to the built-in heuristic (trivial→cheapest, light→balanced, standard→strong, complex→strongest). */
   autoTierPolicy: z.object({
     trivial: autoTierPolicyMode.required(false),
+    light: autoTierPolicyMode.required(false),
     standard: autoTierPolicyMode.required(false),
     complex: autoTierPolicyMode.required(false),
   }).required(false),
   /** Per-tier explicit candidate list, in priority order; when present, fully overrides the tier policy for that tier. */
   autoTierPicks: z.object({
     trivial: z.array(z.string()).required(false),
+    light: z.array(z.string()).required(false),
     standard: z.array(z.string()).required(false),
     complex: z.array(z.string()).required(false),
   }).required(false),
