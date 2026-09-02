@@ -153,7 +153,7 @@ export interface ResolvedConfig {
 /**
  * C1 live config source: a resolved snapshot (mount-time closure, the old
  * shape — tests and the no-settings fallback) or a thunk reading the current
- * authoritative value (the installSettingsSection wiring). Consumers read
+ * authoritative value (the settings.installSection wiring). Consumers read
  * through readConfig() at USE time, so a thunk makes threshold changes live.
  */
 export type ConfigSource = ResolvedConfig | (() => ResolvedConfig)

@@ -18,7 +18,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Config, resolveConfig, validateConfig, type Config as ConfigType, type ResolvedConfig } from './config.ts'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+// dsh-settings@>=0.1.2-alpha.4: module-level exports removed; use ctx.inject + settings.installSection
 import { sessionHealthProjectionDefinition } from './projection.ts'
 import { healthCommandDefinition } from './command.ts'
 import { sessionHealthTool } from './tool.ts'
@@ -56,21 +56,20 @@ export default {
     // the entry when it goes away. All consumers read through source() at USE
     // time — threshold changes reach the badge on the next push frame.
     let source: () => ResolvedConfig = () => resolveConfig(config)
-    // AUDIT C1-1: register() fails loudly on an invalid STORED section (the
-    // settings service resolves + validates at registration). When settings is
-    // already mounted at apply time that throw would propagate out of apply
-    // and kill the whole plugin — asymmetric with the runtime publish path's
-    // last-good+warn. Wrap the wiring: on failure we keep the entry fallback
-    // and warn, so a hand-edited settings.yaml can never brick the plugin.
-    try {
-      installSettingsSection(ctx, settingsNamespace('context-compass'), Config, config, {
-        setSource: current => { source = () => resolveConfig(current()) },
-        onChange: () => syncProjectionUnit(),
-        validate: value => validateConfig(resolveConfig(value)),
-      })
-    } catch (err) {
-      console.warn(`[dsh-context-compass] settings section invalid — falling back to entry config: ${err instanceof Error ? err.message : String(err)}`)
-    }
+    // C1: wire settings via inject (new API: sctx.settings.installSection —
+    // module-level installSettingsSection removed in dsh-settings@0.1.2-alpha.4).
+    // When no settings service exists, source stays as entry fallback.
+    ctx.inject(['settings'], (sctx) => {
+      try {
+        sctx.settings.installSection(ctx, 'context-compass', Config, config, {
+          setSource: current => { source = () => resolveConfig(current()) },
+          onChange: () => syncProjectionUnit(),
+          validate: value => validateConfig(resolveConfig(value)),
+        })
+      } catch (err) {
+        console.warn(`[dsh-context-compass] settings section invalid — falling back to entry config: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    })
     // Stable reader: setSource REASSIGNS `source`, so consumers must capture
     // this wrapper (not the current thunk) to see later assignments.
     const configSource = (): ResolvedConfig => source()
