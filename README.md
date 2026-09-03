@@ -1,26 +1,39 @@
-# DSH 插件集
+# DSH 插件集（已封版 · 存档）
 
-## ⭐ 原创声明
-
-本项目所有插件均为**自研原创开发**，非第三方插件的聚合或转载。
+> **⚠️ 本仓库已于 2026-09 封版（archived）。**
+> 所有插件均已迁移为**独立单库**开发与发布，本仓库下的插件目录内容**已过时**，仅作历史存档保留。
+> **请勿在本仓库提交任何插件改动**——这里不再有构建、部署、发布流程，任何改动都不会生效。
 
 [English](README.en.md) | 简体中文
 
-DeepSeek Harness 个人自研插件合集：上下文罗盘、跨会话知识、子代理模型路由、Cursor 子代理、AI 生图。所有插件均可通过 `dsh plugin add <name>` 安装（npm 已发布的插件）。
+## 插件新家（单库索引）
 
-## 插件
+各插件后续的开发、Issue、发版均在各自独立仓库进行：
 
-| 插件 | 说明 | 状态 |
+| 插件 | 独立仓库 | 说明 |
 |---|---|---|
-| [dsh&#8209;context&#8209;compass](./dsh-context-compass) | **上下文罗盘 v0.11.0**：<br>· 响应式徽章（投影驱动）+ `/compass` 命令 + `context_compass` 工具<br>· **settings 配置点**（v0.10.0）：阈值/探测开关 live 生效（badge 下一帧即变，无需重启）<br>· 浮层占用趋势 sparkline（最近 ≤40 次请求压力折线）<br>· 多会话上下文总览面板（"罗盘一览"）：运行中置顶排序 · 活动列 · SWR 轮询（帧 ≤20ms）<br>· 官方峰谷双币定价（CNY/USD，jsdelivr 主源 + GitHub raw 回退）<br>· 主题自适应四档配色 · 缓存感知窗口经济档位<br>· 压缩频率提示（已压缩 N 次 · 约每 X 轮一次）<br>· 计费金额/token 切换 · 交接清单自动化 · 交接摘要一键复制<br>· 知识库联动（解耦，可选探测 cross-session 回顾）<br>· 富卡片时间标签 · 浮层分层（摘要/详情） · 代理窗口缩放<br>· client 模块化拆分（v0.11.0）<br>· AUDIT-0.10.0 修复批（v0.11.0）<br>· canary 发布通道（v0.11.0）<br>· peer `^0.1.1-rc.2`（v0.11.0） | ✅ 已发布（GitHub + npm） |
-| [dsh&#8209;knowledge&#8209;sqlite](./dsh-knowledge-sqlite) | **跨会话知识库 v0.1.6**：<br>· `ctx.knowledge` 服务 + `knowledge_*` 工具<br>· SQLite FTS5 trigram 索引 + L1 查询扩展（V1.11 契约）<br>· L1 扩展缓存持久化 · 扩展显式关闭思维链<br>· 零 LLM 写入 · 即时可检索 | ✅ 已发布（GitHub + npm） |
-| [dsh&#8209;subagent&#8209;router](./dsh-subagent-router) | **子代理模型路由 v0.3.0**：<br>· `subagent_model`：每次调用可指定 provider/model/max_tokens<br>· 内置 `model: "auto"` 路由策略（锚定父模型 · 任务分档升级 · 失败升档/换路 · 健康感知死锚检测 · 全程可审计）<br>· 路由优先级配置（provider 序 · 档位策略 · 档位候选）——设置页下拉枚举化，无需手填 id<br>· **设置页配置 UI**（6 项 live 配置，保存即实时生效，无需重启）<br>· `subagent_models` 目录工具（含 provider health + 模型派生元数据 cost/speed/contextWindow） | ✅ 已发布（GitHub + npm） |
-| [dsh&#8209;subagent&#8209;cursor](./dsh-subagent-cursor) | **Cursor 子代理 v0.1.0**：<br>· 经 `@cursor/sdk` 注册 `ctx.subagents` provider（默认 `cursor`）<br>· one-shot local · summary 优先结果展示 · Profile Bundle | 🚧 开发中（未发布） |
-| [dsh&#8209;imgdraw](./dsh-imgdraw) | **AI 生图 v0.1.0**：<br>· `draw_image` 工具 + 输入框"生图"按钮/弹窗（异步生成 · 四格网格 · 下载/保留/删除）<br>· `/imgdraw` 图片路由 · 历史持久化<br>· 后端：默认免费百炼 wan2.7-image · 可选 SiliconFlow Qwen-Image | 🚧 开发中（bundle 完成 · 未发布） |
+| dsh-context-compass（上下文罗盘） | https://github.com/NinjaSln-labs/dsh-context-compass | 上下文占用可视化 + 会话交接 |
+| dsh-knowledge-sqlite（跨会话知识库） | https://github.com/NinjaSln-labs/dsh-knowledge-sqlite | SQLite FTS5 跨会话知识检索 |
+| dsh-subagent-router（子代理模型路由） | https://github.com/NinjaSln-labs/dsh-subagent-router | 子代理 provider/model 路由 |
+| dsh-subagent-cursor（Cursor 子代理） | https://github.com/NinjaSln-labs/dsh-subagent-cursor | 经 @cursor/sdk 注册子代理 provider |
+| dsh-imgdraw（AI 生图） | https://github.com/NinjaSln-labs/dsh-imgdraw | draw_image 工具 + 输入框生图 |
+| dsh-session-slm-router（SLM 会话路由） | https://github.com/NinjaSln-labs/dsh-session-slm-router | 弱模型灰度路由（实验） |
 
-## 开发流程（强制）
+## 本仓库还剩什么
 
-**所有插件开发必须遵循敏捷迭代流程**：[DEVELOPMENT.md](./DEVELOPMENT.md)
+- `dsh-*/` 各插件目录：**迁移时的历史快照**，内容可能落后于单库最新版本，仅存档
+- `pricing/`：历史定价数据源（context-compass 已在单库内自带副本）
+- 历史 tag 与 `standalone-*` / `dev/*` 分支：subtree split 切库时的历史锚点，永久保留
+- 单库迁移方法论沉淀在生态目录根的 `DSH-PLUGIN-STANDALONE-MIGRATION.md`（不在本仓内，亦未入库）
 
-- 用户故事写需求（体验导向）→ 一个功能一个迭代 → DoD 全绿才交付 → 交付即试用 → 回顾沉淀
-- 动态插件高频坑速查表见该文档附录（client half 完整性、沙箱禁用全局、契约预检、事件格式等）
+## 历史安装方式（已过时，仅供旧环境参考）
+
+```bash
+dsh plugin add dsh-context-compass    # npm 已发布包，与仓库目录无关
+```
+
+安装以 npm 包为准；本仓库目录内容与 npm 发布物不再保持同步。
+
+## 原创声明
+
+本项目所有插件均为**自研原创开发**，非第三方插件的聚合或转载。各插件的原创声明与 LICENSE 以其单库为准。

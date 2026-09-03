@@ -1,17 +1,17 @@
-# 部署纪律（硬性）
+# 本仓状态：已封版（archived）
 
-本仓是 DSH 插件集。**凡涉及插件源码（`src/`、`lib/`）改动并部署到 profile 的任务，必须遵守以下规则**，全文见根目录 `DEVELOPMENT.md`「部署纪律：profile 安装」一节：
+本仓是 DSH 插件集的**历史存档**。2026-09 起全部插件已迁移为独立单库，各自管理开发-发布流程：
 
-1. **安装方式按状态统一**：联调中 / 已入库未发版 → `file:` 直装；已发版且主仓 lib == 部署 lib → 才可用 registry `^x.y.z`。改完源码未发版绝不留在 registry 安装上（同版本号不同内容，版本校验失效）。
-2. **安装一律走 `dsh plugin --profile web install`**，禁裸 `npm install`（会把 peerDependencies 装进 profile，产生第二套 `@deepseek-ai/*`）。
-3. **每次 install / build 后必跑装后自检**：
+- https://github.com/NinjaSln-labs/dsh-context-compass
+- https://github.com/NinjaSln-labs/dsh-knowledge-sqlite
+- https://github.com/NinjaSln-labs/dsh-subagent-router
+- https://github.com/NinjaSln-labs/dsh-subagent-cursor
+- https://github.com/NinjaSln-labs/dsh-imgdraw
+- https://github.com/NinjaSln-labs/dsh-session-slm-router
 
-   ```bash
-   pnpm check:deploy            # 全量；或 --pkg dsh-xxx 单查
-   ```
+**硬性规则：**
 
-   非零退出码 = FAIL，必须修复后才能继续。
-4. `file:` 场景禁止手动软链（Node realpath 会脱离宿主 fallback）。
-5. `pnpm-workspace.yaml` 的 `overrides` 是防双实例护栏，勿删。
-
-git pre-commit 钩子（`.githooks/pre-commit`）会在提交涉及 `*/lib/` 改动时自动跑此自检；若钩子未生效，先执行 `git config core.hooksPath .githooks`。
+1. **不要在本仓改动插件源码**——`dsh-*/` 目录是过时快照，改动不会构建、不会发布、不会进入任何单库。
+2. 插件的开发、构建、部署、发版一律在对应单库进行，遵循各单库自己的 AGENTS.md / DEVELOPMENT.md。
+3. 本仓的发布流程（GitHub Actions workflows、check:deploy、根级 workspace、pre-commit 部署自检）已于封版时删除，勿引用、勿重建。
+4. 本仓仅保留：过时快照目录、pricing/、历史 tag 与 `standalone-*` / `dev/*` 分支、迁移文档（DSH-PLUGIN-STANDALONE-MIGRATION.md）。
